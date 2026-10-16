@@ -1,0 +1,39 @@
+calculate_route:
+  name: Calculate route
+  description: Calculate one route explicitly. No automatic or periodic calculation is performed.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: The Camper Route Planner config entry to use.
+      required: true
+      selector:
+        text:
+    profile_id:
+      name: Vehicle profile ID
+      description: Stable vehicle profile identifier.
+      required: true
+      selector:
+        text:
+    origin:
+      name: Origin
+      description: Object with latitude, longitude and optional label.
+      required: true
+      selector:
+        object:
+    destination:
+      name: Destination
+      description: Object with latitude, longitude and optional label.
+      required: true
+      selector:
+        object:
+    via:
+      name: Waypoints
+      description: Optional ordered list of waypoint objects.
+      required: false
+      selector:
+        object:
+    route_name:
+      name: Route name
+      required: false
+      selector:
+        text:

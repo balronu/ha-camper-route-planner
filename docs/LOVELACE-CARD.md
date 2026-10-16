@@ -1,0 +1,57 @@
+# Lovelace-Karte
+
+## Ressource
+
+Das lokale Bundle liegt nach dem Build unter
+`frontend/dist/camper-route-planner-card.js`. In einer später autorisierten
+HA-Installation wird es als versionierte Lovelace-Ressource eingebunden:
+
+```yaml
+url: /local/camper-route-planner-card.js?v=0.1.0-alpha.1
+type: module
+```
+
+Die automatische Resource-Registrierung ist in Phase 2B nicht aktiviert, weil
+keine produktive HA-Instanz verändert werden darf.
+
+## Konfiguration
+
+```yaml
+type: custom:camper-route-planner-card
+entry_id: "<camper-route-planner-config-entry-id>"
+title: Camper Route Planner
+```
+
+Die `entry_id` ist bewusst explizit. Es gibt keine automatische Auswahl einer
+anderen Config Entry und keine produktive IP-/Entity-Hardcodierung.
+
+## Bedienung
+
+1. Fahrzeugprofil auswählen.
+2. Start und Ziel als WGS84-Koordinaten eingeben.
+3. Zwischenziele hinzufügen, bearbeiten, verschieben oder entfernen.
+4. **Route berechnen** klicken.
+5. Mock-Ergebnis, Warnungen und SVG-Geometrie prüfen.
+6. Mit **Route speichern** explizit persistieren; gespeicherte Routen können
+   geladen oder nach Bestätigung gelöscht werden.
+
+Freitext-Orte und Geocoding sind nicht enthalten, weil dafür in Phase 2B keine
+getestete Schnittstelle vorhanden ist.
+## Kartenanbieter
+
+Die Karte fragt die Kartenkonfiguration über den HA-WebSocket-Befehl
+`camper_route_planner/map_config` ab. Ein CARTO-Key gehört ausschließlich in
+den Options Flow der Integration und nicht in Lovelace-YAML. Ohne einen
+browsergeeigneten CARTO-Basemap-Key wird die lokale SVG-Geometrie verwendet;
+Details stehen in [MAP-PROVIDER-STRATEGY.md](MAP-PROVIDER-STRATEGY.md).
+
+## Navigation und GPX-Export
+
+Nach einer expliziten Berechnung oder beim Laden einer gespeicherten Route
+stehen **GPX-Route**, **GPX-Track** und – bei vorhandener Geometrie –
+**GPX kombiniert** zur Verfügung. Der Export wird über den HA-WebSocket-Befehl
+`camper_route_planner/export_gpx` erzeugt und erst durch den Button ausgelöst.
+Die Karte berechnet beim Rendern, bei GPS-Änderungen oder beim Kartenwechsel
+keine Route und erzeugt keinen Export automatisch. iOS nutzt, sofern verfügbar,
+die systemeigene Teilen-Funktion; ein nicht dokumentierter Sygic-Deep-Link ist
+nicht Bestandteil der Integration.
