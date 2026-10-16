@@ -13,8 +13,16 @@ gebaute Distribution und Projektbilder. Ausgeschlossen wurden das Workspace-
 `node_modules`, Python-Caches und temporäre Testartefakte.
 
 Das GitHub-Ziel `balronu/ha-camper-route-planner` war vor der Erstellung nicht
-vorhanden. Repository-Erstellung und initialer Push sind für dieses Ziel
-freigegeben; Tag, Release und HACS-Installation bleiben ausdrücklich aus.
+vorhanden. Es wurde öffentlich erstellt und auf `main` gepusht:
+
+- Repository: https://github.com/balronu/ha-camper-route-planner
+- Branch: `main`
+- initialer Inhalts-Commit: `f98e926b78149d1e32f22e93a854e3842ef7318c`
+- CI-Korrekturen: `0a478f12734b6918e1145ce1e407cb79826d1cfb`,
+  `0b51fd5810629c5ba1349c38d6bc08d70686f2b2`
+- grüner CI-Lauf: https://github.com/balronu/ha-camper-route-planner/actions/runs/38912155669
+
+Tag, Release und HACS-Installation bleiben ausdrücklich aus.
 
 ## Branding
 
@@ -35,8 +43,8 @@ keine produktive Wohnmobilnavigation dar.
 |---|---|---|---|
 | P2F-01 | Sichere Projektisolierung | PASS | separate Kopie, Ausschlussliste geprüft |
 | P2F-02 | Eigenständiges lokales Git | PASS | neues Repository in Projektkopie initialisiert |
-| P2F-03 | Öffentliches GitHub-Repository | PASS | nach Erstellung zu verifizieren |
-| P2F-04 | Initialer Push | PASS | nach Push zu verifizieren |
+| P2F-03 | Öffentliches GitHub-Repository | PASS | `balronu/ha-camper-route-planner` |
+| P2F-04 | Initialer Push | PASS | `main`, Commit `0b51fd5` |
 | P2F-05 | Deutsche README | PASS | `README.md` |
 | P2F-06 | Englische README | PASS | `README.en.md` |
 | P2F-07 | Logo | PASS | SVG und PNG vorhanden |
@@ -46,7 +54,7 @@ keine produktive Wohnmobilnavigation dar.
 | P2F-11 | Nakordoni-Dokumentation | PASS | Ticket #230 und Modustrennung dokumentiert |
 | P2F-12 | OAuth-Planung | PASS | eigener Client, kein MFS-Client |
 | P2F-13 | HACS-Struktur | PASS | Manifest, `hacs.json`, Bundle, Lizenz vorhanden |
-| P2F-14 | Tests | PASS/WARN | lokale Python/Frontend/Chromium-Prüfungen grün; HA/Hassfest CI ausstehend |
+| P2F-14 | Tests | PASS/WARN | lokale Python/Frontend/Chromium-Prüfungen grün; CI Python/Frontend/Hassfest grün |
 | P2F-15 | Secret-Scan | PASS/WARN | lokaler Muster-Scan ohne Fund; Gitleaks nicht installiert |
 | P2F-16 | Stable-Strategie | PASS | `v0.1.0` geplant, kein Tag/Release |
 | P2F-17 | Keine produktiven Änderungen | PASS | keine HA-, VM-, Proxmox- oder Schwesterprojektänderung |
@@ -62,7 +70,7 @@ keine produktive Wohnmobilnavigation dar.
 - JSON: **PASS**
 - Bilddimensionen: **PASS**
 - WebKit/iOS: **BLOCKED / NOT RUN**
-- Hassfest: **CI konfiguriert, lokaler Lauf BLOCKED**
+- Hassfest: **PASS in GitHub Actions**
 - HA-Installations-/Update-/Deinstallationstests: **NOT RUN**
 - HACS-Installation: **NOT RUN**
 - automatische Lovelace-Resource-Registrierung: **CONDITIONAL**, aktuell manuell
@@ -72,7 +80,7 @@ keine produktive Wohnmobilnavigation dar.
 1. Nakordoni-Motorhome-Routing ist noch nicht verfügbar.
 2. Truck-Routing ist keine sichere Wohnmobilnavigation.
 3. OAuth-Client, Scopes und Redirect-URIs sind externe Abhängigkeiten.
-4. Hassfest und die HA-Fixtures müssen nach dem Push in CI bestätigt werden.
+4. HA-Fixtures und echte HA-Lifecycle-Tests bleiben außerhalb dieser Phase.
 5. Es existiert noch kein `v0.1.0`-Tag oder Release.
 
 ## Empfehlung für Phase 2G
