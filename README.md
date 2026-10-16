@@ -109,13 +109,14 @@ npm run test:e2e
 Die Ausführungs- und Blocker-Matrix steht in
 [docs/PHASE2E-TEST-REPORT.md](docs/PHASE2E-TEST-REPORT.md). Hassfest und
 GitHub-seitige Validierung werden über
-`.github/workflows/validate.yml` geprüft, sobald das Repository veröffentlicht
-ist.
+`.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
+bereits durch GitHub Actions validiert. Das Ergebnis ist kein Stable- oder
+Installationsfreigabe-Gate.
 
 ## Roadmap
 
-1. **Phase 2F:** eigenständiges Repository, Branding, Dokumentation und
-   Validierung.
+1. **Phase 2F:** öffentliches Repository, Branding, Dokumentation und
+   Validierung (abgeschlossen).
 2. **Phase 2G:** kontrollierter Truck-Adapter nur nach Vertrags-, OAuth- und
    Quota-Freigabe.
 3. **Phase 2H:** Motorhome-Vertrag und Schema erst nach tatsächlicher
