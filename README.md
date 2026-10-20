@@ -129,6 +129,8 @@ ist.
 3. **Phase 2H:** Offline-Provider, OAuth-/PKCE-Vorbereitung und CI.
 4. **Phase 2I:** persönliche API-Keys, Dry-Run-Testwerkzeug und Live-Testplan;
    kein Release ohne Ergebnisbericht und dokumentierte Freigabe.
+5. **Phase 2J:** isolierte interne-Beta-Installation, Lifecycle- und
+   Rücknahmeplanung; noch keine Installation oder Live-Abfrage.
 
 ## Phase 2G/2H: Nakordoni Motorhome-Beta
 

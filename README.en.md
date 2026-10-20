@@ -105,6 +105,8 @@ matrix and blockers. Hassfest and GitHub-side validation run through
 3. **Phase 2H:** offline provider, OAuth/PKCE preparation, and CI.
 4. **Phase 2I:** personal API keys, dry-run test tooling, and live test plan;
    no release without a result report and documented approval.
+5. **Phase 2J:** isolated internal-beta installation, lifecycle, and rollback
+   planning; no installation or live request has been performed.
 
 ## Phase 2G/2H: Nakordoni Motorhome beta
 

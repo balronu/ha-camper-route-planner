@@ -101,6 +101,17 @@ class Phase2ATests(unittest.TestCase):
         self.assertEqual(restored.profiles()[0].name, "Carthago chic e-line I 50 Yachting")
         self.assertGreaterEqual(backend.save_count, 2)
 
+    def test_storage_rejects_credential_shaped_browser_route_fields(self):
+        store = ProfileRouteStore(MemoryStore())
+        asyncio.run(store.async_load())
+        record = {
+            "route_id": "route-secret",
+            "geometry": {"points": [{"latitude": 49, "longitude": 7}, {"latitude": 50, "longitude": 8}]},
+            "metadata": {"provider": "mock", "authorization": "Bearer should-never-persist"},
+        }
+        with self.assertRaisesRegex(ValueError, "forbidden credential"):
+            asyncio.run(store.async_save_route_record(record))
+
     def test_config_flow_validation_and_optional_contracts(self):
         self.assertEqual(validate_user_input({"provider": "mock"}), {})
         self.assertEqual(validate_user_input({"provider": "nakordoni"}), {"api_key": "invalid_api_key"})

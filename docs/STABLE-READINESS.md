@@ -1,15 +1,16 @@
-# Stable-Readiness nach Phase 2I
+# Stable-Readiness nach Phase 2J
 
 ## Fortschritt
 
-Die manuelle persönliche API-Key-Anbindung ist offline implementiert. Der Key
-bleibt lokal in Home Assistant; OAuth/PKCE ist für die erste Stable-Version
-optional. Das Motorhome-Produkt bleibt Beta und wird nicht automatisch oder
-beim Dashboard-Aufruf abgefragt.
+Die manuelle persönliche API-Key-Anbindung und die isolierte Beta-
+Installationsvorbereitung sind implementiert. Der Key bleibt lokal in Home
+Assistant; OAuth/PKCE ist optional. Das Motorhome-Produkt bleibt Beta und wird
+nicht automatisch oder beim Dashboard-Aufruf abgefragt.
 
 ## Verbleibende Gates für v0.1.0 Stable
 
-- kontrollierte Live-Tests nach gesonderter Freigabe
+- kontrollierter HA-Installations- und Praxistest nach gesonderter Freigabe
+- reale Motorhome-API-Antwort mit vollständigem Fahrzeugprofil
 - echte Prüfung der Key-/Kontingentzuordnung und Account Usage
 - verifizierte Ergebnisse für Mautfelder und unvollständige Abdeckung
 - konkrete, amtlich vergleichbare Restriktionsfälle 5–7
@@ -17,4 +18,4 @@ beim Dashboard-Aufruf abgefragt.
 - Surface-Registrierung im jeweiligen Benutzerkonto
 - Entscheidung über Stable erst nach Live-Ergebnisbericht
 
-Bis dahin: **NO-GO für Stable, NO-GO für Merge/Tag/Release**.
+Bis dahin: **NO-GO für interne Beta und Stable, NO-GO für Merge/Tag/Release**.
