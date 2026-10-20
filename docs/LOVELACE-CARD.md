@@ -2,17 +2,18 @@
 
 ## Ressource
 
-Das lokale Bundle liegt nach dem Build unter
-`frontend/dist/camper-route-planner-card.js`. In einer später autorisierten
-HA-Installation wird es als versionierte Lovelace-Ressource eingebunden:
+Das Bundle liegt im installierbaren Paket unter
+`custom_components/camper_route_planner/frontend/camper-route-planner-card.js`.
+Die Integration liefert und lädt es über einen versionierten HA-Static-Path:
 
 ```yaml
-url: /local/camper-route-planner-card.js?v=0.1.0-alpha.1
+url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-alpha.1
 type: module
 ```
 
-Die automatische Resource-Registrierung ist in Phase 2B nicht aktiviert, weil
-keine produktive HA-Instanz verändert werden darf.
+Die URL wird beim Integration-Setup über `add_extra_js_url` registriert. Keine
+manuelle Resource und keine Änderung bestehender Dashboards ist erforderlich;
+der reale HA-Neustart-/Browsernachweis bleibt NOT RUN.
 
 ## Konfiguration
 

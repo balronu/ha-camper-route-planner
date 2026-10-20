@@ -31,7 +31,7 @@ und GPX-Export.
 - produktives Nakordoni-Routing
 - Nakordoni-`vehicle_type=motorhome`
 - verifizierte Wohnmobilnavigation
-- automatische Lovelace-Resource-Registrierung
+- automatische Auslieferung der Lovelace-Karte über die Integration
 
 Truck-Routing darf bis zur Verfügbarkeit und Prüfung des echten Motorhome-
 Profils nicht als sichere Wohnmobilnavigation dargestellt werden. Ein
@@ -131,6 +131,8 @@ ist.
    kein Release ohne Ergebnisbericht und dokumentierte Freigabe.
 5. **Phase 2J:** isolierte interne-Beta-Installation, Lifecycle- und
    Rücknahmeplanung; noch keine Installation oder Live-Abfrage.
+6. **Phase 2K:** eingebettetes Frontend, installierbares internes ZIP und
+   isolierte Paketprüfung; noch keine Installation oder Live-Abfrage.
 
 ## Phase 2G/2H: Nakordoni Motorhome-Beta
 

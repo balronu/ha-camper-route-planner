@@ -5,5 +5,7 @@ __pycache__/
 .env
 *.log
 /dist/
+artifacts/
+frontend/node_modules/
 coverage/
 .DS_Store

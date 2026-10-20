@@ -13,7 +13,9 @@ gesondert freigegebene Sitzung bestimmt.
    Nicht auf dem OpenClaw-Host, in Shell-History oder Git speichern.
 6. Das Carthago-Profil anlegen: 7,65 m × 2,34 m × 3,20 m, 4.800 kg, zwei
    Achsen, `motorhome`.
-7. Lovelace-Ressource manuell und nur in einer eigenen Testansicht einbinden.
+7. Prüfen, dass die Integration das Bundle automatisch über den eigenen
+   versionierten Static-Path lädt; nur in einer eigenen Testansicht eine Karte
+   anlegen. Keine bestehende Resource-Collection verändern.
 8. Zuerst Offline-/Mock-Lifecycle prüfen; danach höchstens acht manuelle
    Routingabfragen mit Stop-Entscheidung nach jeder Abfrage.
 9. Karte, Restriktionen, Maut, Speichern/Laden und GPX nur mit den Ergebnissen

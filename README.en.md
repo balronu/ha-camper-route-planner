@@ -30,7 +30,7 @@ profiles, an interactive map, saved routes, and GPX export.
 - production Nakordoni routing
 - Nakordoni `vehicle_type=motorhome`
 - verified motorhome navigation
-- automatic Lovelace resource registration
+- automatic Lovelace card delivery from the integration
 
 Truck routing must not be presented as safe motorhome navigation before the
 real motorhome profile is available and validated. There is no silent truck
@@ -107,6 +107,8 @@ matrix and blockers. Hassfest and GitHub-side validation run through
    no release without a result report and documented approval.
 5. **Phase 2J:** isolated internal-beta installation, lifecycle, and rollback
    planning; no installation or live request has been performed.
+6. **Phase 2K:** embedded frontend, installable internal ZIP, and isolated
+   package validation; no installation or live request has been performed.
 
 ## Phase 2G/2H: Nakordoni Motorhome beta
 

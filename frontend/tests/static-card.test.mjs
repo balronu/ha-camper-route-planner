@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../src/camper-route-planner-card.js", import.meta.url), "utf8");
@@ -17,6 +18,12 @@ test("frontend has no provider secret or direct Nakordoni endpoint", () => {
   assert.match(source, /nakordoni\.eu/);
   assert.doesNotMatch(source, /api\.nakordoni\.dev|Bearer|api[_-]?key|secret/i);
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest|WebSocket\(/);
+});
+
+test("installable integration contains the same built bundle", () => {
+  const packaged = readFileSync(new URL("../../custom_components/camper_route_planner/frontend/camper-route-planner-card.js", import.meta.url), "utf8");
+  const built = readFileSync(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
+  assert.equal(packaged, built);
 });
 
 test("route calculation appears only behind an explicit action handler", () => {
