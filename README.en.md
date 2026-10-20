@@ -94,7 +94,8 @@ npm run test:e2e
 
 See [the Phase 2E report](docs/PHASE2E-TEST-REPORT.md) for the current test
 matrix and blockers. Hassfest and GitHub-side validation run through
-`.github/workflows/validate.yml` after publication.
+`.github/workflows/validate.yml`; the public repository is already validated by
+GitHub Actions. This result is not a Stable or installation-approval gate.
 
 ## Roadmap
 

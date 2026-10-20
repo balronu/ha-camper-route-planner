@@ -117,8 +117,9 @@ npm run test:e2e
 Die Ausführungs- und Blocker-Matrix steht in
 [docs/PHASE2E-TEST-REPORT.md](docs/PHASE2E-TEST-REPORT.md). Hassfest und
 GitHub-seitige Validierung werden über
-`.github/workflows/validate.yml` geprüft, sobald das Repository veröffentlicht
-ist.
+`.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
+bereits durch GitHub Actions validiert. Das Ergebnis ist kein Stable- oder
+Installationsfreigabe-Gate.
 
 ## Roadmap
 
