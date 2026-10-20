@@ -10,6 +10,17 @@ export function normalizeConfig(config = {}) {
   return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
 }
 
+export function selectConfigEntry(config = {}, entries = []) {
+  const explicit = String(config.entry_id || "");
+  const normalized = (Array.isArray(entries) ? entries : []).filter((entry) => entry && entry.entry_id).map((entry) => ({
+    entry_id: String(entry.entry_id), title: String(entry.title || "Camper Route Planner"), state: String(entry.state || "")
+  }));
+  if (explicit) return { entryId: explicit, status: "ready", entries: normalized };
+  if (normalized.length === 1) return { entryId: normalized[0].entry_id, status: "ready", entries: normalized };
+  if (normalized.length > 1) return { entryId: "", status: "multiple", entries: normalized };
+  return { entryId: "", status: "missing", entries: normalized };
+}
+
 export function addWaypoint(waypoints, point = { latitude: "", longitude: "", label: "" }) {
   return [...waypoints, { ...point }];
 }
@@ -50,6 +61,9 @@ export function normalizeServiceResponse(response) {
     synthetic: Boolean(payload.synthetic),
     created_at: payload.created_at || new Date().toISOString(),
     geometry: payload.geometry || null,
+    metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    beta: Boolean(payload.beta),
+    attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
     origin: payload.origin || null,
     destination: payload.destination || null,
     waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
@@ -71,6 +85,7 @@ export function routeRecordFromResult(result, state) {
     destination: state.destination,
     waypoints: state.waypoints,
     warnings: result.warnings,
+    metadata: result.metadata,
     created_at: result.created_at
   };
 }

@@ -28,10 +28,9 @@ profiles, an interactive map, saved routes, and GPX export.
 ## Not available yet
 
 - production Nakordoni routing
-- a dedicated Nakordoni OAuth client
 - Nakordoni `vehicle_type=motorhome`
 - verified motorhome navigation
-- automatic Lovelace resource registration
+- automatic Lovelace card delivery from the integration
 
 Truck routing must not be presented as safe motorhome navigation before the
 real motorhome profile is available and validated. There is no silent truck
@@ -100,12 +99,27 @@ GitHub Actions. This result is not a Stable or installation-approval gate.
 
 ## Roadmap
 
-1. **Phase 2F:** public repository, branding, documentation, and validation
-   (completed).
-2. **Phase 2G:** controlled truck adapter after contract, OAuth, and quota
-   approval.
-3. **Phase 2H:** motorhome contract and schema after actual provider release.
-4. **Phase 2I:** conservative preparation of `v0.1.0 Stable`.
+1. **Phase 2F:** independent repository, branding, documentation, and
+   validation.
+2. **Phase 2G:** offline preparation of the Nakordoni Motorhome beta provider,
+   OAuth/PKCE, quota, and toll contracts.
+3. **Phase 2H:** offline provider, OAuth/PKCE preparation, and CI.
+4. **Phase 2I:** personal API keys, dry-run test tooling, and live test plan;
+   no release without a result report and documented approval.
+5. **Phase 2J:** isolated internal-beta installation, lifecycle, and rollback
+   planning; no installation or live request has been performed.
+6. **Phase 2K:** embedded frontend, installable internal ZIP, and isolated
+   package validation; no installation or live request has been performed.
+
+## Phase 2G/2H: Nakordoni Motorhome beta
+
+The `nakordoni_motorhome` provider is prepared locally as an offline/fixture provider, but is not enabled for production. Nakordoni Motorhome is a beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider and no verified motorhome navigation claim.
+
+OAuth/PKCE remains a later optional alternative for v0.1.0 Stable. The Mobile
+Fuel Stations OAuth client is not reused. No live routing requests were made
+in Phase 2I.
+
+Route data is attributed to [Data by nakordoni.eu](https://nakordoni.eu). The routing API is officially documented on `nakordoni.eu`; OAuth and Account Usage use `api.nakordoni.dev`. See [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [quotas](docs/NAKORDONI-QUOTAS.md), and [tolls](docs/NAKORDONI-TOLLS.md).
 
 ## License
 

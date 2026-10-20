@@ -7,7 +7,17 @@ from typing import Any
 try:
     import voluptuous as vol
     from homeassistant.components import websocket_api
+    from .const import DOMAIN
     from .gpx import GpxExportError, export_gpx, filename_for_route
+
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/list_entries"})
+    @websocket_api.async_response
+    async def ws_list_entries(hass, connection, msg) -> None:
+        """Expose only safe config-entry metadata for card discovery."""
+        connection.send_result(msg["id"], {"entries": [
+            {"entry_id": entry.entry_id, "title": entry.title, "state": entry.state.value}
+            for entry in hass.config_entries.async_entries(DOMAIN)
+        ]})
 
     @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/list_profiles", vol.Required("entry_id"): str})
     @websocket_api.async_response
@@ -82,7 +92,7 @@ try:
         connection.send_result(msg["id"], {"route_id": route_id})
 
     def async_register(hass) -> None:
-        for command in (ws_list_profiles, ws_list_routes, ws_map_config, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
+        for command in (ws_list_entries, ws_list_profiles, ws_list_routes, ws_map_config, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
             websocket_api.async_register_command(hass, command)
 
 except ImportError:  # pragma: no cover - HA-only wrapper.

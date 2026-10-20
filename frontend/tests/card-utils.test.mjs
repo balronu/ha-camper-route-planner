@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeServiceResponse, removeWaypoint } from "../src/card-utils.js";
+import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 
 test("coordinates and waypoint ordering are validated deterministically", () => {
@@ -31,4 +31,12 @@ test("track export eligibility requires existing geometry", () => {
   assert.equal(hasTrackGeometry({ geometry: { points: [{ latitude: 1, longitude: 2 }, { latitude: 2, longitude: 3 }] } }), true);
   assert.equal(hasTrackGeometry({ geometry: { points: [{ latitude: 1, longitude: 2 }] } }), false);
   assert.equal(hasTrackGeometry({}), false);
+});
+
+test("config entry selection handles explicit, single, multiple and missing instances", () => {
+  const entries = [{ entry_id: "one", title: "One" }, { entry_id: "two", title: "Two" }];
+  assert.equal(selectConfigEntry({}, [entries[0]]).entryId, "one");
+  assert.equal(selectConfigEntry({}, entries).status, "multiple");
+  assert.equal(selectConfigEntry({}, []).status, "missing");
+  assert.deepEqual(selectConfigEntry({ entry_id: "legacy" }, entries), { entryId: "legacy", status: "ready", entries: [{ entry_id: "one", title: "One", state: "" }, { entry_id: "two", title: "Two", state: "" }] });
 });

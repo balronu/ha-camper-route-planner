@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/nakordoni-motorhome]
   pull_request:
 
 permissions:
@@ -19,6 +19,60 @@ jobs:
       - run: PYTHONPATH=src:. python -m unittest discover -s tests -v
       - run: python -m compileall -q src tests custom_components
 
+  ha-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.2'
+      - name: Install isolated HA fixture dependencies
+        run: python -m pip install --disable-pip-version-check pytest pytest-asyncio homeassistant==2026.10.1 pytest-homeassistant-custom-component
+      - name: Verify HA fixture imports
+        run: python -c "from pytest_homeassistant_custom_component.common import MockConfigEntry; print(MockConfigEntry)"
+      - name: Verify integration fixture imports
+        run: |
+          python - <<'PY'
+          imports = (
+              'homeassistant.core',
+              'pytest_homeassistant_custom_component.common',
+              'custom_components.camper_route_planner.const',
+              'custom_components.camper_route_planner.models',
+          )
+          for module in imports:
+              try:
+                  __import__(module, fromlist=['*'])
+              except Exception as err:
+                  print(f'{module}: FAIL {type(err).__name__}: {err}')
+                  raise
+              print(f'{module}: OK')
+          PY
+      - run: PYTHONPATH=.:$PYTHONPATH HA_FIXTURE_CI=1 pytest -q tests/test_phase2c_ha.py
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate JSON files
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path('.').rglob('*.json'):
+              if '.git' not in path.parts and 'node_modules' not in path.parts:
+                  json.loads(path.read_text(encoding='utf-8'))
+          print('JSON validation: PASS')
+          PY
+      - run: git diff --check
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +87,22 @@ jobs:
       - run: npm test
         working-directory: frontend
       - run: npm run build
+        working-directory: frontend
+
+  chromium:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
         working-directory: frontend
 
   hassfest:

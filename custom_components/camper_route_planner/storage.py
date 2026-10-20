@@ -12,6 +12,31 @@ from .const import STORAGE_VERSION
 from .models import RouteResult, RouteWaypoint, VehicleProfile
 
 
+_SECRET_FIELD_MARKERS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "client_secret",
+    "password",
+    "secret",
+    "token",
+)
+
+
+def _contains_secret_field(value: Any) -> bool:
+    """Reject credential-shaped fields before accepting browser route data."""
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            if any(marker in normalized for marker in _SECRET_FIELD_MARKERS):
+                return True
+            if _contains_secret_field(nested):
+                return True
+    elif isinstance(value, (list, tuple)):
+        return any(_contains_secret_field(item) for item in value)
+    return False
+
+
 class AsyncStore(Protocol):
     async def async_load(self) -> dict[str, Any] | None: ...
     async def async_save(self, data: dict[str, Any]) -> None: ...
@@ -103,6 +128,7 @@ class ProfileRouteStore:
             "destination": request.destination.as_dict(),
             "waypoints": [point.as_dict() for point in request.waypoints],
             "warnings": [asdict(warning) for warning in result.warnings],
+            "metadata": copy.deepcopy(result.metadata),
         }
         await self._store.async_save(self.data)
 
@@ -111,7 +137,9 @@ class ProfileRouteStore:
         route_id = str(record.get("route_id") or "")
         if not route_id or not record.get("geometry"):
             raise ValueError("route_id and geometry are required")
-        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "created_at"}
+        if _contains_secret_field(record):
+            raise ValueError("route record contains a forbidden credential field")
+        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "metadata", "created_at"}
         self.data["routes"][route_id] = {key: value for key, value in record.items() if key in allowed}
         await self._store.async_save(self.data)
         return route_id

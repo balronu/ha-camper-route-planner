@@ -1,6 +1,7 @@
 {
   "domain": "camper_route_planner",
   "name": "Camper Route Planner",
+  "after_dependencies": ["frontend", "http"],
   "codeowners": [],
   "config_flow": true,
   "documentation": "https://github.com/balronu/ha-camper-route-planner",

@@ -9592,6 +9592,13 @@
       warnings: "Warnungen",
       noRoute: "Keine Route vorhanden",
       mockRoute: "Mock-Route",
+      motorhomeBeta: "Nakordoni Motorhome \u2013 Beta",
+      motorhomeWarning: "Wohnmobil-Routing befindet sich in der Beta-Phase. Verkehrszeichen und geltende Vorschriften haben Vorrang.",
+      dataByNakordoni: "Daten von nakordoni.eu",
+      tolls: "Maut",
+      tollEstimate: "Sch\xE4tzung",
+      tollIncomplete: "Mautdaten unvollst\xE4ndig",
+      tollUnavailable: "Keine Mautpreisinformation",
       providerUnavailable: "Provider nicht verf\xFCgbar",
       invalidCoordinates: "Ung\xFCltige Koordinaten",
       calculationFailed: "Berechnung fehlgeschlagen",
@@ -9614,7 +9621,9 @@
       latitude: "Breitengrad",
       longitude: "L\xE4ngengrad",
       mockDataNotice: "Synthetische Testdaten \u2013 keine gepr\xFCfte Stra\xDFenroute",
-      configMissing: "Bitte entry_id in der Kartenkonfiguration setzen.",
+      configMissing: "Keine Camper-Route-Planner-Instanz gefunden. Bitte die Integration zuerst einrichten.",
+      multipleEntries: "Mehrere Camper-Route-Planner-Instanzen gefunden. Bitte eine ausw\xE4hlen.",
+      entrySelection: "Camper-Route-Planner-Instanz",
       routeSaved: "Route gespeichert",
       mapTileError: "CARTO-Kartenkacheln nicht erreichbar; SVG-Fallback wird angezeigt.",
       navigationExport: "Navigation / Export",
@@ -9639,6 +9648,13 @@
       warnings: "Warnings",
       noRoute: "No route available",
       mockRoute: "Mock route",
+      motorhomeBeta: "Nakordoni Motorhome \u2013 Beta",
+      motorhomeWarning: "Motorhome routing is in beta. Traffic signs and applicable regulations take precedence.",
+      dataByNakordoni: "Data by nakordoni.eu",
+      tolls: "Tolls",
+      tollEstimate: "Estimate",
+      tollIncomplete: "Toll data incomplete",
+      tollUnavailable: "No toll price information",
       providerUnavailable: "Provider unavailable",
       invalidCoordinates: "Invalid coordinates",
       calculationFailed: "Calculation failed",
@@ -9661,7 +9677,9 @@
       latitude: "Latitude",
       longitude: "Longitude",
       mockDataNotice: "Synthetic test data \u2013 not a checked road route",
-      configMissing: "Set entry_id in the card configuration.",
+      configMissing: "No Camper Route Planner instance found. Set up the integration first.",
+      multipleEntries: "Multiple Camper Route Planner instances found. Select one.",
+      entrySelection: "Camper Route Planner instance",
       routeSaved: "Route saved",
       mapTileError: "CARTO map tiles are unavailable; showing the SVG fallback.",
       navigationExport: "Navigation / Export",
@@ -9690,6 +9708,18 @@
   }
   function normalizeConfig(config = {}) {
     return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
+  }
+  function selectConfigEntry(config = {}, entries = []) {
+    const explicit = String(config.entry_id || "");
+    const normalized = (Array.isArray(entries) ? entries : []).filter((entry) => entry && entry.entry_id).map((entry) => ({
+      entry_id: String(entry.entry_id),
+      title: String(entry.title || "Camper Route Planner"),
+      state: String(entry.state || "")
+    }));
+    if (explicit) return { entryId: explicit, status: "ready", entries: normalized };
+    if (normalized.length === 1) return { entryId: normalized[0].entry_id, status: "ready", entries: normalized };
+    if (normalized.length > 1) return { entryId: "", status: "multiple", entries: normalized };
+    return { entryId: "", status: "missing", entries: normalized };
   }
   function addWaypoint(waypoints, point = { latitude: "", longitude: "", label: "" }) {
     return [...waypoints, { ...point }];
@@ -9726,6 +9756,9 @@
       synthetic: Boolean(payload.synthetic),
       created_at: payload.created_at || (/* @__PURE__ */ new Date()).toISOString(),
       geometry: payload.geometry || null,
+      metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+      beta: Boolean(payload.beta),
+      attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
       origin: payload.origin || null,
       destination: payload.destination || null,
       waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
@@ -9746,6 +9779,7 @@
       destination: state.destination,
       waypoints: state.waypoints,
       warnings: result.warnings,
+      metadata: result.metadata,
       created_at: result.created_at
     };
   }
@@ -9887,12 +9921,35 @@
       this.config = { ...config };
       this.render();
     }
+    set hass(hass) {
+      this._hass = hass;
+      this._connection = hass?.connection || hass;
+      this.loadEntries();
+    }
     connectedCallback() {
       this.render();
     }
+    async loadEntries() {
+      if (!this._hass?.callWS || this._entriesConnection === this._connection || this._loadingEntries) return;
+      this._entriesConnection = this._connection;
+      this._loadingEntries = true;
+      try {
+        const response = await callWebsocket(this._hass, { type: "camper_route_planner/list_entries" });
+        this._entries = Array.isArray(response?.entries) ? response.entries : [];
+      } catch (_error) {
+        this._entries = [];
+      } finally {
+        this._loadingEntries = false;
+        this.render();
+      }
+    }
     render() {
-      this.innerHTML = `<label>entry_id <input value="${escapeHtml(this.config?.entry_id || "")}></label>`;
-      this.querySelector("input")?.addEventListener("change", (event) => this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: { ...this.config, entry_id: event.target.value } } })));
+      const language = languageOf(this._hass);
+      const translate = (key) => t(language, key);
+      const selection = selectConfigEntry(this.config, this._entries || []);
+      const options = (this._entries || []).map((entry) => `<option value="${escapeHtml(entry.entry_id)}" ${entry.entry_id === this.config?.entry_id ? "selected" : ""}>${escapeHtml(entry.title)}</option>`).join("");
+      this.innerHTML = `<label>${translate("entrySelection")} <select data-entry-id><option value="">${selection.status === "multiple" ? translate("multipleEntries") : translate("configMissing")}</option>${options}</select></label>`;
+      this.querySelector("select")?.addEventListener("change", (event) => this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: { ...this.config, entry_id: event.target.value } } })));
     }
   };
   var CamperRoutePlannerCard = class extends HTMLElement {
@@ -9906,12 +9963,17 @@
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", busy: false, loaded: false };
+      this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._connection = null;
+      this._entryDiscoveryConnection = null;
+      this._entryDiscoveryPromise = null;
     }
     setConfig(config) {
-      this._config = normalizeConfig(config);
-      this.render();
+      const next = normalizeConfig(config);
+      const changed = next.entry_id !== this._config.entry_id || next.title !== this._config.title;
+      this._config = next;
+      if (changed && this._hass) this.loadData();
+      else this.render();
     }
     set hass(hass) {
       this._hass = hass;
@@ -9921,15 +9983,38 @@
         this.loadData();
       }
     }
+    async discoverEntry() {
+      if (this._config.entry_id) return selectConfigEntry(this._config, []);
+      if (this._entryDiscoveryConnection === this._connection && this._entryDiscoveryPromise) return this._entryDiscoveryPromise;
+      this._entryDiscoveryConnection = this._connection;
+      this._entryDiscoveryPromise = callWebsocket(this._hass, { type: "camper_route_planner/list_entries" }).then((response) => {
+        const selection = selectConfigEntry(this._config, response?.entries || []);
+        this._state.entries = selection.entries;
+        this._state.entryStatus = selection.status;
+        return selection;
+      }).finally(() => {
+        this._entryDiscoveryPromise = null;
+      });
+      return this._entryDiscoveryPromise;
+    }
     async loadData() {
-      if (!this._hass || !this._config.entry_id) return;
+      if (!this._hass) return;
       this._state.error = "";
       try {
+        const selection = await this.discoverEntry();
+        if (!selection.entryId) {
+          this._state.entryStatus = selection.status;
+          this._state.loaded = true;
+          this.render();
+          return;
+        }
+        const entryId = selection.entryId;
         const [profiles, routes, mapConfig] = await Promise.all([
-          callWebsocket(this._hass, { type: "camper_route_planner/list_profiles", entry_id: this._config.entry_id }),
-          callWebsocket(this._hass, { type: "camper_route_planner/list_routes", entry_id: this._config.entry_id }),
-          callWebsocket(this._hass, { type: "camper_route_planner/map_config", entry_id: this._config.entry_id })
+          callWebsocket(this._hass, { type: "camper_route_planner/list_profiles", entry_id: entryId }),
+          callWebsocket(this._hass, { type: "camper_route_planner/list_routes", entry_id: entryId }),
+          callWebsocket(this._hass, { type: "camper_route_planner/map_config", entry_id: entryId })
         ]);
+        this._config = { ...this._config, entry_id: entryId };
         this._state.profiles = Array.isArray(profiles?.profiles) ? profiles.profiles : [];
         this._state.routes = Array.isArray(routes?.routes) ? routes.routes : [];
         this._state.mapConfig = mapConfig || { provider: "none", status: "not_configured" };
@@ -10047,10 +10132,17 @@
       const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId);
       const result = this._state.result;
       if (!this._config.entry_id) {
-        this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${translate("configMissing")}</p></div></ha-card>`;
+        const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing");
+        this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`;
         return;
       }
       this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}" aria-label="${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(profile.vehicle_kind)} \xB7 ${escapeHtml(profile.fuel_type)}</dd></div></dl>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${this.renderPoint(this._state.origin, "origin")}</div><div class="panel"><h3>${translate("destination")}</h3>${this.renderPoint(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => this.renderPoint(point, "waypoint", index)).join("")}<button data-action="add">\uFF0B ${translate("addWaypoint")}</button></div></section><div class="actions"><button class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${translate("mockRoute") === (result?.synthetic ? translate("mockRoute") : "") ? translate("mockRoute") : result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div><div><b>${escapeHtml(result.provider)}</b><span>${translate("provider")}</span></div></div><div class="map-host"></div><div class="export-panel"><b>${translate("navigationExport")}</b><div class="export-actions"><button data-action="export" data-mode="route">${translate("exportRoute")}</button><button data-action="export" data-mode="track" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportCombined")}</button></div></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}${result.warnings.length ? `<div class="warnings"><b>${translate("warnings")}</b><ul>${result.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button data-action="export" data-mode="track" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportCombined")}</button><button data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+      if (result?.provider === "nakordoni_motorhome") {
+        const resultPanel = this.shadowRoot.querySelector(".result");
+        resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
+        const tolls = result.metadata?.tolls;
+        resultPanel?.insertAdjacentHTML("beforeend", `<div class="notice"><b>${translate("tolls")}</b>: ${tolls?.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "")}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}` : tolls?.complete === false ? translate("tollIncomplete") : translate("tollUnavailable")}</div>`);
+      }
       this.bindEvents();
       if (result) renderMap(this.shadowRoot.querySelector(".map-host"), result, this._state.mapConfig, { noRoute: translate("noRoute"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint") }, () => {
         this._state.mapError = translate("mapTileError");
@@ -10097,7 +10189,7 @@
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.content{padding:16px}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.export-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.export-actions button{min-height:38px}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
-  if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "custom:camper-route-planner-card")) window.customCards.push({ type: "custom:camper-route-planner-card", name: "Camper Route Planner", description: "Manual route planning with vehicle profiles" });
+  if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "custom:camper-route-planner-card")) window.customCards.push({ type: "custom:camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });
 })();
 /*! Bundled license information:
 

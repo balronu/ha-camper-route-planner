@@ -1,5 +1,5 @@
 import { languageOf, t } from "./localization.js";
-import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult } from "./card-utils.js";
+import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry } from "./card-utils.js";
 import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx } from "./services.js";
 import { renderMap } from "./map-view.js";
 
@@ -7,8 +7,21 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character
 
 class CamperRoutePlannerCardEditor extends HTMLElement {
   setConfig(config) { this.config = { ...config }; this.render(); }
+  set hass(hass) { this._hass = hass; this._connection = hass?.connection || hass; this.loadEntries(); }
   connectedCallback() { this.render(); }
-  render() { this.innerHTML = `<label>entry_id <input value="${escapeHtml(this.config?.entry_id || "")}></label>`; this.querySelector("input")?.addEventListener("change", (event) => this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: { ...this.config, entry_id: event.target.value } } }))); }
+  async loadEntries() {
+    if (!this._hass?.callWS || this._entriesConnection === this._connection || this._loadingEntries) return;
+    this._entriesConnection = this._connection; this._loadingEntries = true;
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/list_entries" }); this._entries = Array.isArray(response?.entries) ? response.entries : []; }
+    catch (_error) { this._entries = []; }
+    finally { this._loadingEntries = false; this.render(); }
+  }
+  render() {
+    const language = languageOf(this._hass); const translate = (key) => t(language, key); const selection = selectConfigEntry(this.config, this._entries || []);
+    const options = (this._entries || []).map((entry) => `<option value="${escapeHtml(entry.entry_id)}" ${entry.entry_id === this.config?.entry_id ? "selected" : ""}>${escapeHtml(entry.title)}</option>`).join("");
+    this.innerHTML = `<label>${translate("entrySelection")} <select data-entry-id><option value="">${selection.status === "multiple" ? translate("multipleEntries") : translate("configMissing")}</option>${options}</select></label>`;
+    this.querySelector("select")?.addEventListener("change", (event) => this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: { ...this.config, entry_id: event.target.value } } })));
+  }
 }
 
 export class CamperRoutePlannerCard extends HTMLElement {
@@ -19,11 +32,16 @@ export class CamperRoutePlannerCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = normalizeConfig();
-    this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", busy: false, loaded: false };
+    this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._connection = null;
+    this._entryDiscoveryConnection = null;
+    this._entryDiscoveryPromise = null;
   }
 
-  setConfig(config) { this._config = normalizeConfig(config); this.render(); }
+  setConfig(config) {
+    const next = normalizeConfig(config); const changed = next.entry_id !== this._config.entry_id || next.title !== this._config.title;
+    this._config = next; if (changed && this._hass) this.loadData(); else this.render();
+  }
 
   set hass(hass) {
     this._hass = hass;
@@ -34,15 +52,29 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }
   }
 
+  async discoverEntry() {
+    if (this._config.entry_id) return selectConfigEntry(this._config, []);
+    if (this._entryDiscoveryConnection === this._connection && this._entryDiscoveryPromise) return this._entryDiscoveryPromise;
+    this._entryDiscoveryConnection = this._connection;
+    this._entryDiscoveryPromise = callWebsocket(this._hass, { type: "camper_route_planner/list_entries" }).then((response) => {
+      const selection = selectConfigEntry(this._config, response?.entries || []); this._state.entries = selection.entries; this._state.entryStatus = selection.status; return selection;
+    }).finally(() => { this._entryDiscoveryPromise = null; });
+    return this._entryDiscoveryPromise;
+  }
+
   async loadData() {
-    if (!this._hass || !this._config.entry_id) return;
+    if (!this._hass) return;
     this._state.error = "";
     try {
+      const selection = await this.discoverEntry();
+      if (!selection.entryId) { this._state.entryStatus = selection.status; this._state.loaded = true; this.render(); return; }
+      const entryId = selection.entryId;
       const [profiles, routes, mapConfig] = await Promise.all([
-        callWebsocket(this._hass, { type: "camper_route_planner/list_profiles", entry_id: this._config.entry_id }),
-        callWebsocket(this._hass, { type: "camper_route_planner/list_routes", entry_id: this._config.entry_id }),
-        callWebsocket(this._hass, { type: "camper_route_planner/map_config", entry_id: this._config.entry_id })
+        callWebsocket(this._hass, { type: "camper_route_planner/list_profiles", entry_id: entryId }),
+        callWebsocket(this._hass, { type: "camper_route_planner/list_routes", entry_id: entryId }),
+        callWebsocket(this._hass, { type: "camper_route_planner/map_config", entry_id: entryId })
       ]);
+      this._config = { ...this._config, entry_id: entryId };
       this._state.profiles = Array.isArray(profiles?.profiles) ? profiles.profiles : [];
       this._state.routes = Array.isArray(routes?.routes) ? routes.routes : [];
       this._state.mapConfig = mapConfig || { provider: "none", status: "not_configured" };
@@ -105,8 +137,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
 
   render() {
     const language = languageOf(this._hass); const translate = (key) => t(language, key); const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId); const result = this._state.result;
-    if (!this._config.entry_id) { this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${translate("configMissing")}</p></div></ha-card>`; return; }
+    if (!this._config.entry_id) { const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing"); this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`; return; }
     this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}" aria-label="${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(profile.vehicle_kind)} · ${escapeHtml(profile.fuel_type)}</dd></div></dl>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${this.renderPoint(this._state.origin, "origin")}</div><div class="panel"><h3>${translate("destination")}</h3>${this.renderPoint(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => this.renderPoint(point, "waypoint", index)).join("")}<button data-action="add">＋ ${translate("addWaypoint")}</button></div></section><div class="actions"><button class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${translate("mockRoute") === (result?.synthetic ? translate("mockRoute") : "") ? translate("mockRoute") : result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div><div><b>${escapeHtml(result.provider)}</b><span>${translate("provider")}</span></div></div><div class="map-host"></div><div class="export-panel"><b>${translate("navigationExport")}</b><div class="export-actions"><button data-action="export" data-mode="route">${translate("exportRoute")}</button><button data-action="export" data-mode="track" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportCombined")}</button></div></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}${result.warnings.length ? `<div class="warnings"><b>${translate("warnings")}</b><ul>${result.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button data-action="export" data-mode="track" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportCombined")}</button><button data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+    if (result?.provider === "nakordoni_motorhome") {
+      const resultPanel = this.shadowRoot.querySelector(".result");
+      resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
+      const tolls = result.metadata?.tolls;
+      resultPanel?.insertAdjacentHTML("beforeend", `<div class="notice"><b>${translate("tolls")}</b>: ${tolls?.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "")}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}` : tolls?.complete === false ? translate("tollIncomplete") : translate("tollUnavailable")}</div>`);
+    }
     this.bindEvents(); if (result) renderMap(this.shadowRoot.querySelector(".map-host"), result, this._state.mapConfig, { noRoute: translate("noRoute"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint") }, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); });
   }
 
@@ -122,4 +160,4 @@ const STYLES = `:host{display:block;color:var(--primary-text-color);font-family:
 
 if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
 if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
-if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "custom:camper-route-planner-card")) window.customCards.push({ type: "custom:camper-route-planner-card", name: "Camper Route Planner", description: "Manual route planning with vehicle profiles" });
+if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "custom:camper-route-planner-card")) window.customCards.push({ type: "custom:camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });

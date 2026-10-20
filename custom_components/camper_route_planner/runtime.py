@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI
+from .const import CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
 from .coordinator import RouteCoordinator
 from .models import RouteRequest, RouteWaypoint
 from .map_provider import build_map_config
 from .providers.mock import MockRoutingProvider
 from .providers.nakordoni import NakordoniRoutingProvider
+from .providers.nakordoni_motorhome import NakordoniMotorhomeProvider
 from .storage import ProfileRouteStore
 
 
@@ -31,7 +32,9 @@ class RuntimeData:
             store_backend = MemoryStore()
         store = ProfileRouteStore(store_backend)
         provider_name = entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)
-        if provider_name == PROVIDER_NAKORDONI:
+        if provider_name == PROVIDER_NAKORDONI_MOTORHOME:
+            provider = NakordoniMotorhomeProvider(api_key=entry.data.get("api_key"), live_enabled=False)
+        elif provider_name == PROVIDER_NAKORDONI:
             provider = NakordoniRoutingProvider(api_key=entry.data.get("api_key"), live_enabled=False)
         else:
             provider = MockRoutingProvider()
@@ -50,4 +53,9 @@ class RuntimeData:
             raise ValueError("unknown vehicle profile")
         request = RouteRequest(RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile, tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])))
         result = await self.coordinator.async_calculate_manual(request)
-        return {"provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m, "duration_s": result.duration_s, "warnings": [warning.message for warning in result.warnings]}
+        return {
+            "provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m,
+            "duration_s": result.duration_s, "warnings": [warning.message for warning in result.warnings],
+            "geometry": result.geometry.as_dict(), "metadata": result.metadata,
+            "beta": result.metadata.get("beta", False), "attribution_url": result.metadata.get("attribution_url"),
+        }
