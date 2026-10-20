@@ -191,6 +191,6 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     )
     assert result["type"] == "form"
     assert result["step_id"] == "init"
-    assert result["errors"]["base"] == "carto_api_key_required"
+    assert result["errors"]["carto_api_key"] == "carto_key_required"
     assert entry.options["provider"] == PROVIDER_MOCK
     assert entry.options["preserved_option"] == "keep-me"
