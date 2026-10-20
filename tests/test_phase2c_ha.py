@@ -212,7 +212,7 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"provider": PROVIDER_MOCK, "map_provider": "carto"},
+        user_input={"provider": PROVIDER_MOCK, "map_provider": "carto", "carto_api_key": "", "remove_carto_api_key": True},
     )
     assert result["type"] == "form"
     assert result["step_id"] == "init"
