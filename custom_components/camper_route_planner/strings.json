@@ -7,7 +7,8 @@
         "data": {
           "name": "Name",
           "provider": "Routing provider",
-          "api_key": "Nakordoni API key",
+          "api_key": "Nakordoni API key (stored locally in Home Assistant)",
+          "remove_api_key": "Remove Nakordoni API key",
           "map_provider": "Map provider",
           "carto_api_key": "Browser-safe CARTO key",
           "remove_carto_api_key": "Remove CARTO key"
@@ -17,7 +18,7 @@
     "error": {
       "invalid_provider": "Select a supported provider.",
       "api_key": "A Nakordoni key is required only for the separate provider configuration.",
-      "required_for_nakordoni": "A Nakordoni API key is required for this provider configuration.",
+      "invalid_api_key": "Enter a valid Nakordoni API key. The key is never sent to the browser.",
       "invalid_map_provider": "Select a supported map provider.",
       "carto_key_required": "A CARTO key is required for the CARTO map provider.",
       "carto_key_invalid": "The CARTO key is not valid for browser tile access.",
@@ -33,7 +34,8 @@
         "title": "Camper Route Planner options",
         "data": {
           "provider": "Routing provider",
-          "api_key": "Nakordoni API key",
+          "api_key": "Replace Nakordoni API key (blank keeps current key)",
+          "remove_api_key": "Remove Nakordoni API key",
           "map_provider": "Map provider",
           "carto_api_key": "Browser-safe CARTO key",
           "remove_carto_api_key": "Remove CARTO key"

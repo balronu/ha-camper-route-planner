@@ -28,7 +28,6 @@ profiles, an interactive map, saved routes, and GPX export.
 ## Not available yet
 
 - production Nakordoni routing
-- a dedicated Nakordoni OAuth client
 - Nakordoni `vehicle_type=motorhome`
 - verified motorhome navigation
 - automatic Lovelace resource registration
@@ -103,16 +102,17 @@ matrix and blockers. Hassfest and GitHub-side validation run through
    validation.
 2. **Phase 2G:** offline preparation of the Nakordoni Motorhome beta provider,
    OAuth/PKCE, quota, and toll contracts.
-3. **Phase 2H:** dedicated OAuth client, isolated activation tests, and
-   controlled real-route comparisons after approval.
-4. **Phase 2I:** conservative preparation of `v0.1.0 Stable`; no release
-   without documented approval.
+3. **Phase 2H:** offline provider, OAuth/PKCE preparation, and CI.
+4. **Phase 2I:** personal API keys, dry-run test tooling, and live test plan;
+   no release without a result report and documented approval.
 
 ## Phase 2G/2H: Nakordoni Motorhome beta
 
 The `nakordoni_motorhome` provider is prepared locally as an offline/fixture provider, but is not enabled for production. Nakordoni Motorhome is a beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider and no verified motorhome navigation claim.
 
-Future activation requires a dedicated Nakordoni OAuth client with PKCE, individual user accounts, and individual routing quotas. The Mobile Fuel Stations OAuth client is not reused. No live routing requests were made in Phase 2G.
+OAuth/PKCE remains a later optional alternative for v0.1.0 Stable. The Mobile
+Fuel Stations OAuth client is not reused. No live routing requests were made
+in Phase 2I.
 
 Route data is attributed to [Data by nakordoni.eu](https://nakordoni.eu). The routing API is officially documented on `nakordoni.eu`; OAuth and Account Usage use `api.nakordoni.dev`. See [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [quotas](docs/NAKORDONI-QUOTAS.md), and [tolls](docs/NAKORDONI-TOLLS.md).
 

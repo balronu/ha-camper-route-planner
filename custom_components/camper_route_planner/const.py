@@ -10,6 +10,7 @@ VERSION: Final = "0.1.0-alpha.1"
 
 CONF_PROVIDER: Final = "provider"
 CONF_API_KEY: Final = "api_key"
+CONF_REMOVE_API_KEY: Final = "remove_api_key"
 CONF_LIVE_ENABLED: Final = "live_enabled"
 CONF_PROFILE_ID: Final = "profile_id"
 CONF_PROFILE: Final = "profile"

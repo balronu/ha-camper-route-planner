@@ -6,6 +6,7 @@ from custom_components.camper_route_planner.providers.nakordoni_motorhome import
     FORBIDDEN_TRUCK_TIME_FIELDS, NakordoniMotorhomeProvider, build_motorhome_parameters,
     provider_error_from_payload, safe_provider_link,
 )
+from custom_components.camper_route_planner.config_flow_support import normalize_api_key, validate_user_input
 
 
 def request(**changes):
@@ -59,3 +60,16 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertFalse(error.retryable)
         self.assertEqual(safe_provider_link("https://nakordoni.eu/upgrade"), "https://nakordoni.eu/upgrade")
         self.assertIsNone(safe_provider_link("https://evil.example/steal"))
+
+    def test_manual_key_is_required_for_motorhome_but_never_echoed(self):
+        self.assertEqual(validate_user_input({"provider": "nakordoni_motorhome"}), {"api_key": "invalid_api_key"})
+        key = normalize_api_key(f"  {'K' * 24}  ")
+        self.assertEqual(key, "K" * 24)
+        for invalid in ("short", "contains space 123456", f"\n{'K' * 24}"):
+            with self.assertRaises(ValueError):
+                normalize_api_key(invalid)
+
+    def test_manual_key_errors_do_not_contain_secret(self):
+        secret = "S" * 24
+        error = provider_error_from_payload({"status": 401, "error": {"code": "invalid_api_key", "message": secret}})
+        self.assertNotIn(secret, str(error))

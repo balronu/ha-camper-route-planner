@@ -103,7 +103,7 @@ class Phase2ATests(unittest.TestCase):
 
     def test_config_flow_validation_and_optional_contracts(self):
         self.assertEqual(validate_user_input({"provider": "mock"}), {})
-        self.assertEqual(validate_user_input({"provider": "nakordoni"}), {"api_key": "required_for_nakordoni"})
+        self.assertEqual(validate_user_input({"provider": "nakordoni"}), {"api_key": "invalid_api_key"})
         self.assertEqual(validate_user_input({"provider": "nakordoni", "api_key": "x", "live_enabled": True}), {"base": "live_routing_requires_separate_phase"})
 
     def test_no_fixture_is_written_to_integration_source(self):

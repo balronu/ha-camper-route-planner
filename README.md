@@ -29,7 +29,6 @@ und GPX-Export.
 ## Noch nicht verfügbar
 
 - produktives Nakordoni-Routing
-- eigenständiger Nakordoni-OAuth-Client
 - Nakordoni-`vehicle_type=motorhome`
 - verifizierte Wohnmobilnavigation
 - automatische Lovelace-Resource-Registrierung
@@ -64,21 +63,30 @@ normalisierten Route und enthält keine Zugangsdaten.
 
 ## Nakordoni-Status
 
+Jede Installation verwendet ausschließlich den persönlichen Nakordoni-
+Developer-API-Key des Benutzers. Der Key wird im Home-Assistant
+Config-/Options-Flow als Passwortfeld eingegeben und lokal in der Config Entry
+gespeichert; er wird nie an Lovelace, Browser-Local-Storage, GPX oder Logs
+übertragen. Erneuerung und explizites Entfernen sind über den Options Flow
+möglich. Siehe [API-Key-Anbindung](docs/NAKORDONI-API-KEY.md).
+
 Laut Support-Ticket #230 ist `GET /api/v2/data/truck-route` mit dem
 vorhandenen Zugang zugänglich. Das Projekt hat dafür keinen Live-Aufruf
 ausgeführt. Das Truck-Routing besitzt ein separates Tageskontingent (Explorer
 10, Starter 300 Routen/Tag; Zusatzkontingente möglich).
 
-`vehicle_type=motorhome` ist noch nicht verfügbar. Eine erste Beta wurde
-unverbindlich für ungefähr den 26.10.2026 prognostiziert. Das geplante Profil
-soll Wohnmobilmaße, Gewichtsgrenzen, Wohnmobilverbote und Mautregeln
-berücksichtigen; Lkw-Lenk- und Ruhezeiten sollen nicht gelten. Diese
-Ankündigung ist kein API- oder Release-Gate.
+`vehicle_type=motorhome` ist als Beta dokumentiert. Das Profil verwendet
+7,65 m × 2,34 m × 3,20 m, 4,8 t und zwei Achsen; Lkw-Lenk- und Ruhezeitfelder
+werden nicht übertragen. Reale Aufrufe bleiben bis zur gesonderten Freigabe
+aus. Das isolierte Werkzeug startet standardmäßig im Dry-Run; der
+[Live-Testplan](docs/PHASE2I-LIVE-TEST-PLAN.md) begrenzt den ersten Tag auf
+acht Abfragen.
 
-Nakordoni soll nach Übermittlung der Repository-URL einen eigenen OAuth-Client
-für dieses Projekt registrieren. Der Client von Mobile Fuel Stations wird
-nicht übernommen. Jeder Nutzer verwendet seinen eigenen Zugang und sein
-eigenes Routing-Kontingent.
+OAuth/PKCE bleibt als spätere Alternative vorbereitet und ist für v0.1.0
+Stable optional. Der Client von Mobile Fuel Stations wird nicht übernommen.
+Jeder Nutzer verwendet seinen eigenen Zugang und sein eigenes Routing-
+Kontingent. Die Surface-Registrierung im Nakordoni-Dashboard ist vorbereitet,
+aber nicht in einem fremden Account durchgeführt.
 
 Details: [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
 [API-Audit](docs/NAKORDONI-API-AUDIT.md),
@@ -118,16 +126,17 @@ ist.
    Validierung.
 2. **Phase 2G:** Offline-Vorbereitung des Nakordoni-Motorhome-Beta-Providers,
    OAuth-/PKCE-, Quoten- und Mautvertrag.
-3. **Phase 2H:** eigener OAuth-Client, isolierte Aktivierungstests und
-   kontrollierte reale Streckenvergleiche nach Freigabe.
-4. **Phase 2I:** konservative Vorbereitung von `v0.1.0 Stable`; kein Release
-   ohne dokumentierte Freigabe.
+3. **Phase 2H:** Offline-Provider, OAuth-/PKCE-Vorbereitung und CI.
+4. **Phase 2I:** persönliche API-Keys, Dry-Run-Testwerkzeug und Live-Testplan;
+   kein Release ohne Ergebnisbericht und dokumentierte Freigabe.
 
 ## Phase 2G/2H: Nakordoni Motorhome-Beta
 
 Der Provider `nakordoni_motorhome` ist lokal als Offline-/Fixture-Provider vorbereitet, aber nicht produktiv aktiviert. Nakordoni Motorhome ist eine Beta; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider und keine verifizierte Wohnmobilnavigation.
 
-Für eine spätere Aktivierung sind ein eigener Nakordoni-OAuth-Client mit PKCE, individuelle Benutzerkonten und individuelle Routingkontingente erforderlich. Der OAuth-Client von Mobile Fuel Stations wird nicht verwendet. Keine Live-Routingabfragen wurden in Phase 2G ausgeführt.
+OAuth/PKCE bleibt als spätere Alternative vorbereitet und ist für v0.1.0
+Stable optional. Der OAuth-Client von Mobile Fuel Stations wird nicht verwendet.
+Keine Live-Routingabfragen wurden in Phase 2I ausgeführt.
 
 Routendaten werden mit [Data by nakordoni.eu](https://nakordoni.eu) attribuiert. Die Routing-API ist offiziell unter `nakordoni.eu` dokumentiert; OAuth und Account Usage unter `api.nakordoni.dev`. Details: [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API-Hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [Kontingente](docs/NAKORDONI-QUOTAS.md), [Maut](docs/NAKORDONI-TOLLS.md).
 

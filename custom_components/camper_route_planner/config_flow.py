@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .config_flow_support import validate_user_input
+from .config_flow_support import normalize_api_key, validate_user_input
 from .const import (CONF_API_KEY, CONF_CARTO_API_KEY, CONF_LIVE_ENABLED, CONF_MAP_PROVIDER,
-                    CONF_PROVIDER, CONF_REMOVE_CARTO_API_KEY, DOMAIN, MAP_PROVIDER_CARTO,
+                    CONF_PROVIDER, CONF_REMOVE_API_KEY, CONF_REMOVE_CARTO_API_KEY, DOMAIN, MAP_PROVIDER_CARTO,
                     MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME)
 from .models import VehicleProfile
 
@@ -14,6 +14,13 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
     import voluptuous as vol
     from homeassistant import config_entries
     from homeassistant.const import CONF_NAME
+    from homeassistant.helpers import selector
+
+    def _api_key_selector():
+        try:
+            return selector.TextSelector({"type": "password"})
+        except TypeError:  # pragma: no cover
+            return selector.TextSelector(selector.TextSelectorConfig(type="password"))
 
     class CamperRoutePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Set up an isolated provider configuration."""
@@ -25,14 +32,16 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
             if user_input is not None:
                 errors = validate_user_input(user_input)
                 if not errors:
+                    provider = user_input[CONF_PROVIDER]
+                    api_key = normalize_api_key(user_input[CONF_API_KEY]) if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME) else ""
                     return self.async_create_entry(title=user_input.get(CONF_NAME, "Camper Route Planner"), data={
                         CONF_PROVIDER: user_input[CONF_PROVIDER],
-                        CONF_API_KEY: user_input.get(CONF_API_KEY),
+                        CONF_API_KEY: api_key,
                         CONF_LIVE_ENABLED: False,
                         CONF_MAP_PROVIDER: user_input.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE),
                         CONF_CARTO_API_KEY: user_input.get(CONF_CARTO_API_KEY, "").strip(),
                     })
-            schema = vol.Schema({vol.Required(CONF_NAME, default="Camper Route Planner"): str, vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): str, vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str})
+            schema = vol.Schema({vol.Required(CONF_NAME, default="Camper Route Planner"): str, vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str})
             return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
         @staticmethod
@@ -50,19 +59,30 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
             if user_input is not None:
                 current = {**self.config_entry.data, **self.config_entry.options}
                 submitted = {**current, **user_input}
+                provider = user_input.get(CONF_PROVIDER, current.get(CONF_PROVIDER, PROVIDER_MOCK))
+                if provider not in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
+                    submitted[CONF_API_KEY] = ""
+                elif user_input.get(CONF_REMOVE_API_KEY):
+                    submitted[CONF_API_KEY] = ""
+                elif str(user_input.get(CONF_API_KEY, "")).strip():
+                    submitted[CONF_API_KEY] = user_input[CONF_API_KEY]
+                else:
+                    submitted[CONF_API_KEY] = current.get(CONF_API_KEY, "")
                 if not str(user_input.get(CONF_CARTO_API_KEY, "")).strip():
                     submitted[CONF_CARTO_API_KEY] = current.get(CONF_CARTO_API_KEY, "")
                 if user_input.get(CONF_REMOVE_CARTO_API_KEY):
                     submitted[CONF_CARTO_API_KEY] = ""
                 errors = validate_user_input(submitted)
                 if not errors:
-                    self._provider_input = {**user_input, CONF_CARTO_API_KEY: submitted.get(CONF_CARTO_API_KEY, ""), CONF_LIVE_ENABLED: False}
+                    if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
+                        submitted[CONF_API_KEY] = normalize_api_key(submitted[CONF_API_KEY])
+                    self._provider_input = {**user_input, CONF_API_KEY: submitted.get(CONF_API_KEY, ""), CONF_CARTO_API_KEY: submitted.get(CONF_CARTO_API_KEY, ""), CONF_LIVE_ENABLED: False}
                     return await self.async_step_profile()
                 return self.async_show_form(step_id="init", data_schema=self._schema(), errors=errors)
             return self.async_show_form(step_id="init", data_schema=self._schema())
 
         def _schema(self):
-            return vol.Schema({vol.Required(CONF_PROVIDER, default=self.config_entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): str, vol.Optional(CONF_MAP_PROVIDER, default=self.config_entry.data.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
+            return vol.Schema({vol.Required(CONF_PROVIDER, default=self.config_entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_REMOVE_API_KEY, default=False): bool, vol.Optional(CONF_MAP_PROVIDER, default=self.config_entry.data.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
             errors: dict[str, str] = {}
