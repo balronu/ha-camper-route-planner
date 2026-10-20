@@ -4,9 +4,12 @@ from __future__ import annotations
 
 try:
     import pytest
-    from homeassistant.const import CONF_NAME
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+    try:
+        from homeassistant.const import CONF_NAME
+    except ImportError:  # HA 2026.10 keeps the flow field name as a literal.
+        CONF_NAME = "name"
     from custom_components.camper_route_planner.const import DOMAIN, PROVIDER_MOCK
     from custom_components.camper_route_planner.models import VehicleProfile
     HA_AVAILABLE = True
