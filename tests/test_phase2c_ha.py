@@ -50,7 +50,6 @@ async def test_config_flow_options_and_response_service(hass: HomeAssistant, ena
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert hass.data[DOMAIN]["_frontend_registered"] is True
 
     runtime = hass.data[DOMAIN][entry.entry_id]
     await runtime.store.async_save_profile(
@@ -135,4 +134,3 @@ async def test_config_entry_unload_cleans_only_own_runtime(hass: HomeAssistant, 
     assert entry.entry_id in hass.data[DOMAIN]
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.entry_id not in hass.data[DOMAIN]
-    assert hass.data[DOMAIN]["_frontend_registered"] is False

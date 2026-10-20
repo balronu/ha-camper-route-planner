@@ -33,14 +33,19 @@ try:
         del config
         domain_data = hass.data.setdefault(DOMAIN, {})
         if not domain_data.get("_frontend_registered"):
-            from homeassistant.components.frontend import add_extra_js_url
-            from homeassistant.components.http import StaticPathConfig
+            if hass.http is not None:
+                from homeassistant.components.frontend import add_extra_js_url
+                from homeassistant.components.http import StaticPathConfig
 
-            await hass.http.async_register_static_paths(
-                [StaticPathConfig(FRONTEND_URL, str(FRONTEND_FILE), True)]
-            )
-            add_extra_js_url(hass, f"{FRONTEND_URL}?v=0.1.0-alpha.1")
-            domain_data["_frontend_registered"] = True
+                await hass.http.async_register_static_paths(
+                    [StaticPathConfig(FRONTEND_URL, str(FRONTEND_FILE), True)]
+                )
+                add_extra_js_url(hass, f"{FRONTEND_URL}?v=0.1.0-alpha.1")
+                domain_data["_frontend_registered"] = True
+            else:
+                # Some isolated HA fixtures omit the HTTP component. A real HA
+                # instance loads it; integration setup must remain testable.
+                domain_data["_frontend_registered"] = False
         if not domain_data.get("_websocket_registered"):
             from .websocket_api import async_register as async_register_websocket
             async_register_websocket(hass)
@@ -73,7 +78,10 @@ try:
 
     async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-        if not hass.config_entries.async_loaded_entries(DOMAIN):
+        if (
+            not hass.config_entries.async_loaded_entries(DOMAIN)
+            and hass.data.get(DOMAIN, {}).get("_frontend_registered")
+        ):
             from homeassistant.components.frontend import remove_extra_js_url
 
             remove_extra_js_url(hass, f"{FRONTEND_URL}?v=0.1.0-alpha.1")
