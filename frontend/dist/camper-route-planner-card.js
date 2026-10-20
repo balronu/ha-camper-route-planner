@@ -9592,6 +9592,13 @@
       warnings: "Warnungen",
       noRoute: "Keine Route vorhanden",
       mockRoute: "Mock-Route",
+      motorhomeBeta: "Nakordoni Motorhome \u2013 Beta",
+      motorhomeWarning: "Wohnmobil-Routing befindet sich in der Beta-Phase. Verkehrszeichen und geltende Vorschriften haben Vorrang.",
+      dataByNakordoni: "Daten von nakordoni.eu",
+      tolls: "Maut",
+      tollEstimate: "Sch\xE4tzung",
+      tollIncomplete: "Mautdaten unvollst\xE4ndig",
+      tollUnavailable: "Keine Mautpreisinformation",
       providerUnavailable: "Provider nicht verf\xFCgbar",
       invalidCoordinates: "Ung\xFCltige Koordinaten",
       calculationFailed: "Berechnung fehlgeschlagen",
@@ -9639,6 +9646,13 @@
       warnings: "Warnings",
       noRoute: "No route available",
       mockRoute: "Mock route",
+      motorhomeBeta: "Nakordoni Motorhome \u2013 Beta",
+      motorhomeWarning: "Motorhome routing is in beta. Traffic signs and applicable regulations take precedence.",
+      dataByNakordoni: "Data by nakordoni.eu",
+      tolls: "Tolls",
+      tollEstimate: "Estimate",
+      tollIncomplete: "Toll data incomplete",
+      tollUnavailable: "No toll price information",
       providerUnavailable: "Provider unavailable",
       invalidCoordinates: "Invalid coordinates",
       calculationFailed: "Calculation failed",
@@ -9726,6 +9740,9 @@
       synthetic: Boolean(payload.synthetic),
       created_at: payload.created_at || (/* @__PURE__ */ new Date()).toISOString(),
       geometry: payload.geometry || null,
+      metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+      beta: Boolean(payload.beta),
+      attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
       origin: payload.origin || null,
       destination: payload.destination || null,
       waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
@@ -9746,6 +9763,7 @@
       destination: state.destination,
       waypoints: state.waypoints,
       warnings: result.warnings,
+      metadata: result.metadata,
       created_at: result.created_at
     };
   }
@@ -10051,6 +10069,12 @@
         return;
       }
       this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}" aria-label="${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(profile.vehicle_kind)} \xB7 ${escapeHtml(profile.fuel_type)}</dd></div></dl>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${this.renderPoint(this._state.origin, "origin")}</div><div class="panel"><h3>${translate("destination")}</h3>${this.renderPoint(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => this.renderPoint(point, "waypoint", index)).join("")}<button data-action="add">\uFF0B ${translate("addWaypoint")}</button></div></section><div class="actions"><button class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${translate("mockRoute") === (result?.synthetic ? translate("mockRoute") : "") ? translate("mockRoute") : result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div><div><b>${escapeHtml(result.provider)}</b><span>${translate("provider")}</span></div></div><div class="map-host"></div><div class="export-panel"><b>${translate("navigationExport")}</b><div class="export-actions"><button data-action="export" data-mode="route">${translate("exportRoute")}</button><button data-action="export" data-mode="track" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportCombined")}</button></div></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}${result.warnings.length ? `<div class="warnings"><b>${translate("warnings")}</b><ul>${result.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button data-action="export" data-mode="track" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportCombined")}</button><button data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+      if (result?.provider === "nakordoni_motorhome") {
+        const resultPanel = this.shadowRoot.querySelector(".result");
+        resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
+        const tolls = result.metadata?.tolls;
+        resultPanel?.insertAdjacentHTML("beforeend", `<div class="notice"><b>${translate("tolls")}</b>: ${tolls?.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "")}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}` : tolls?.complete === false ? translate("tollIncomplete") : translate("tollUnavailable")}</div>`);
+      }
       this.bindEvents();
       if (result) renderMap(this.shadowRoot.querySelector(".map-host"), result, this._state.mapConfig, { noRoute: translate("noRoute"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint") }, () => {
         this._state.mapError = translate("mapTileError");

@@ -14,7 +14,8 @@ test("card exposes HA registration and editor API", () => {
 });
 
 test("frontend has no provider secret or direct Nakordoni endpoint", () => {
-  assert.doesNotMatch(source, /nakordoni\.eu|Bearer|api[_-]?key|secret/i);
+  assert.match(source, /nakordoni\.eu/);
+  assert.doesNotMatch(source, /api\.nakordoni\.dev|Bearer|api[_-]?key|secret/i);
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest|WebSocket\(/);
 });
 

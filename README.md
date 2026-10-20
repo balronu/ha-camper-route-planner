@@ -116,11 +116,20 @@ ist.
 
 1. **Phase 2F:** eigenständiges Repository, Branding, Dokumentation und
    Validierung.
-2. **Phase 2G:** kontrollierter Truck-Adapter nur nach Vertrags-, OAuth- und
-   Quota-Freigabe.
-3. **Phase 2H:** Motorhome-Vertrag und Schema erst nach tatsächlicher
-   Providerfreigabe.
-4. **Phase 2I:** konservative Vorbereitung von `v0.1.0 Stable`.
+2. **Phase 2G:** Offline-Vorbereitung des Nakordoni-Motorhome-Beta-Providers,
+   OAuth-/PKCE-, Quoten- und Mautvertrag.
+3. **Phase 2H:** eigener OAuth-Client, isolierte Aktivierungstests und
+   kontrollierte reale Streckenvergleiche nach Freigabe.
+4. **Phase 2I:** konservative Vorbereitung von `v0.1.0 Stable`; kein Release
+   ohne dokumentierte Freigabe.
+
+## Phase 2G: Nakordoni Motorhome-Beta
+
+Der Provider `nakordoni_motorhome` ist lokal als Offline-/Fixture-Provider vorbereitet, aber nicht produktiv aktiviert. Nakordoni Motorhome ist eine Beta; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider und keine verifizierte Wohnmobilnavigation.
+
+Für eine spätere Aktivierung sind ein eigener Nakordoni-OAuth-Client mit PKCE, individuelle Benutzerkonten und individuelle Routingkontingente erforderlich. Der OAuth-Client von Mobile Fuel Stations wird nicht verwendet. Keine Live-Routingabfragen wurden in Phase 2G ausgeführt.
+
+Routendaten werden mit [Data by nakordoni.eu](https://nakordoni.eu) attribuiert. Details: [Phase 2G](docs/PHASE2G-IMPLEMENTATION.md), [OAuth](docs/NAKORDONI-OAUTH.md), [Kontingente](docs/NAKORDONI-QUOTAS.md), [Maut](docs/NAKORDONI-TOLLS.md).
 
 ## Lizenz
 

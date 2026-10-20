@@ -7,7 +7,7 @@ from typing import Any
 from .config_flow_support import validate_user_input
 from .const import (CONF_API_KEY, CONF_CARTO_API_KEY, CONF_LIVE_ENABLED, CONF_MAP_PROVIDER,
                     CONF_PROVIDER, CONF_REMOVE_CARTO_API_KEY, DOMAIN, MAP_PROVIDER_CARTO,
-                    MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI)
+                    MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME)
 from .models import VehicleProfile
 
 try:  # Home Assistant is intentionally not required by the offline test runner.
@@ -32,7 +32,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                         CONF_MAP_PROVIDER: user_input.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE),
                         CONF_CARTO_API_KEY: user_input.get(CONF_CARTO_API_KEY, "").strip(),
                     })
-            schema = vol.Schema({vol.Required(CONF_NAME, default="Camper Route Planner"): str, vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI]), vol.Optional(CONF_API_KEY): str, vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str})
+            schema = vol.Schema({vol.Required(CONF_NAME, default="Camper Route Planner"): str, vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): str, vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str})
             return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
         @staticmethod
@@ -62,7 +62,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
             return self.async_show_form(step_id="init", data_schema=self._schema())
 
         def _schema(self):
-            return vol.Schema({vol.Required(CONF_PROVIDER, default=self.config_entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI]), vol.Optional(CONF_API_KEY): str, vol.Optional(CONF_MAP_PROVIDER, default=self.config_entry.data.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
+            return vol.Schema({vol.Required(CONF_PROVIDER, default=self.config_entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): str, vol.Optional(CONF_MAP_PROVIDER, default=self.config_entry.data.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
             errors: dict[str, str] = {}
@@ -72,6 +72,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                         profile_id=user_input["profile_id"], name=user_input["name"], vehicle_kind=user_input["vehicle_kind"],
                         height_m=float(user_input["height_m"]), width_m=float(user_input["width_m"]), length_m=float(user_input["length_m"]),
                         gross_weight_kg=int(user_input["gross_weight_kg"]), fuel_type=user_input["fuel_type"],
+                        axles=int(user_input.get("axles", 2)),
                     )
                     runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
                     if runtime is not None:
@@ -88,6 +89,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                 vol.Required("length_m", default=7.65): vol.Coerce(float),
                 vol.Required("gross_weight_kg", default=4800): vol.Coerce(int),
                 vol.Required("fuel_type", default="diesel"): vol.In(["diesel", "petrol", "electric", "hybrid", "other"]),
+                vol.Required("axles", default=2): vol.Coerce(int),
             })
             return self.async_show_form(step_id="profile", data_schema=schema, errors=errors)
 

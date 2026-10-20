@@ -50,7 +50,8 @@
           "width_m": "Width (m)",
           "length_m": "Length (m)",
           "gross_weight_kg": "Permitted mass (kg)",
-          "fuel_type": "Fuel type"
+          "fuel_type": "Fuel type",
+          "axles": "Number of axles"
         }
       }
     },

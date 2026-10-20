@@ -101,10 +101,20 @@ matrix and blockers. Hassfest and GitHub-side validation run through
 
 1. **Phase 2F:** independent repository, branding, documentation, and
    validation.
-2. **Phase 2G:** controlled truck adapter after contract, OAuth, and quota
-   approval.
-3. **Phase 2H:** motorhome contract and schema after actual provider release.
-4. **Phase 2I:** conservative preparation of `v0.1.0 Stable`.
+2. **Phase 2G:** offline preparation of the Nakordoni Motorhome beta provider,
+   OAuth/PKCE, quota, and toll contracts.
+3. **Phase 2H:** dedicated OAuth client, isolated activation tests, and
+   controlled real-route comparisons after approval.
+4. **Phase 2I:** conservative preparation of `v0.1.0 Stable`; no release
+   without documented approval.
+
+## Phase 2G: Nakordoni Motorhome beta
+
+The `nakordoni_motorhome` provider is prepared locally as an offline/fixture provider, but is not enabled for production. Nakordoni Motorhome is a beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider and no verified motorhome navigation claim.
+
+Future activation requires a dedicated Nakordoni OAuth client with PKCE, individual user accounts, and individual routing quotas. The Mobile Fuel Stations OAuth client is not reused. No live routing requests were made in Phase 2G.
+
+Route data is attributed to [Data by nakordoni.eu](https://nakordoni.eu). See [Phase 2G](docs/PHASE2G-IMPLEMENTATION.md), [OAuth](docs/NAKORDONI-OAUTH.md), [quotas](docs/NAKORDONI-QUOTAS.md), and [tolls](docs/NAKORDONI-TOLLS.md).
 
 ## License
 

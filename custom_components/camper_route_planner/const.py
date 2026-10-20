@@ -19,6 +19,7 @@ CONF_REMOVE_CARTO_API_KEY: Final = "remove_carto_api_key"
 
 PROVIDER_MOCK: Final = "mock"
 PROVIDER_NAKORDONI: Final = "nakordoni"
+PROVIDER_NAKORDONI_MOTORHOME: Final = "nakordoni_motorhome"
 MAP_PROVIDER_NONE: Final = "none"
 MAP_PROVIDER_CARTO: Final = "carto"
 CARTO_TILE_URL: Final = "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key={key}"

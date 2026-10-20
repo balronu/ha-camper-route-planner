@@ -50,6 +50,9 @@ export function normalizeServiceResponse(response) {
     synthetic: Boolean(payload.synthetic),
     created_at: payload.created_at || new Date().toISOString(),
     geometry: payload.geometry || null,
+    metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    beta: Boolean(payload.beta),
+    attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
     origin: payload.origin || null,
     destination: payload.destination || null,
     waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
@@ -71,6 +74,7 @@ export function routeRecordFromResult(result, state) {
     destination: state.destination,
     waypoints: state.waypoints,
     warnings: result.warnings,
+    metadata: result.metadata,
     created_at: result.created_at
   };
 }

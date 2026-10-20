@@ -103,6 +103,7 @@ class ProfileRouteStore:
             "destination": request.destination.as_dict(),
             "waypoints": [point.as_dict() for point in request.waypoints],
             "warnings": [asdict(warning) for warning in result.warnings],
+            "metadata": copy.deepcopy(result.metadata),
         }
         await self._store.async_save(self.data)
 
@@ -111,7 +112,7 @@ class ProfileRouteStore:
         route_id = str(record.get("route_id") or "")
         if not route_id or not record.get("geometry"):
             raise ValueError("route_id and geometry are required")
-        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "created_at"}
+        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "metadata", "created_at"}
         self.data["routes"][route_id] = {key: value for key, value in record.items() if key in allowed}
         await self._store.async_save(self.data)
         return route_id

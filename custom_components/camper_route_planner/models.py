@@ -51,6 +51,7 @@ class VehicleProfile:
     length_m: float
     gross_weight_kg: int
     fuel_type: FuelType
+    axles: int = 2
     actual_weight_kg: int | None = None
     axle_load_kg: int | None = None
     trailer: bool = False
@@ -72,6 +73,8 @@ class VehicleProfile:
                 raise ValidationError(f"{label} must be between {low} and {high}")
         if not 500 <= self.gross_weight_kg <= 60000:
             raise ValidationError("gross_weight_kg must be between 500 and 60000")
+        if not 1 <= self.axles <= 16:
+            raise ValidationError("axles must be between 1 and 16")
         if self.actual_weight_kg is not None and not 1 <= self.actual_weight_kg <= self.gross_weight_kg:
             raise ValidationError("actual_weight_kg must be positive and no greater than gross weight")
         if self.axle_load_kg is not None and not 1 <= self.axle_load_kg <= self.gross_weight_kg:
@@ -93,6 +96,7 @@ class VehicleProfile:
             "length_m": self.length_m,
             "gross_weight_kg": self.gross_weight_kg,
             "fuel_type": self.fuel_type,
+            "axles": self.axles,
             "actual_weight_kg": self.actual_weight_kg,
             "axle_load_kg": self.axle_load_kg,
             "trailer": self.trailer,
