@@ -73,7 +73,13 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                 if not errors:
                     if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
                         submitted[CONF_API_KEY] = normalize_api_key(submitted[CONF_API_KEY])
-                    self._provider_input = {**user_input, CONF_API_KEY: submitted.get(CONF_API_KEY, ""), CONF_CARTO_API_KEY: submitted.get(CONF_CARTO_API_KEY, ""), CONF_LIVE_ENABLED: False}
+                    self._provider_input = {
+                        **current,
+                        **user_input,
+                        CONF_API_KEY: submitted.get(CONF_API_KEY, ""),
+                        CONF_CARTO_API_KEY: submitted.get(CONF_CARTO_API_KEY, ""),
+                        CONF_LIVE_ENABLED: False,
+                    }
                     return await self.async_step_profile()
                 return self.async_show_form(step_id="init", data_schema=self._schema(), errors=errors)
             return self.async_show_form(step_id="init", data_schema=self._schema())
