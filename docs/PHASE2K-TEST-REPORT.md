@@ -23,7 +23,8 @@ Stand: 2026-10-20. Der Teststand bleibt auf dem Feature-Branch.
 
 - Name: `camper-route-planner-0.1.0-internal-beta.1.zip`
 - Lokaler Pfad: `artifacts/camper-route-planner-0.1.0-internal-beta.1.zip`
-- Prüfsumme: wird nach dem finalen Quellcommit eingetragen
+- SHA-256: `2c2bcafeb93174864ca1fbb370c27372c81320d9abdb28f50d943ad956468439`
+- Paket-Quellcommit: `b4a258c5431d02b4f94be3f798548bbf049a9478`
 - Paketwurzel: `camper_route_planner/`
 - Enthält: Integration, Config-/Options-Flow, Übersetzungen, Provider,
   WebSocket, Services und eingebettetes Frontend-Bundle
