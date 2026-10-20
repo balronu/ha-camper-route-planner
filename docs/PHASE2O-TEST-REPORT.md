@@ -50,13 +50,13 @@ schreibt `BETA-COMMIT.txt`, prüft erwartete Dateien, sichere ZIP-Pfade,
 Secret-Muster und ZIP-Integrität; anschließend wird die SHA-256-Prüfsumme
 separat dokumentiert. Beta.2-Artefakte werden nicht wiederverwendet.
 
-Finaler Quellcommit: `87555b28a92d2a1a82d17708d07ecffc199b5124`
+Finaler Paketquellcommit: `2e98de9668d14956bd1f248025f8e3511857ae49`
 
 Beta.3-ZIP: `artifacts/camper-route-planner-0.1.0-internal-beta.3.zip`
 
-SHA-256: `c3520139454977149ffca2384ec22e4cf4cfbfbb916b3cf88c27259e973d0f33`
+SHA-256: `15fefd06b4c24c298c665f79b00c99eeb617e366a04b93a31de1b76cb353b660`
 
-CI: [Validate 39432599730](https://github.com/balronu/ha-camper-route-planner/actions/runs/39432599730)
+CI: [Validate 39432837576](https://github.com/balronu/ha-camper-route-planner/actions/runs/39432837576)
 
 ## Bewertung vor CI
 
