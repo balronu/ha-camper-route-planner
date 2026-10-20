@@ -1,20 +1,22 @@
 # Phase 2J – Testbericht
 
 Stand: 2026-10-20. Alle Aussagen beziehen sich auf den Feature-Branch; keine
-Produktivinstanz wurde verwendet.
+Produktivinstanz wurde verwendet. Verifizierter CI-Lauf:
+[39417984765](https://github.com/balronu/ha-camper-route-planner/actions/runs/39417984765)
+auf Commit `49f75dd4d35ac57bb2ad416d98d3714a99aff446`.
 
 ## Ergebnisse
 
 | Prüfung | Ergebnis | Hinweis |
 |---|---|---|
 | Python-Unittest | **PASS – 40 Tests** | Offline-Domain, Storage, Provider, GPX, Quoten |
-| HA-Fixtures | **NOT RUN lokal** | `pytest` lokal nicht installiert; letzter CI-Lauf 4/4 PASS |
+| HA-Fixtures | **PASS – 4/4** | CI-Lauf 39417984765; lokal nicht installiert |
 | Frontend | **PASS – 8 Tests** | `npm test` |
 | Frontend-Build | **PASS** | `npm run build` |
 | Chromium-E2E | **PASS** | isolierter Browser-Harness |
 | WebKit/iOS | **NOT RUN** | keine isolierte WebKit-Umgebung verfügbar |
-| Hassfest | **NOT RUN lokal / CI-Gate** | letzter CI-Lauf PASS |
-| Gitleaks | **NOT RUN lokal / CI-Gate** | letzter CI-Lauf PASS |
+| Hassfest | **PASS** | CI-Lauf 39417984765 |
+| Gitleaks | **PASS** | CI-Lauf 39417984765 |
 | Compileall | **PASS** | `src`, `tests`, `custom_components`, `tools` |
 | JSON-Validierung | **PASS** | alle versionierten JSON-Dateien |
 | `git diff --check` | **PASS** | sauber |
