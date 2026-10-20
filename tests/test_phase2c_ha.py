@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 try:
     import pytest
     from homeassistant.core import HomeAssistant
@@ -13,7 +15,8 @@ try:
     from custom_components.camper_route_planner.const import DOMAIN, PROVIDER_MOCK
     from custom_components.camper_route_planner.models import VehicleProfile
     HA_AVAILABLE = True
-except ImportError:  # unittest discovery remains usable without pytest.
+except ImportError as err:  # unittest discovery remains usable without pytest.
+    print(f"HA fixture imports unavailable: {err!r}", file=sys.stderr)
     HA_AVAILABLE = False
     class _Mark:
         def __getattr__(self, _name):

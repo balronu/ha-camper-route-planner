@@ -30,6 +30,23 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest pytest-asyncio homeassistant==2026.10.1 pytest-homeassistant-custom-component
       - name: Verify HA fixture imports
         run: python -c "from pytest_homeassistant_custom_component.common import MockConfigEntry; print(MockConfigEntry)"
+      - name: Verify integration fixture imports
+        run: |
+          python - <<'PY'
+          imports = (
+              'homeassistant.core',
+              'pytest_homeassistant_custom_component.common',
+              'custom_components.camper_route_planner.const',
+              'custom_components.camper_route_planner.models',
+          )
+          for module in imports:
+              try:
+                  __import__(module, fromlist=['*'])
+              except Exception as err:
+                  print(f'{module}: FAIL {type(err).__name__}: {err}')
+                  raise
+              print(f'{module}: OK')
+          PY
       - run: pytest -q tests/test_phase2c_ha.py
 
   quality:
