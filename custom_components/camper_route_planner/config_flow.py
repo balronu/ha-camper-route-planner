@@ -46,14 +46,11 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
 
         @staticmethod
         def async_get_options_flow(config_entry):
-            return CamperRoutePlannerOptionsFlow(config_entry)
+            return CamperRoutePlannerOptionsFlow()
 
 
     class CamperRoutePlannerOptionsFlow(config_entries.OptionsFlow):
         """Edit non-secret provider settings without enabling live routing."""
-
-        def __init__(self, config_entry) -> None:
-            self.config_entry = config_entry
 
         async def async_step_init(self, user_input: dict[str, Any] | None = None):
             if user_input is not None:

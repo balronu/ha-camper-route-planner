@@ -134,3 +134,63 @@ async def test_config_entry_unload_cleans_only_own_runtime(hass: HomeAssistant, 
     assert entry.entry_id in hass.data[DOMAIN]
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.entry_id not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_options_flow_manager_form_save_reopen_and_invalid_input(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    """Exercise the real HA Options flow manager, including read-only ownership."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Options Planner",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+        options={"preserved_option": "keep-me"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == "form"
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"provider": PROVIDER_MOCK, "map_provider": "none"},
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "profile"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "profile_id": "fixture-profile",
+            "name": "Fixture Motorhome",
+            "vehicle_kind": "motorhome",
+            "height_m": 3.2,
+            "width_m": 2.34,
+            "length_m": 7.65,
+            "gross_weight_kg": 4800,
+            "fuel_type": "diesel",
+            "axles": 2,
+        },
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert entry.options["provider"] == PROVIDER_MOCK
+    assert entry.options["preserved_option"] == "keep-me"
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == "form"
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"provider": PROVIDER_MOCK, "map_provider": "carto"},
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "init"
+    assert result["errors"]["base"] == "carto_api_key_required"
+    assert entry.options["provider"] == PROVIDER_MOCK
+    assert entry.options["preserved_option"] == "keep-me"
