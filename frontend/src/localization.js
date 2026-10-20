@@ -10,7 +10,7 @@ const TRANSLATIONS = {
     geometryFallback: "Beta / Mock-Routing · Berechnung nur nach Klick", manualOnly: "Beta / Mock-Routing · Berechnung nur nach Klick",
     provider: "Provider", calculatedAt: "Berechnet", confirmation: "Route wirklich löschen?", unknown: "Unbekannt",
     latitude: "Breitengrad", longitude: "Längengrad", mockDataNotice: "Synthetische Testdaten – keine geprüfte Straßenroute",
-    configMissing: "Bitte entry_id in der Kartenkonfiguration setzen.", routeSaved: "Route gespeichert", mapTileError: "CARTO-Kartenkacheln nicht erreichbar; SVG-Fallback wird angezeigt.", navigationExport: "Navigation / Export", exportRoute: "GPX-Route", exportTrack: "GPX-Track", exportCombined: "GPX kombiniert", exportFailed: "GPX-Export fehlgeschlagen", exportNoGeometry: "Für den Track ist keine ausreichende Routengeometrie vorhanden.", shareFailed: "Teilen/Download nicht verfügbar"
+    configMissing: "Keine Camper-Route-Planner-Instanz gefunden. Bitte die Integration zuerst einrichten.", multipleEntries: "Mehrere Camper-Route-Planner-Instanzen gefunden. Bitte eine auswählen.", entrySelection: "Camper-Route-Planner-Instanz", routeSaved: "Route gespeichert", mapTileError: "CARTO-Kartenkacheln nicht erreichbar; SVG-Fallback wird angezeigt.", navigationExport: "Navigation / Export", exportRoute: "GPX-Route", exportTrack: "GPX-Track", exportCombined: "GPX kombiniert", exportFailed: "GPX-Export fehlgeschlagen", exportNoGeometry: "Für den Track ist keine ausreichende Routengeometrie vorhanden.", shareFailed: "Teilen/Download nicht verfügbar"
   },
   en: {
     vehicle: "Vehicle", start: "Start", destination: "Destination", waypoint: "Waypoint",
@@ -23,7 +23,7 @@ const TRANSLATIONS = {
     geometryFallback: "Beta / Mock-Routing · geometry fallback without map tiles", manualOnly: "Beta / Mock-Routing · calculation only after click",
     provider: "Provider", calculatedAt: "Calculated", confirmation: "Delete this route?", unknown: "Unknown",
     latitude: "Latitude", longitude: "Longitude", mockDataNotice: "Synthetic test data – not a checked road route",
-    configMissing: "Set entry_id in the card configuration.", routeSaved: "Route saved", mapTileError: "CARTO map tiles are unavailable; showing the SVG fallback.", navigationExport: "Navigation / Export", exportRoute: "GPX route", exportTrack: "GPX track", exportCombined: "GPX combined", exportFailed: "GPX export failed", exportNoGeometry: "Track export needs sufficient route geometry.", shareFailed: "Sharing/download is unavailable"
+    configMissing: "No Camper Route Planner instance found. Set up the integration first.", multipleEntries: "Multiple Camper Route Planner instances found. Select one.", entrySelection: "Camper Route Planner instance", routeSaved: "Route saved", mapTileError: "CARTO map tiles are unavailable; showing the SVG fallback.", navigationExport: "Navigation / Export", exportRoute: "GPX route", exportTrack: "GPX track", exportCombined: "GPX combined", exportFailed: "GPX export failed", exportNoGeometry: "Track export needs sufficient route geometry.", shareFailed: "Sharing/download is unavailable"
   }
 };
 

@@ -90,6 +90,25 @@ async def test_websocket_map_config_is_editor_safe(hass: HomeAssistant, hass_ws_
 
 
 @pytest.mark.asyncio
+async def test_websocket_lists_safe_config_entry_metadata(hass: HomeAssistant, hass_ws_client, enable_custom_integrations) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Discovery Planner",
+        data={"provider": PROVIDER_MOCK, "api_key": "must-not-leave-backend", "map_provider": "none"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "camper_route_planner/list_entries"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["entries"] == [{"entry_id": entry.entry_id, "title": "Discovery Planner", "state": "loaded"}]
+    assert "api_key" not in response["result"]
+    assert "options" not in response["result"]
+
+
+@pytest.mark.asyncio
 async def test_websocket_gpx_export_is_explicit_and_provider_free(hass: HomeAssistant, hass_ws_client, enable_custom_integrations) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -145,7 +164,7 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
         domain=DOMAIN,
         title="Options Planner",
         data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
-        options={"preserved_option": "keep-me"},
+        options={"provider": PROVIDER_MOCK, "map_provider": "carto", "carto_api_key": "fixture-carto-key", "preserved_option": "keep-me"},
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -154,10 +173,13 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] == "form"
     assert result["step_id"] == "init"
+    schema_defaults = {getattr(key, "schema", None): getattr(key, "default", None)() for key in result["data_schema"].schema if callable(getattr(key, "default", None))}
+    assert schema_defaults["provider"] == PROVIDER_MOCK
+    assert schema_defaults["map_provider"] == "carto"
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"provider": PROVIDER_MOCK, "map_provider": "none"},
+        user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
     )
     assert result["type"] == "form"
     assert result["step_id"] == "profile"
@@ -180,10 +202,13 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     await hass.async_block_till_done()
     assert entry.options["provider"] == PROVIDER_MOCK
     assert entry.options["preserved_option"] == "keep-me"
+    assert entry.options["carto_api_key"] == "fixture-carto-key"
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] == "form"
     assert result["step_id"] == "init"
+    schema_defaults = {getattr(key, "schema", None): getattr(key, "default", None)() for key in result["data_schema"].schema if callable(getattr(key, "default", None))}
+    assert schema_defaults["map_provider"] == "none"
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -194,3 +219,25 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     assert result["errors"]["carto_api_key"] == "carto_key_required"
     assert entry.options["provider"] == PROVIDER_MOCK
     assert entry.options["preserved_option"] == "keep-me"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "remove_carto_api_key": True}
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "profile"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "profile_id": "fixture-profile-remove",
+            "name": "Fixture Motorhome",
+            "vehicle_kind": "motorhome",
+            "height_m": 3.2,
+            "width_m": 2.34,
+            "length_m": 7.65,
+            "gross_weight_kg": 4800,
+            "fuel_type": "diesel",
+            "axles": 2,
+        },
+    )
+    assert result["type"] == "create_entry"
+    assert entry.options["carto_api_key"] == ""

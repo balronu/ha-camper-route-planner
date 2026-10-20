@@ -64,6 +64,26 @@ assert.equal(download.suggestedFilename(), "camper-route-2026-10-16.gpx", "expor
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), callsBeforeExport, "export does not recalculate");
 await desktop.screenshot({ path: "../docs/phase2c-desktop.png", fullPage: true });
 
+const auto = await browser.newPage({ viewport: { width: 900, height: 700 } });
+await auto.goto(`http://127.0.0.1:${port}/`);
+await auto.evaluate(() => { window.customCards = []; });
+await auto.addScriptTag({ content: bundle });
+await auto.evaluate(() => {
+  const card = document.querySelector("camper-route-planner-card");
+  card.hass = { language: "en", connection: {}, callWS: async (message) => {
+    if (message.type.endsWith("/list_entries")) return { entries: [{ entry_id: "auto-entry", title: "Automatically selected" }] };
+    if (message.type.endsWith("/list_profiles")) return { profiles: [] };
+    if (message.type.endsWith("/list_routes")) return { routes: [] };
+    if (message.type.endsWith("/map_config")) return { provider: "none", status: "not_configured" };
+    return {};
+  } };
+  globalThis.__autoCard = card;
+});
+await auto.locator(".panel").first().waitFor();
+assert.equal(await auto.evaluate(() => globalThis.__autoCard._config.entry_id), "auto-entry", "single entry is auto-selected");
+assert.equal(await auto.evaluate(() => window.customCards.filter((item) => item.type === "custom:camper-route-planner-card").length), 1, "catalog registration is idempotent");
+await auto.close();
+
 for (const [label, handler] of [["403", async (route) => route.fulfill({ status: 403, body: "forbidden" })], ["429", async (route) => route.fulfill({ status: 429, body: "rate limited" })], ["timeout", async (route) => route.abort("timedout")]]) {
   const page = await preparePage({ width: 1280, height: 900 });
   await page.route("https://tiles.test/**", handler);

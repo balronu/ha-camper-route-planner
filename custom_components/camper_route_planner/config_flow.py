@@ -52,9 +52,13 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
     class CamperRoutePlannerOptionsFlow(config_entries.OptionsFlow):
         """Edit non-secret provider settings without enabling live routing."""
 
+        def _current_values(self) -> dict[str, Any]:
+            """Return the effective values, with options overriding data."""
+            return {**self.config_entry.data, **self.config_entry.options}
+
         async def async_step_init(self, user_input: dict[str, Any] | None = None):
             if user_input is not None:
-                current = {**self.config_entry.data, **self.config_entry.options}
+                current = self._current_values()
                 submitted = {**current, **user_input}
                 provider = user_input.get(CONF_PROVIDER, current.get(CONF_PROVIDER, PROVIDER_MOCK))
                 if provider not in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
@@ -85,7 +89,8 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
             return self.async_show_form(step_id="init", data_schema=self._schema())
 
         def _schema(self):
-            return vol.Schema({vol.Required(CONF_PROVIDER, default=self.config_entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_REMOVE_API_KEY, default=False): bool, vol.Optional(CONF_MAP_PROVIDER, default=self.config_entry.data.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
+            current = self._current_values()
+            return vol.Schema({vol.Required(CONF_PROVIDER, default=current.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_REMOVE_API_KEY, default=False): bool, vol.Optional(CONF_MAP_PROVIDER, default=current.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
             errors: dict[str, str] = {}
