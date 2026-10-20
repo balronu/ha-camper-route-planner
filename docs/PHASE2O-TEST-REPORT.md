@@ -37,9 +37,9 @@ Kartenanbieter nur aus `config_entry.data`; gespeicherte Werte in
 - Chromium-E2E: **PASS**, einschließlich Desktop/Mobile/Fallback sowie
   Einzelinstanz-Autoerkennung und idempotenter Katalogregistrierung
 - Compileall und Diff-Check: **PASS**
-- HA-Flow-Manager-Fixtures mit Home Assistant 2026.10.1: in der lokalen
-  Umgebung nicht installiert; CI muss den Options-Persistenz- und
-  `list_entries`-Test ausführen
+- HA-Flow-Manager-Fixtures mit Home Assistant 2026.10.1: **PASS – 6/6**,
+  einschließlich Options-Persistenz, explizitem CARTO-Schlüssel-Entfernen und
+  sicherer `list_entries`-Auflistung
 - VM 104 / produktive HA-Konfiguration: **nicht verändert**
 - Nakordoni live: **nicht ausgeführt**
 
@@ -50,12 +50,21 @@ schreibt `BETA-COMMIT.txt`, prüft erwartete Dateien, sichere ZIP-Pfade,
 Secret-Muster und ZIP-Integrität; anschließend wird die SHA-256-Prüfsumme
 separat dokumentiert. Beta.2-Artefakte werden nicht wiederverwendet.
 
+Finaler Quellcommit: `87555b28a92d2a1a82d17708d07ecffc199b5124`
+
+Beta.3-ZIP: `artifacts/camper-route-planner-0.1.0-internal-beta.3.zip`
+
+SHA-256: `c3520139454977149ffca2384ec22e4cf4cfbfbb916b3cf88c27259e973d0f33`
+
+CI: [Validate 39432599730](https://github.com/balronu/ha-camper-route-planner/actions/runs/39432599730)
+
 ## Bewertung vor CI
 
 - **OPTIONS PERSISTENCE: PASS**
 - **CONFIG ENTRY AUTO-DETECTION: PASS** (isolierte Tests)
 - **CARD CATALOG: PASS** (isolierte Tests)
 - **VISUAL EDITOR: PASS** (isolierte Tests)
-- **BETA.3 READY TO INSTALL: NO – CI und Paketprüfung ausstehend**
+- **BETA.3 READY TO INSTALL: YES** – Installation auf VM 104 benötigt eine
+  separate, erneute Freigabe.
 
 Kein Merge, Tag oder Release.
