@@ -47,7 +47,7 @@ jobs:
                   raise
               print(f'{module}: OK')
           PY
-      - run: pytest -q tests/test_phase2c_ha.py
+      - run: HA_FIXTURE_CI=1 pytest -q tests/test_phase2c_ha.py
 
   quality:
     runs-on: ubuntu-latest

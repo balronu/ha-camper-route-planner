@@ -17,6 +17,8 @@ try:
     HA_AVAILABLE = True
 except ImportError as err:  # unittest discovery remains usable without pytest.
     print(f"HA fixture imports unavailable: {err!r}", file=sys.stderr)
+    if __import__("os").environ.get("HA_FIXTURE_CI") == "1":
+        raise
     HA_AVAILABLE = False
     class _Mark:
         def __getattr__(self, _name):
