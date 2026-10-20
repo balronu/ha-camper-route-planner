@@ -4,7 +4,7 @@
 
 Der Provider `nakordoni_motorhome` ist lokal vorbereitet, aber im Runtime-Betrieb deaktiviert. Phase 2G verwendet ausschließlich synthetische Fixtures. Es werden keine API-Schlüssel, OAuth-Tokens oder Live-Routenabfragen verwendet.
 
-Der Arbeitsauftrag nennt `https://api.nakordoni.dev/api/v2/data/truck-route`. Die öffentliche Dokumentationsseite nennt als API-Host teilweise `nakordoni.eu`. Diese Hostabweichung wird vor einer Aktivierung mit Nakordoni geklärt; sie ist kein Anlass für einen Live-Test.
+Die aktuelle offizielle Dokumentation bestätigt `https://nakordoni.eu/api/v2/data/truck-route` für Routing. OAuth und Account Usage liegen separat unter `api.nakordoni.dev`; die vollständige Zuordnung steht in [NAKORDONI-API-HOSTS.md](NAKORDONI-API-HOSTS.md).
 
 ## Request
 
@@ -34,4 +34,3 @@ Mautbeträge bleiben `null`, wenn die Antwort keinen Betrag liefert. `complete=f
 ## Attribution und Beta
 
 Routendaten erhalten `https://nakordoni.eu` als vertrauenswürdige Attribution. Die Oberfläche zeigt `Nakordoni Motorhome – Beta` und den Hinweis, dass Verkehrszeichen und geltende Vorschriften Vorrang haben.
-

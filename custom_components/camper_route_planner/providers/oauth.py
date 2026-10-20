@@ -46,12 +46,12 @@ def validate_callback_state(expected: OAuthState, received_state: str) -> None:
 
 
 def normalize_token_response(payload: dict[str, object]) -> dict[str, object]:
-    if payload.get("error") == "invalid_grant":
-        raise ValueError("invalid_grant")
+    if payload.get("error") in {"invalid_grant", "invalid_api_key"}:
+        raise ValueError(str(payload["error"]))
     if not payload.get("access_token"):
         raise ValueError("OAuth response did not contain an access token")
     result = {"access_token": payload["access_token"], "token_type": payload.get("token_type", "Bearer")}
-    for key in ("refresh_token", "expires_in", "scope"):
+    for key in ("refresh_token", "expires_in", "scope", "markets_approved", "markets_allowed", "markets_available", "upgrade_url"):
         if key in payload:
             result[key] = payload[key]
     return result
@@ -61,6 +61,11 @@ def token_endpoint() -> str:
     return TOKEN_ENDPOINT
 
 
+def build_refresh_request(*, client_id: str, refresh_token: str) -> dict[str, str]:
+    if not client_id.strip() or not refresh_token.strip():
+        raise ValueError("client_id and refresh_token are required")
+    return {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": client_id}
+
+
 def validate_redirect(value: object) -> str | None:
     return safe_provider_link(value)
-

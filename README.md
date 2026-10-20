@@ -123,13 +123,13 @@ ist.
 4. **Phase 2I:** konservative Vorbereitung von `v0.1.0 Stable`; kein Release
    ohne dokumentierte Freigabe.
 
-## Phase 2G: Nakordoni Motorhome-Beta
+## Phase 2G/2H: Nakordoni Motorhome-Beta
 
 Der Provider `nakordoni_motorhome` ist lokal als Offline-/Fixture-Provider vorbereitet, aber nicht produktiv aktiviert. Nakordoni Motorhome ist eine Beta; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider und keine verifizierte Wohnmobilnavigation.
 
 Für eine spätere Aktivierung sind ein eigener Nakordoni-OAuth-Client mit PKCE, individuelle Benutzerkonten und individuelle Routingkontingente erforderlich. Der OAuth-Client von Mobile Fuel Stations wird nicht verwendet. Keine Live-Routingabfragen wurden in Phase 2G ausgeführt.
 
-Routendaten werden mit [Data by nakordoni.eu](https://nakordoni.eu) attribuiert. Details: [Phase 2G](docs/PHASE2G-IMPLEMENTATION.md), [OAuth](docs/NAKORDONI-OAUTH.md), [Kontingente](docs/NAKORDONI-QUOTAS.md), [Maut](docs/NAKORDONI-TOLLS.md).
+Routendaten werden mit [Data by nakordoni.eu](https://nakordoni.eu) attribuiert. Die Routing-API ist offiziell unter `nakordoni.eu` dokumentiert; OAuth und Account Usage unter `api.nakordoni.dev`. Details: [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API-Hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [Kontingente](docs/NAKORDONI-QUOTAS.md), [Maut](docs/NAKORDONI-TOLLS.md).
 
 ## Lizenz
 

@@ -13,3 +13,4 @@ Die lokale Implementierung erzeugt Verifier/Challenge, State und eine synthetisc
 
 Eine manuelle API-Key-Variante bleibt als spätere, sicher im Config Entry gespeicherte Alternative planbar. Die produktive Aktivierung erfordert zuerst den eigenen Client, Reauth-/Refresh-Tests und eine ausdrückliche Freigabe.
 
+Die offizielle Dokumentation bestätigt: Public Client ohne Client-Secret, Authorization Code ist nur kurzzeitig und einmalig gültig, Refresh kann mit `invalid_grant` scheitern und muss dann eine Reauth auslösen. Der Schlüssel wird nur im Token-Response-Body geliefert. Bis zur Client-ID ist der OAuth-Modus in Camper Route Planner nicht verfügbar.

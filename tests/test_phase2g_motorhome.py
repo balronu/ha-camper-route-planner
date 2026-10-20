@@ -44,13 +44,14 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "live_routing_disabled")
 
     def test_fixture_preserves_beta_and_toll_state(self):
-        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"route": {
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"vehicle": {"type": "motorhome", "beta": True, "beta_note": "Synthetic beta warning"}, "route": {
             "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [45, 10]],
             "tolls": {"priced": True, "complete": False, "estimate": True, "currency": "EUR"},
         }}})
         self.assertTrue(result.synthetic)
         self.assertTrue(result.metadata["beta"])
         self.assertIsNone(result.metadata["tolls"]["total"])
+        self.assertTrue(any(item.code == "motorhome_beta" for item in result.warnings))
 
     def test_error_mapping_and_safe_links(self):
         error = provider_error_from_payload({"status": 429, "error": {"code": "quota_exceeded"}})
@@ -58,4 +59,3 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertFalse(error.retryable)
         self.assertEqual(safe_provider_link("https://nakordoni.eu/upgrade"), "https://nakordoni.eu/upgrade")
         self.assertIsNone(safe_provider_link("https://evil.example/steal"))
-

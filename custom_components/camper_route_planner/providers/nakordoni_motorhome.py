@@ -8,6 +8,7 @@ client has been registered.  The normal Phase 2G runtime remains disabled.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
@@ -23,7 +24,9 @@ from ..models import (
 )
 
 PROVIDER_NAME = "nakordoni_motorhome"
-ROUTE_ENDPOINT = "https://api.nakordoni.dev/api/v2/data/truck-route"
+# Nakordoni documents routing on the public API host, while OAuth and usage
+# are intentionally served from api.nakordoni.dev.
+ROUTE_ENDPOINT = "https://nakordoni.eu/api/v2/data/truck-route"
 USAGE_ENDPOINT = "https://api.nakordoni.dev/api/v2/account/usage"
 AUTHORIZE_ENDPOINT = "https://api.nakordoni.dev/oauth/authorize"
 TOKEN_ENDPOINT = "https://api.nakordoni.dev/oauth/token"
@@ -44,7 +47,7 @@ def _number(value: Any, label: str) -> float:
         result = float(value)
     except (TypeError, ValueError) as exc:
         raise ValidationError(f"{label} must be numeric") from exc
-    if result <= 0:
+    if not math.isfinite(result) or result <= 0:
         raise ValidationError(f"{label} must be positive")
     return result
 
@@ -56,8 +59,8 @@ def validate_motorhome_profile(profile: Any) -> None:
     for field in ("length_m", "width_m", "height_m", "gross_weight_kg"):
         _number(getattr(profile, field, None), field)
     axles = getattr(profile, "axles", None)
-    if axles is None or isinstance(axles, bool) or not 1 <= int(axles) <= 16:
-        raise ValidationError("axles must be an integer between 1 and 16")
+    if axles is None or isinstance(axles, bool) or not 2 <= int(axles) <= 12:
+        raise ValidationError("axles must be an integer between 2 and 12 for Nakordoni")
 
 
 def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
@@ -104,7 +107,7 @@ def _toll_summary(raw: Any) -> dict[str, Any] | None:
         "coverage_note": str(raw["coverage_note"]) if raw.get("coverage_note") is not None else None,
         "currency": str(raw["currency"]) if raw.get("currency") else None,
     }
-    amount = raw.get("total")
+    amount = raw.get("total_eur", raw.get("total"))
     if isinstance(amount, (int, float)) and not isinstance(amount, bool):
         result["total"] = float(amount)
     else:
@@ -114,6 +117,9 @@ def _toll_summary(raw: Any) -> dict[str, Any] | None:
         countries = [{"country": country, **value} for country, value in countries.items() if isinstance(value, dict)]
     if isinstance(countries, list):
         result["countries"] = [item for item in countries if isinstance(item, dict)]
+        for country in result["countries"]:
+            if "amount" in country and "total" not in country:
+                country["total"] = country["amount"]
     return result
 
 
@@ -163,20 +169,28 @@ class NakordoniMotorhomeProvider:
         if payload.get("ok") is not True:
             raise provider_error_from_payload(payload)
         try:
-            route = payload["data"]["route"]
+            data = payload["data"]
+            route = data["route"]
             points = _route_points(route["geometry"])
+            warning_items = list(route.get("warnings", []))
+            vehicle = data.get("vehicle", {}) if isinstance(data.get("vehicle", {}), dict) else {}
+            if vehicle.get("beta") and not any(item.get("code") == "motorhome_beta" for item in warning_items if isinstance(item, dict)):
+                warning_items.append({"code": "motorhome_beta", "message": str(vehicle.get("beta_note", "Motorhome routing is in beta."))})
             warnings = tuple(
                 RouteWarning(str(item.get("code", "provider_warning")), str(item.get("message", "Provider warning")))
-                for item in route.get("warnings", []) if isinstance(item, dict)
+                for item in warning_items if isinstance(item, dict)
             )
             metadata = {
                 "fixture": synthetic,
                 "beta": True,
                 "provider_mode": PROVIDER_NAME,
                 "attribution_url": ATTRIBUTION_URL,
-                "tolls": _toll_summary(route.get("tolls", payload["data"].get("tolls"))),
+                "tolls": _toll_summary(route.get("tolls", data.get("tolls"))),
                 "countries": route.get("countries", []),
+                "country_split": route.get("country_split", []),
                 "restriction_hits": route.get("restriction_hits", []),
+                "vehicle": vehicle,
+                "attribution": data.get("attribution", ["Data by nakordoni.eu"]),
             }
             return RouteResult(PROVIDER_NAME, float(route["distance_m"]), int(route["duration_s"]), RouteGeometry(points), warnings, metadata, synthetic)
         except (KeyError, TypeError, ValueError, IndexError) as exc:
@@ -197,9 +211,10 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
     }
     if status == 429:
         code = code if code != "provider_error" else "quota_exceeded"
-    if status in {500, 502, 503}:
+    if status in {500, 502, 503, 504}:
         retryable = True
     else:
         retryable = False
-    return ProviderError(messages.get(code, str(error.get("message", "Nakordoni request failed"))), code=code, status=status, retryable=retryable)
-
+    reset_at = error.get("reset_at") or payload.get("headers", {}).get("X-Devapi-Reset") if isinstance(payload.get("headers"), dict) else error.get("reset_at")
+    suffix = f" Reset: {reset_at}." if reset_at else ""
+    return ProviderError(messages.get(code, str(error.get("message", "Nakordoni request failed"))) + suffix, code=code, status=status, retryable=retryable)
