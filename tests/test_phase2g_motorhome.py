@@ -39,9 +39,14 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertEqual(result.provider, "mock")
         self.assertTrue(result.synthetic)
 
-    def test_live_is_disabled_without_network(self):
+    def test_missing_key_is_reported_before_live_gate(self):
         with self.assertRaises(ProviderError) as ctx:
             asyncio.run(NakordoniMotorhomeProvider().calculate(request()))
+        self.assertEqual(ctx.exception.code, "missing_api_key")
+
+    def test_live_is_disabled_without_network_when_key_exists(self):
+        with self.assertRaises(ProviderError) as ctx:
+            asyncio.run(NakordoniMotorhomeProvider(api_key="K" * 24).calculate(request()))
         self.assertEqual(ctx.exception.code, "live_routing_disabled")
 
     def test_fixture_preserves_beta_and_toll_state(self):

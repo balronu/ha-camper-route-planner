@@ -33,6 +33,12 @@ class NakordoniRoutingProvider:
 
     async def calculate(self, request: RouteRequest) -> RouteResult:
         del request
+        if not self.api_key:
+            raise ProviderError(
+                "Nakordoni API key is missing; configure it in the integration options.",
+                code="missing_api_key",
+                status=401,
+            )
         raise ProviderError(
             "Nakordoni live routing is disabled in Phase 2A",
             code="live_routing_disabled",

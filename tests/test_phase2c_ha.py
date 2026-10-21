@@ -16,6 +16,8 @@ try:
     from custom_components.camper_route_planner.const import CONF_API_KEY, DOMAIN, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
     from custom_components.camper_route_planner import FRONTEND_RESOURCE_URL, FRONTEND_URL
     from custom_components.camper_route_planner.models import VehicleProfile
+    from custom_components.camper_route_planner.providers.nakordoni_motorhome import NakordoniMotorhomeProvider
+    from custom_components.camper_route_planner.models import ProviderError
     HA_AVAILABLE = True
 except ImportError as err:  # unittest discovery remains usable without pytest.
     print(f"HA fixture imports unavailable: {err!r}", file=sys.stderr)
@@ -71,6 +73,42 @@ async def test_config_flow_options_and_response_service(hass: HomeAssistant, ena
     )
     assert response["provider"] == "mock"
     assert response["synthetic"] is True
+
+
+@pytest.mark.asyncio
+async def test_provider_options_override_entry_data_and_reload_before_next_route(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    """An Options Flow provider change replaces the live runtime instance."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Provider switch planner",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+        options={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    await runtime.store.async_save_profile(
+        VehicleProfile("zoe", "Zoe", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", axles=2)
+    )
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={"provider": PROVIDER_NAKORDONI_MOTORHOME, "api_key": "K" * 24, "map_provider": "none"},
+    )
+    await hass.async_block_till_done()
+
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    assert isinstance(runtime.coordinator.provider, NakordoniMotorhomeProvider)
+    with pytest.raises(ProviderError, match="not enabled"):
+        await runtime.async_calculate_service({
+            "profile_id": "zoe",
+            "origin": {"latitude": 49, "longitude": 7},
+            "destination": {"latitude": 50, "longitude": 8},
+            "via": [{"latitude": 49.5, "longitude": 7.5}],
+        })
 
 
 @pytest.mark.asyncio

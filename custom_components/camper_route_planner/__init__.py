@@ -103,7 +103,14 @@ try:
         runtime = RuntimeData.from_config_entry(hass, entry)
         await runtime.async_load()
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
+        # Options Flow updates do not mutate the already-created runtime in
+        # place. Reloading the entry reconstructs the provider, geocoder and
+        # merged data/options snapshot before the next route calculation.
+        entry.async_on_unload(entry.add_update_listener(_async_options_updated))
         return True
+
+    async def _async_options_updated(hass: HomeAssistant, entry) -> None:
+        await hass.config_entries.async_reload(entry.entry_id)
 
     async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
