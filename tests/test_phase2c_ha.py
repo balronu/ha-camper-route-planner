@@ -111,7 +111,9 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     body = await response.text()
     assert f"Camper Route Planner Card v0.1.0-beta.7" in body
     assert 'customElements.define("camper-route-planner-card"' in body
-    assert "custom:camper-route-planner-card" in body
+    assert 'return { entry_id: "" }' in body
+    assert 'card.type === "camper-route-planner-card"' in body
+    assert 'card.type === "custom:camper-route-planner-card"' not in body
     resources = hass.data[LOVELACE_DATA].resources
     assert any(
         item["url"] == FRONTEND_RESOURCE_URL and item["type"] == "module"
