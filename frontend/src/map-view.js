@@ -6,6 +6,9 @@ import L from "leaflet";
 const CRP_LEAFLET_MAP = Symbol("camper-route-planner-leaflet-map");
 const CRP_LEAFLET_RESIZE_OBSERVER = Symbol("camper-route-planner-leaflet-resize-observer");
 const CRP_LEAFLET_TILE_TIMER = Symbol("camper-route-planner-leaflet-tile-timer");
+const CRP_LEAFLET_MARKERS = Symbol("camper-route-planner-leaflet-markers");
+const CRP_LEAFLET_OPTIONS = Symbol("camper-route-planner-leaflet-options");
+const CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -59,6 +62,36 @@ export function destroyMap(container) {
     container[CRP_LEAFLET_MAP].remove();
     container[CRP_LEAFLET_MAP] = null;
   }
+  if (container) {
+    container[CRP_LEAFLET_MARKERS] = null;
+    container[CRP_LEAFLET_OPTIONS] = null;
+    container[CRP_LEAFLET_LABELS] = null;
+  }
+}
+
+function updateLeafletMarkers(container, points) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return false;
+  for (const marker of container[CRP_LEAFLET_MARKERS] || []) marker.remove();
+  const labels = container[CRP_LEAFLET_LABELS] || {};
+  const options = container[CRP_LEAFLET_OPTIONS] || {};
+  const markers = points.map((point, index) => {
+    const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
+    const marker = L.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange) });
+    marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
+    marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
+    return marker;
+  });
+  container[CRP_LEAFLET_MARKERS] = markers;
+  return true;
+}
+
+/** Update markers without rebuilding the Leaflet map or its tile layer. */
+export function updateMapPoints(container, points, labels = {}, options = {}) {
+  if (!container?.[CRP_LEAFLET_MAP]) return false;
+  container[CRP_LEAFLET_OPTIONS] = { ...container[CRP_LEAFLET_OPTIONS], ...options };
+  container[CRP_LEAFLET_LABELS] = { ...container[CRP_LEAFLET_LABELS], ...labels };
+  return updateLeafletMarkers(container, points || []);
 }
 
 export function renderMap(container, route, mapConfig, labels, onTileError = () => {}, options = {}) {
@@ -70,6 +103,8 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     container.className = "crp-map crp-leaflet-map";
     const map = L.map(container, { zoomControl: true, attributionControl: true });
     container[CRP_LEAFLET_MAP] = map;
+    container[CRP_LEAFLET_OPTIONS] = options;
+    container[CRP_LEAFLET_LABELS] = labels;
     if (globalThis.ResizeObserver) {
       container[CRP_LEAFLET_RESIZE_OBSERVER] = new ResizeObserver(() => map.invalidateSize({ pan: false }));
       container[CRP_LEAFLET_RESIZE_OBSERVER].observe(container);
@@ -102,12 +137,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     container[CRP_LEAFLET_TILE_TIMER] = setTimeout(() => { if (!tileLoaded) failTiles(); }, 10000);
     layer.addTo(map);
     if (geometry.length >= 2) L.polyline(geometry.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
-    points.forEach((point, index) => {
-      const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
-      const marker = L.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange) });
-        marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
-      marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
-    });
+    updateLeafletMarkers(container, points);
     if (points.length === 1) {
       map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
     } else if (points.length > 1) {

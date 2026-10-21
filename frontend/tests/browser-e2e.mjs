@@ -40,8 +40,11 @@ assert.equal(editorResult.catalogEntry.preview, true, "catalog metadata enables 
 assert.deepEqual({ tag: editorResult.tag, hasSelect: editorResult.hasSelect }, { tag: "camper-route-planner-card-editor", hasSelect: true }, "visual editor is created by the card contract");
 await resourcePage.close();
 
-async function preparePage(viewport, colorScheme = "light", tileHandler = null) {
-  const page = await browser.newPage({ viewport, colorScheme });
+async function preparePage(viewport, colorScheme = "light", tileHandler = null, hasTouch = false) {
+  const page = await browser.newPage({ viewport, colorScheme, hasTouch });
+  let tileRequests = 0;
+  page.on("request", (request) => { if (request.url().startsWith("https://tiles.test/")) tileRequests += 1; });
+  page.tileRequestCount = () => tileRequests;
   await page.route("https://tiles.test/**", tileHandler || (async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") })));
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.addScriptTag({ content: bundle });
@@ -114,6 +117,13 @@ assert.ok(initialTileCoverage.tileCount >= 4, "Leaflet loads a tile grid rather 
 assert.equal(initialTileCoverage.hasTilePane, true, "Leaflet tile pane is present");
 assert.equal(initialTileCoverage.hasMapPane, true, "Leaflet map pane is present");
 assert.equal(initialTileCoverage.covered, true, "loaded tiles cover the complete visible map container");
+await desktop.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.origin.latitude === 47.3769);
+const selectionMapState = await desktop.evaluate(() => {
+  const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map");
+  window.__selectionMapHost = host;
+  return { leafletId: host?._leaflet_id, tileCount: host?.querySelectorAll(".leaflet-tile").length || 0 };
+});
+const selectionTileRequests = desktop.tileRequestCount();
 const attributionFlag = await desktop.locator(".leaflet-attribution-flag").evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, inAttribution: Boolean(node.closest(".leaflet-control-attribution")) }));
 assert.ok(attributionFlag.width <= 20 && attributionFlag.height <= 12, "Leaflet attribution flag keeps its intrinsic size instead of becoming a map-sized rectangle");
 assert.equal(attributionFlag.inAttribution, true, "attribution flag remains inside the attribution control");
@@ -149,6 +159,31 @@ assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').c
 assert.equal(await desktop.locator('.panel').nth(2).locator('input[data-search-input="destination"] + button').count(), 1, "destination search stays with destination editor");
 assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "destination results never render below waypoints");
 assert.ok(await desktop.locator('.leaflet-marker-icon').count() >= 2, "origin and selected destination markers are rendered");
+const afterFirstSelection = await desktop.evaluate(() => {
+  const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map");
+  return { sameHost: host === window.__selectionMapHost, leafletId: host?._leaflet_id, tileCount: host?.querySelectorAll(".leaflet-tile").length || 0, hasFallback: Boolean(host?.querySelector(":scope > svg")), markers: host?.querySelectorAll(".leaflet-marker-icon").length || 0 };
+});
+assert.equal(afterFirstSelection.sameHost, true, "target selection keeps the existing map container");
+assert.equal(afterFirstSelection.leafletId, selectionMapState.leafletId, "target selection keeps the existing Leaflet instance");
+assert.equal(afterFirstSelection.tileCount, selectionMapState.tileCount, "target selection does not rebuild the tile layer");
+assert.equal(desktop.tileRequestCount(), selectionTileRequests, "target selection does not issue new tile requests");
+assert.equal(afterFirstSelection.hasFallback, false, "target selection does not activate the SVG fallback");
+assert.equal(afterFirstSelection.markers, 2, "target selection leaves exactly one marker per point");
+assert.equal(await desktop.evaluate(() => window.scrollY), destinationIdentity.scrollY, "target selection keeps the dashboard scroll position");
+await destinationSearch.fill("Second fixture address");
+await desktop.waitForTimeout(500);
+await desktop.getByRole("button", { name: "Second fixture address", exact: true }).click();
+assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.138", "repeated target selection updates latitude");
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Second fixture address", "repeated target selection updates the address");
+const afterSecondSelection = await desktop.evaluate(() => {
+  const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map");
+  return { sameHost: host === window.__selectionMapHost, leafletId: host?._leaflet_id, tileCount: host?.querySelectorAll(".leaflet-tile").length || 0, markers: host?.querySelectorAll(".leaflet-marker-icon").length || 0 };
+});
+assert.equal(afterSecondSelection.sameHost, true, "repeated target selection keeps the existing map container");
+assert.equal(afterSecondSelection.leafletId, selectionMapState.leafletId, "repeated target selection keeps one Leaflet instance");
+assert.equal(afterSecondSelection.tileCount, selectionMapState.tileCount, "repeated target selection does not reload tiles");
+assert.equal(desktop.tileRequestCount(), selectionTileRequests, "repeated target selection does not issue new tile requests");
+assert.equal(afterSecondSelection.markers, 2, "repeated target selection does not duplicate markers");
 await desktop.evaluate(() => document.querySelector("camper-route-planner-card").useTrackerLocation(true));
 await desktop.waitForFunction(() => document.querySelector("camper-route-planner-card")._state.origin.latitude === 47.3769);
 assert.equal(await desktop.locator('input[data-point="origin"][data-field="longitude"]').inputValue(), "8.5417", "tracker point fills origin coordinates");
@@ -238,6 +273,16 @@ assert.equal(await mobileDestination.evaluate((input) => input === input.getRoot
 await calculate(mobile);
 assert.equal(await mobile.locator(".grid").evaluate((node) => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length), 1, "mobile layout uses one column");
 await mobile.screenshot({ path: "../docs/phase2c-mobile.png", fullPage: true });
+
+const touchSelection = await preparePage({ width: 390, height: 844 }, "light", null, true);
+const touchSearch = touchSelection.locator('input[data-search-input="destination"]');
+await touchSearch.fill("Touch selection address");
+await touchSelection.waitForTimeout(500);
+await touchSelection.getByRole("button", { name: "Fixture address", exact: true }).tap();
+assert.equal(await touchSelection.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "touch selection fills destination latitude");
+assert.equal(await touchSelection.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Fixture address", "touch selection keeps the address label");
+assert.equal(await touchSelection.locator(".crp-map > svg").count(), 0, "touch selection keeps Leaflet instead of SVG fallback");
+await touchSelection.close();
 
 const tablet = await preparePage({ width: 768, height: 1024 }, "dark");
 await tablet.route("https://tiles.test/**", async (route) => route.fulfill({ status: 429, body: "rate limited" }));
