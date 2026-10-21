@@ -109,7 +109,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert f"Camper Route Planner Card v0.1.0-beta.5" in body
+    assert f"Camper Route Planner Card v0.1.0-beta.6" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert "custom:camper-route-planner-card" in body
     assert FRONTEND_RESOURCE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
@@ -123,7 +123,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert FRONTEND_RESOURCE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.0-beta.5" in await response.text()
+    assert "Camper Route Planner Card v0.1.0-beta.6" in await response.text()
 
 
 @pytest.mark.asyncio
