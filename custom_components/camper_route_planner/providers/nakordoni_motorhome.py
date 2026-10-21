@@ -80,7 +80,9 @@ def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
         "geometry": request.geometry_format,
     }
     if request.waypoints:
-        parameters["via"] = [f"{p.latitude},{p.longitude}" for p in request.waypoints]
+        # The documented Truck Route contract uses one pipe-separated via
+        # parameter, not repeated query parameters.
+        parameters["via"] = "|".join(f"{p.latitude},{p.longitude}" for p in request.waypoints)
     if FORBIDDEN_TRUCK_TIME_FIELDS.intersection(parameters):
         raise ValidationError("truck driver-time parameters are not valid for motorhomes")
     return parameters
@@ -124,17 +126,20 @@ def _toll_summary(raw: Any) -> dict[str, Any] | None:
 
 
 def _route_points(raw: Any) -> tuple[RouteWaypoint, ...]:
+    geojson = False
     if isinstance(raw, dict) and raw.get("type") == "LineString":
         raw = raw.get("coordinates")
+        geojson = True
     if not isinstance(raw, list):
         raise ValueError("geometry is not a coordinate list")
     points = []
     for point in raw:
         if not isinstance(point, (list, tuple)) or len(point) < 2:
             raise ValueError("invalid geometry point")
-        # Nakordoni fixtures use latitude/longitude pairs; accept GeoJSON
-        # longitude/latitude only when explicitly marked by the payload.
-        points.append(RouteWaypoint(float(point[0]), float(point[1])))
+        # Fixture arrays use latitude/longitude pairs. A marked GeoJSON
+        # LineString follows RFC 7946 and therefore uses longitude/latitude.
+        latitude, longitude = (point[1], point[0]) if geojson else (point[0], point[1])
+        points.append(RouteWaypoint(float(latitude), float(longitude)))
     return tuple(points)
 
 
@@ -166,6 +171,8 @@ class NakordoniMotorhomeProvider:
             raise ProviderError("Nakordoni request timed out", code="timeout", retryable=True) from exc
         except OSError as exc:
             raise ProviderError("Nakordoni network request failed", code="network_error", retryable=True) from exc
+        except ValueError as exc:
+            raise ProviderError("Nakordoni returned invalid JSON", code="invalid_response") from exc
         return self.normalize_fixture(payload, synthetic=False)
 
     def build_parameters(self, request: RouteRequest) -> dict[str, Any]:
