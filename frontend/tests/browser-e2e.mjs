@@ -42,6 +42,7 @@ await resourcePage.close();
 
 async function preparePage(viewport, colorScheme = "light") {
   const page = await browser.newPage({ viewport, colorScheme });
+  await page.route("https://tiles.test/**", async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.addScriptTag({ content: bundle });
   await page.evaluate(() => {
@@ -57,6 +58,7 @@ async function preparePage(viewport, colorScheme = "light") {
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
         if (message.type.endsWith("/tracker_position")) return { available: false, point: null };
+        if (message.type.endsWith("/geocode")) { await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: false, results: [] }; }
         if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: true, address: `Fixture address ${message.latitude},${message.longitude}` }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
@@ -84,9 +86,15 @@ async function calculate(page) {
 const desktop = await preparePage({ width: 1280, height: 900 });
 assert.equal(await desktop.locator(".metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
-// Phase 3B renders the map before calculation, so install the offline tile
-// fixture before entering coordinates as well as before the route click.
-await desktop.route("https://tiles.test/**", async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
+await desktop.locator(".leaflet-container").waitFor();
+assert.equal(await desktop.locator(".metrics").count(), 0, "a basemap is visible before route calculation");
+assert.equal(await desktop.locator(".leaflet-tile").count() > 0, true, "geographic tile fixture is visible before route calculation");
+const longDestination = "Rue de la République, Strasbourg, France";
+const destinationSearch = desktop.locator('input[data-search-input="destination"]');
+await destinationSearch.fill(longDestination);
+await desktop.waitForTimeout(500);
+assert.equal(await destinationSearch.inputValue(), longDestination, "long destination input survives async search rendering");
+assert.equal(await destinationSearch.evaluate((input) => input === input.getRootNode().activeElement), true, "destination input keeps focus after async search rendering");
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();
 await desktop.waitForFunction(() => globalThis.__crp.reverseCalls > 0);
@@ -162,6 +170,11 @@ for (const [label, handler] of [["403", async (route) => route.fulfill({ status:
 
 const mobile = await preparePage({ width: 390, height: 844 });
 await mobile.route("https://tiles.test/**", async (route) => route.fulfill({ status: 403, body: "forbidden" }));
+const mobileDestination = mobile.locator('input[data-search-input="destination"]');
+await mobileDestination.fill("Via Roma 123, Palermo, Italy");
+await mobile.waitForTimeout(500);
+assert.equal(await mobileDestination.inputValue(), "Via Roma 123, Palermo, Italy", "mobile destination input survives missing-key response");
+assert.equal(await mobileDestination.evaluate((input) => input === input.getRootNode().activeElement), true, "mobile destination input keeps focus");
 await calculate(mobile);
 assert.equal(await mobile.locator(".grid").evaluate((node) => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length), 1, "mobile layout uses one column");
 await mobile.screenshot({ path: "../docs/phase2c-mobile.png", fullPage: true });
@@ -173,6 +186,22 @@ await tablet.locator(".crp-map > svg").waitFor({ timeout: 5000 });
 assert.equal(await tablet.locator(".grid").evaluate((node) => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length), 2, "tablet layout uses two columns");
 assert.equal(await tablet.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches), true, "dark mode is available to the browser");
 await tablet.close();
+
+for (const width of [320, 375, 400, 600, 900]) {
+  await desktop.evaluate((containerWidth) => { const card = document.querySelector("camper-route-planner-card"); card.style.width = `${containerWidth}px`; card.updateResponsiveClass(); }, width);
+  await desktop.waitForTimeout(50);
+  const layout = await desktop.locator(".content").evaluate((content) => ({
+    contentWidth: content.clientWidth,
+    columns: (() => { const panels = [...content.querySelectorAll(".grid > .panel")]; return panels.length > 1 && Math.abs(panels[0].getBoundingClientRect().top - panels[1].getBoundingClientRect().top) < 1 ? 2 : 1; })(),
+    overflows: [...content.children].filter((child) => !child.classList.contains("map-section")).some((child) => child.scrollWidth > content.clientWidth + 1),
+    mapClipped: getComputedStyle(content.querySelector(".crp-map")).overflowX === "hidden",
+    inputWidths: [...content.querySelectorAll("input")].map((input) => input.getBoundingClientRect().width),
+  }));
+  assert.equal(layout.overflows, false, `${width}px card has no horizontal overflow`);
+  assert.equal(layout.mapClipped, true, `${width}px map clips internal Leaflet panes`);
+  assert.equal(layout.inputWidths.every((inputWidth) => inputWidth > 0 && inputWidth <= width), true, `${width}px card inputs fit the container`);
+  assert.equal(layout.columns, width <= 600 ? 1 : 2, `${width}px card uses container-aware columns`);
+}
 
 await desktop.close();
 await mobile.close();

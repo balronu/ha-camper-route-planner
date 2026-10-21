@@ -4,6 +4,7 @@ import L from "leaflet";
 // Lovelace document use the generic `_leafletMap` property while resizing
 // their own map; exposing that name makes them able to invalidate this map.
 const CRP_LEAFLET_MAP = Symbol("camper-route-planner-leaflet-map");
+const CRP_LEAFLET_RESIZE_OBSERVER = Symbol("camper-route-planner-leaflet-resize-observer");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -50,6 +51,8 @@ export function renderGeometryMap(container, route, labels) {
 
 export function destroyMap(container) {
   if (container?.[CRP_LEAFLET_MAP]) {
+    container[CRP_LEAFLET_RESIZE_OBSERVER]?.disconnect();
+    container[CRP_LEAFLET_RESIZE_OBSERVER] = null;
     container[CRP_LEAFLET_MAP].remove();
     container[CRP_LEAFLET_MAP] = null;
   }
@@ -59,12 +62,15 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
   destroyMap(container);
   const points = options.points || route?.geometry?.points || [];
   const geometry = route?.geometry?.points || [];
-  if (mapConfig?.provider === "carto" && mapConfig.status === "configured" && mapConfig.tile_url && points.length >= 1) {
+  if (mapConfig?.provider === "carto" && mapConfig.status === "configured" && mapConfig.tile_url) {
     container.replaceChildren();
     container.className = "crp-map crp-leaflet-map";
     const map = L.map(container, { zoomControl: true, attributionControl: true });
     container[CRP_LEAFLET_MAP] = map;
-    const bounds = L.latLngBounds(points.map((point) => [Number(point.latitude), Number(point.longitude)]));
+    if (globalThis.ResizeObserver) {
+      container[CRP_LEAFLET_RESIZE_OBSERVER] = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+      container[CRP_LEAFLET_RESIZE_OBSERVER].observe(container);
+    }
     const layer = L.tileLayer(mapConfig.tile_url, { maxZoom: 19, attribution: mapConfig.tile_attribution || "" });
     let failed = false;
     layer.on("tileerror", () => {
@@ -82,7 +88,16 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
         marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
       marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
     });
-    if (points.length === 1) map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12); else map.fitBounds(bounds, { padding: [20, 20] });
+    if (points.length === 1) {
+      map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
+    } else if (points.length > 1) {
+      map.fitBounds(L.latLngBounds(points.map((point) => [Number(point.latitude), Number(point.longitude)])), { padding: [20, 20] });
+    } else {
+      // A basemap is useful before a route exists. Keep a neutral central
+      // Europe view until the tracker or a manually entered point is known.
+      map.setView([51, 10], 5);
+    }
+    requestAnimationFrame(() => map.invalidateSize());
     map.on("click", (event) => options.onMapClick?.(event.latlng));
     return;
   }
