@@ -32,6 +32,13 @@ try:
         except TypeError:  # pragma: no cover
             return selector.EntitySelector(selector.EntitySelectorConfig(domain="device_tracker"))
 
+    def _select_selector(options: tuple[str, ...], translation_key: str):
+        config = {"options": list(options), "translation_key": translation_key}
+        try:
+            return selector.SelectSelector(config)
+        except TypeError:  # pragma: no cover
+            return selector.SelectSelector(selector.SelectSelectorConfig(**config))
+
     class CamperRoutePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         VERSION = 1
 
@@ -50,9 +57,9 @@ try:
                     })
             schema = vol.Schema({
                 vol.Required(CONF_NAME, default="Camper Route Planner"): str,
-                vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]),
+                vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): _select_selector((PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME), "provider"),
                 vol.Optional(CONF_API_KEY): _api_key_selector(),
-                vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]),
+                vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): _select_selector((MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO), "map_provider"),
                 vol.Optional(CONF_CARTO_API_KEY, default=""): str,
                 vol.Optional(CONF_GEOCODING_API_KEY, default=""): _api_key_selector(),
             })
@@ -64,7 +71,20 @@ try:
 
     class CamperRoutePlannerOptionsFlow(config_entries.OptionsFlow):
         def _current_values(self) -> dict[str, Any]:
-            return {**self.config_entry.data, **self.config_entry.options}
+            data = dict(self.config_entry.data)
+            options = dict(self.config_entry.options)
+            values = {**data, **options}
+            # Older beta flows could leave an empty options value while the
+            # real key still lived in ConfigEntry.data. An explicit remove
+            # marker is the only case where that empty value must win.
+            for key, remove_key in (
+                (CONF_API_KEY, CONF_REMOVE_API_KEY),
+                (CONF_CARTO_API_KEY, CONF_REMOVE_CARTO_API_KEY),
+                (CONF_GEOCODING_API_KEY, CONF_REMOVE_GEOCODING_API_KEY),
+            ):
+                if key in options and not str(options.get(key) or "").strip() and str(data.get(key) or "").strip() and not options.get(remove_key):
+                    values[key] = data[key]
+            return values
 
         def _runtime(self):
             return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
@@ -74,7 +94,9 @@ try:
             return runtime.store.profiles() if runtime is not None else ()
 
         def _secret_status(self, key: str) -> str:
-            return "stored" if str(self._current_values().get(key, "") or "").strip() else "not_stored"
+            german = str(getattr(getattr(self.hass, "config", None), "language", "en")).lower().startswith("de")
+            stored = str(self._current_values().get(key, "") or "").strip()
+            return ("gespeichert" if stored else "nicht gespeichert") if german else ("stored" if stored else "not stored")
 
         async def _show_init(self, errors: dict[str, str] | None = None):
             return self.async_show_form(
@@ -92,9 +114,7 @@ try:
             current = self._current_values()
             submitted = {**current, **user_input}
             provider = user_input.get(CONF_PROVIDER, current.get(CONF_PROVIDER, PROVIDER_MOCK))
-            if provider not in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
-                submitted[CONF_API_KEY] = ""
-            elif user_input.get(CONF_REMOVE_API_KEY):
+            if user_input.get(CONF_REMOVE_API_KEY):
                 submitted[CONF_API_KEY] = ""
             elif str(user_input.get(CONF_API_KEY, "")).strip():
                 submitted[CONF_API_KEY] = user_input[CONF_API_KEY]
@@ -113,7 +133,7 @@ try:
             errors = validate_user_input(submitted)
             if errors:
                 return await self._show_init(errors)
-            if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
+            if str(submitted.get(CONF_API_KEY, "")).strip():
                 submitted[CONF_API_KEY] = normalize_api_key(submitted[CONF_API_KEY])
             self._provider_input = {**current, **user_input, **{
                 CONF_API_KEY: submitted.get(CONF_API_KEY, ""),
@@ -129,10 +149,10 @@ try:
         def _schema(self):
             current = self._current_values()
             return vol.Schema({
-                vol.Required(CONF_PROVIDER, default=current.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]),
+                vol.Required(CONF_PROVIDER, default=current.get(CONF_PROVIDER, PROVIDER_MOCK)): _select_selector((PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME), "provider"),
                 vol.Optional(CONF_API_KEY): _api_key_selector(),
                 vol.Optional(CONF_REMOVE_API_KEY, default=False): bool,
-                vol.Optional(CONF_MAP_PROVIDER, default=current.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]),
+                vol.Optional(CONF_MAP_PROVIDER, default=current.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): _select_selector((MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO), "map_provider"),
                 vol.Optional(CONF_CARTO_API_KEY): str,
                 vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool,
                 vol.Optional(CONF_GEOCODING_API_KEY): _api_key_selector(),
@@ -165,14 +185,15 @@ try:
             return vol.Schema({
                 vol.Required("profile_id", default=defaults["profile_id"]): str,
                 vol.Required("name", default=defaults["name"]): str,
-                vol.Required("vehicle_kind", default=defaults["vehicle_kind"]): vol.In(["motorhome", "truck", "car"]),
+                vol.Required("vehicle_kind", default=defaults["vehicle_kind"]): _select_selector(("motorhome", "truck", "car"), "vehicle_kind"),
                 vol.Required("height_m", default=defaults["height_m"]): vol.Coerce(float),
                 vol.Required("width_m", default=defaults["width_m"]): vol.Coerce(float),
                 vol.Required("length_m", default=defaults["length_m"]): vol.Coerce(float),
                 vol.Required("gross_weight_kg", default=defaults["gross_weight_kg"]): vol.Coerce(int),
-                vol.Required("fuel_type", default=defaults["fuel_type"]): vol.In(["diesel", "petrol", "electric", "hybrid", "other"]),
+                vol.Required("fuel_type", default=defaults["fuel_type"]): _select_selector(("diesel", "petrol", "electric", "hybrid", "other"), "fuel_type"),
                 vol.Required("axles", default=defaults["axles"]): vol.Coerce(int),
                 tracker_key: _entity_selector(),
+                **({vol.Optional("delete_profile", default=False): bool} if profile else {}),
             })
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
@@ -180,6 +201,9 @@ try:
             editing_id = getattr(self, "_editing_profile_id", None)
             existing = next((profile for profile in self._profiles() if profile.profile_id == editing_id), None) if editing_id else None
             if user_input is not None:
+                if existing and user_input.get("delete_profile"):
+                    self._deleting_profile = existing
+                    return await self.async_step_vehicle_delete()
                 try:
                     profile = VehicleProfile(
                         profile_id=editing_id or user_input["profile_id"], name=user_input["name"], vehicle_kind=user_input["vehicle_kind"],
@@ -195,6 +219,39 @@ try:
                 except (KeyError, TypeError, ValueError):
                     errors = {"base": "invalid_profile"}
             return self.async_show_form(step_id="profile", data_schema=self._profile_schema(existing), errors=errors, description_placeholders={"mode": "edit" if existing else "add"})
+
+        async def async_step_vehicle_delete(self, user_input: dict[str, Any] | None = None):
+            profile = getattr(self, "_deleting_profile", None)
+            runtime = self._runtime()
+            if profile is None or runtime is None:
+                return await self._show_init({"base": "invalid_profile"})
+            routes = runtime.store.routes_for_profile(profile.profile_id)
+            if user_input is not None:
+                if not user_input.get("confirm_delete"):
+                    return self.async_show_form(
+                        step_id="vehicle_delete", data_schema=self._delete_schema(),
+                        errors={"base": "delete_confirmation_required"},
+                        description_placeholders={"name": profile.name, "route_count": str(len(routes))},
+                    )
+                if routes and not user_input.get("delete_routes"):
+                    return self.async_show_form(
+                        step_id="vehicle_delete", data_schema=self._delete_schema(),
+                        errors={"base": "profile_has_routes"},
+                        description_placeholders={"name": profile.name, "route_count": str(len(routes))},
+                    )
+                await runtime.store.async_delete_profile(profile.profile_id, delete_routes=bool(user_input.get("delete_routes")))
+                return self.async_create_entry(data=getattr(self, "_provider_input", {CONF_LIVE_ENABLED: False}))
+            return self.async_show_form(
+                step_id="vehicle_delete", data_schema=self._delete_schema(),
+                description_placeholders={"name": profile.name, "route_count": str(len(routes))},
+            )
+
+        @staticmethod
+        def _delete_schema():
+            return vol.Schema({
+                vol.Required("confirm_delete", default=False): bool,
+                vol.Optional("delete_routes", default=False): bool,
+            })
 
 except ImportError:  # pragma: no cover - exercised without HA.
     CamperRoutePlannerConfigFlow = None  # type: ignore[assignment,misc]
