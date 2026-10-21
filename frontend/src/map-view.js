@@ -1,5 +1,10 @@
 import L from "leaflet";
 
+// Keep the map handle private to this card. Other custom cards in the same
+// Lovelace document use the generic `_leafletMap` property while resizing
+// their own map; exposing that name makes them able to invalidate this map.
+const CRP_LEAFLET_MAP = Symbol("camper-route-planner-leaflet-map");
+
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
   for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -44,9 +49,9 @@ export function renderGeometryMap(container, route, labels) {
 }
 
 export function destroyMap(container) {
-  if (container?._leafletMap) {
-    container._leafletMap.remove();
-    container._leafletMap = null;
+  if (container?.[CRP_LEAFLET_MAP]) {
+    container[CRP_LEAFLET_MAP].remove();
+    container[CRP_LEAFLET_MAP] = null;
   }
 }
 
@@ -55,9 +60,9 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
   const points = route?.geometry?.points || [];
   if (mapConfig?.provider === "carto" && mapConfig.status === "configured" && mapConfig.tile_url && points.length >= 2) {
     container.replaceChildren();
-    container.className = "crp-map leaflet-map";
+    container.className = "crp-map crp-leaflet-map";
     const map = L.map(container, { zoomControl: true, attributionControl: true });
-    container._leafletMap = map;
+    container[CRP_LEAFLET_MAP] = map;
     const bounds = L.latLngBounds(points.map((point) => [Number(point.latitude), Number(point.longitude)]));
     const layer = L.tileLayer(mapConfig.tile_url, { maxZoom: 19, attribution: mapConfig.tile_attribution || "" });
     let failed = false;

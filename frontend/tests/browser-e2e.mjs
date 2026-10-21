@@ -79,6 +79,18 @@ await desktop.route("https://tiles.test/**", async (route) => route.fulfill({ st
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();
 assert.equal(await desktop.locator(".crp-map > svg").count(), 0, "successful tile mock uses Leaflet");
+const foreignMapIsolation = await desktop.evaluate(() => {
+  const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-leaflet-map");
+  const map = host;
+  return {
+    className: map?.className || "",
+    exposesGenericHandle: Boolean(map && Object.prototype.hasOwnProperty.call(map, "_leafletMap")),
+    exposesGenericClass: Boolean(map?.classList.contains("leaflet-map")),
+  };
+});
+assert.equal(foreignMapIsolation.exposesGenericHandle, false, "the route map must not expose other cards' generic Leaflet handle");
+assert.equal(foreignMapIsolation.exposesGenericClass, false, "the route map must not expose other cards' generic Leaflet class");
+assert.match(foreignMapIsolation.className, /(^| )crp-leaflet-map( |$)/, "the route map keeps a namespaced class");
 const callsBeforeExport = await desktop.evaluate(() => globalThis.__crp.calculateCalls);
 const download = await (async () => { const wait = desktop.waitForEvent("download"); await desktop.getByRole("button", { name: "GPX route" }).click(); return wait; })();
 assert.equal(download.suggestedFilename(), "camper-route-2026-10-16.gpx", "export uses backend filename");
