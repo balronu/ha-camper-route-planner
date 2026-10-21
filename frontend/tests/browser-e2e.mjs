@@ -58,8 +58,8 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null) 
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
         if (message.type.endsWith("/tracker_position")) return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } };
-        if (message.type.endsWith("/geocode")) { await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: true, results: [{ label: "Fixture address", latitude: 48.137, longitude: 11.575 }] }; }
-        if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: true, address: `Fixture address ${message.latitude},${message.longitude}` }; }
+        if (message.type.endsWith("/geocode")) { await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: true, results: [{ label: "Fixture address", latitude: 48.137, longitude: 11.575 }, { label: "Second fixture address", latitude: 48.138, longitude: 11.576 }] }; }
+        if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: false, address: "" }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
@@ -124,15 +124,27 @@ assert.equal(await emptyTileFailure.getByText("Map tiles are unavailable; check 
 await emptyTileFailure.close();
 const longDestination = "Rue de la République, Strasbourg, France";
 const destinationSearch = desktop.locator('input[data-search-input="destination"]');
-await destinationSearch.fill(longDestination);
+const destinationIdentity = await destinationSearch.evaluate((input) => {
+  document.body.style.minHeight = "2400px";
+  input.focus();
+  window.scrollTo(0, 240);
+  window.__destinationInput = input;
+  return { scrollY: window.scrollY };
+});
+await destinationSearch.pressSequentially(longDestination);
 await desktop.waitForTimeout(500);
 assert.equal(await destinationSearch.inputValue(), longDestination, "long destination input survives async search rendering");
 assert.equal(await destinationSearch.evaluate((input) => input === input.getRootNode().activeElement), true, "destination input keeps focus after async search rendering");
+assert.equal(await destinationSearch.evaluate((input) => input === window.__destinationInput), true, "destination input remains the same DOM node during async search rendering");
+assert.equal(await desktop.evaluate(() => window.scrollY), destinationIdentity.scrollY, "page scroll position remains stable while suggestions update");
 assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').count(), 1, "search results render directly inside destination editor");
+assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results button').count(), 2, "multiple asynchronous search results render in the destination editor");
 assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "search results do not render below waypoint editor");
-await desktop.getByRole("button", { name: "Fixture address" }).click();
+await desktop.getByRole("button", { name: "Fixture address", exact: true }).click();
 assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "selected search result fills latitude");
 assert.equal(await desktop.locator('input[data-point="destination"][data-field="longitude"]').inputValue(), "11.575", "selected search result fills longitude");
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Fixture address", "selected address is retained in state");
+assert.ok((await desktop.locator('.panel').nth(2).locator('.point-address').textContent()).includes("Fixture address"), "selected address is shown");
 assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').count(), 0, "search results close after selection");
 assert.equal(await desktop.locator('.panel').nth(2).locator('input[data-search-input="destination"] + button').count(), 1, "destination search stays with destination editor");
 assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "destination results never render below waypoints");
