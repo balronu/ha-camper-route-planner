@@ -81,6 +81,8 @@ async function calculate(page) {
 const desktop = await preparePage({ width: 1280, height: 900 });
 assert.equal(await desktop.locator(".metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
+// Phase 3B renders the map before calculation, so install the offline tile
+// fixture before entering coordinates as well as before the route click.
 await desktop.route("https://tiles.test/**", async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();

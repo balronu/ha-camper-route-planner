@@ -12,15 +12,17 @@ from .providers.mock import MockRoutingProvider
 from .providers.nakordoni import NakordoniRoutingProvider
 from .providers.nakordoni_motorhome import NakordoniMotorhomeProvider
 from .storage import ProfileRouteStore
+from .geocoding import GeoapifyGeocoder
 
 
 class RuntimeData:
     """One config-entry runtime; no background refresh is created."""
 
-    def __init__(self, coordinator: RouteCoordinator, store: ProfileRouteStore, config_values: dict[str, Any] | None = None) -> None:
+    def __init__(self, coordinator: RouteCoordinator, store: ProfileRouteStore, config_values: dict[str, Any] | None = None, geocoder: GeoapifyGeocoder | None = None) -> None:
         self.coordinator = coordinator
         self.store = store
         self.config_values = config_values or {}
+        self.geocoder = geocoder
 
     @classmethod
     def from_config_entry(cls, hass: Any, entry: Any) -> "RuntimeData":
@@ -38,7 +40,12 @@ class RuntimeData:
             provider = NakordoniRoutingProvider(api_key=entry.data.get("api_key"), live_enabled=False)
         else:
             provider = MockRoutingProvider()
-        return cls(RouteCoordinator(provider, store), store, {**entry.data, **getattr(entry, "options", {})})
+        values = {**entry.data, **getattr(entry, "options", {})}
+        geocoder = None
+        if values.get("geocoding_api_key"):
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+            geocoder = GeoapifyGeocoder(str(values["geocoding_api_key"]), session=async_get_clientsession(hass))
+        return cls(RouteCoordinator(provider, store), store, values, geocoder)
 
     def map_config(self) -> dict[str, Any]:
         return build_map_config(self.config_values).as_dict()

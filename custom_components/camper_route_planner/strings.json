@@ -11,7 +11,9 @@
           "remove_api_key": "Remove Nakordoni API key",
           "map_provider": "Map provider",
           "carto_api_key": "Browser-safe CARTO key",
-          "remove_carto_api_key": "Remove CARTO key"
+          "remove_carto_api_key": "Remove CARTO key",
+          "geocoding_api_key": "Geoapify API key",
+          "remove_geocoding_api_key": "Remove Geoapify API key"
         }
       }
     },
@@ -38,7 +40,9 @@
           "remove_api_key": "Remove Nakordoni API key",
           "map_provider": "Map provider",
           "carto_api_key": "Browser-safe CARTO key",
-          "remove_carto_api_key": "Remove CARTO key"
+          "remove_carto_api_key": "Remove CARTO key",
+          "geocoding_api_key": "Replace Geoapify API key (blank keeps current key)",
+          "remove_geocoding_api_key": "Remove Geoapify API key"
         }
       },
       "profile": {
@@ -53,7 +57,8 @@
           "length_m": "Length (m)",
           "gross_weight_kg": "Permitted mass (kg)",
           "fuel_type": "Fuel type",
-          "axles": "Number of axles"
+          "axles": "Number of axles",
+          "tracker_entity_id": "Vehicle GPS tracker entity"
         }
       }
     },

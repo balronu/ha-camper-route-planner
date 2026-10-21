@@ -26,6 +26,9 @@ und GPX-Export.
 - Speicherung und Laden synthetischer Routen
 - GPX-Export als Route, Track oder kombiniert
 - deutsche und englische UI-Texte
+- dauerhaft sichtbare Leaflet-Karte mit Marker-Drag und Kartenauswahl
+- GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
+- Geoapify-Adresssuche über den HA-Options-Flow (Backend-only, mockbar)
 
 ## Noch nicht verfügbar
 
@@ -58,6 +61,21 @@ Die Berechnung wird ausschließlich über die Schaltfläche bzw. die explizite
 Service-Grenze ausgelöst. GPS-Änderungen, HA-Start, Reload oder das Öffnen der
 Karte starten keine Berechnung. Der GPX-Export arbeitet auf der gespeicherten
 normalisierten Route und enthält keine Zugangsdaten.
+
+### Geoapify-Adresssuche und Datenschutz
+
+Die Phase-3B-Kandidatenimplementierung nutzt Geoapify Address Autocomplete über
+eine Backend-WebSocket-Grenze. Der Geoapify-Key wird ausschließlich im
+Home-Assistant-Options-Flow gespeichert und niemals an Lovelace, Browser,
+Logs, Diagnoseexporte oder GitHub übertragen. Suchtexte werden an Geoapify
+übermittelt, wenn die Funktion aktiviert ist; die Oberfläche zeigt deshalb
+einen Datenschutzhinweis und Geoapify/OpenStreetMap-Attribution. Debounce,
+Ergebnislimit, lokales Rate-Limiting und Cache reduzieren unnötige Abfragen.
+Ohne Key bleiben Karte, GPS und manuelle Koordinaten aktiv.
+
+Diese Phase-3B-Änderungen sind ein ungemergter Kandidatenbranch; sie ändern
+weder VM 104 noch ein produktives Home-Assistant-System und führen keine
+Live-Geoapify- oder Nakordoni-Abfragen aus.
 
 ## Nakordoni-Status
 

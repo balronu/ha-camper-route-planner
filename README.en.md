@@ -24,6 +24,9 @@ profiles, an interactive map, saved routes, and GPX export.
 - saving and loading synthetic routes
 - GPX route, track, and combined export
 - German and English UI text
+- always-visible Leaflet map with draggable markers and map selection
+- per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
+- Geoapify address search through the HA Options Flow (backend-only, mockable)
 
 ## Not available yet
 
@@ -47,6 +50,21 @@ The map supports a browser-safe CARTO configuration and an SVG fallback. No
 credentials belong in the frontend, screenshots, logs, GPX files, or Git.
 Route calculation is manual only; GPS changes, Home Assistant startup,
 reloads, and opening the card do not trigger routing.
+
+### Geoapify address search and privacy
+
+The Phase 3B candidate uses Geoapify Address Autocomplete behind a backend
+Home Assistant WebSocket boundary. The Geoapify key is stored only through the
+Home Assistant Options Flow and is never sent to Lovelace, the browser, logs,
+diagnostic exports, or GitHub. Queries are sent to Geoapify when search is
+enabled; the UI displays a privacy notice and Geoapify/OpenStreetMap
+attribution. Debouncing, result limits, local rate limiting, and caching reduce
+unnecessary requests. Without a key, the map, GPS, and manual coordinates remain
+available.
+
+These Phase 3B changes are an unmerged candidate branch. They do not change VM
+104 or a productive Home Assistant system and perform no live Geoapify or
+Nakordoni requests.
 
 ## Nakordoni status
 

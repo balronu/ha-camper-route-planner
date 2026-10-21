@@ -13,6 +13,14 @@ export async function exportGpx(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/export_gpx", ...data });
 }
 
+export function geocode(hass, data) {
+  return callWebsocket(hass, { type: "camper_route_planner/geocode", ...data });
+}
+
+export function trackerPosition(hass, data) {
+  return callWebsocket(hass, { type: "camper_route_planner/tracker_position", ...data });
+}
+
 export async function deliverGpxExport(payload) {
   const bytes = new TextEncoder().encode(payload.content);
   const blob = new Blob([bytes], { type: payload.mime_type || "application/gpx+xml;charset=utf-8" });
