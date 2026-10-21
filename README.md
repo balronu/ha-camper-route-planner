@@ -6,7 +6,7 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0-beta.13` Pre-release. Die Lovelace-Karte ist für eine
+> **Status:** `v0.1.0-beta.14` Pre-release. Die Lovelace-Karte ist für eine
 > isolierte HA-2026.10.1-Fixture und Chromium geprüft. Der aktuelle Stand
 > verwendet ausschließlich deterministisches Mock-Routing und ist keine
 > geprüfte Wohnmobilnavigation.
@@ -135,7 +135,7 @@ npm run test:e2e
 ```
 
 Der Beta-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.0-beta.13.md](docs/releases/v0.1.0-beta.13.md). Hassfest und
+    [docs/releases/v0.1.0-beta.14.md](docs/releases/v0.1.0-beta.14.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation
