@@ -39,6 +39,8 @@ test("search drafts and request generations protect active user input", () => {
   assert.match(source, /_searchRequestIds/);
   assert.match(source, /input\.focus\(\{ preventScroll: true \}\)/);
   assert.match(source, /selectionStart/);
+  assert.match(source, /updateSearchResults\(\)/);
+  assert.match(source, /data-search-results/);
 });
 
 test("GPX export is explicit, backend-mediated and supports mobile share fallback", () => {

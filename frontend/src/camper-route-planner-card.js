@@ -161,7 +161,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._state.searchTarget = target; this._state.searchSlot = slot; this._state.searchError = "";
     const requestId = (this._searchRequestIds.get(key) || 0) + 1;
     this._searchRequestIds.set(key, requestId);
-    if (query.trim().length < 2) { this._state.searchResults = []; return; }
+    if (query.trim().length < 2) { this._state.searchResults = []; this.updateSearchResults(); return; }
     try {
       const response = await geocode(this._hass, { entry_id: this._config.entry_id, text: query.trim(), limit: 5 });
       if (this._searchRequestIds.get(key) !== requestId || this._inputDrafts.get(key) !== query) return;
@@ -171,13 +171,39 @@ export class CamperRoutePlannerCard extends HTMLElement {
       if (this._searchRequestIds.get(key) !== requestId || this._inputDrafts.get(key) !== query) return;
       this._state.searchResults = []; this._state.searchError = t(languageOf(this._hass), "providerUnavailable");
     }
-    this.render();
+    this.updateSearchResults();
+  }
+
+  updateSearchResults() {
+    const target = this._state.searchTarget;
+    const slot = this._state.searchSlot;
+    const container = [...(this.shadowRoot?.querySelectorAll("[data-search-results]") || [])]
+      .find((node) => node.dataset.target === target && Number(node.dataset.index) === slot);
+    if (!container) return;
+    const buttons = this._state.searchResults.map((item, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.action = "select-search";
+      button.dataset.target = target;
+      button.dataset.index = String(index);
+      button.textContent = item.label || "";
+      button.addEventListener("click", () => this.selectSearchResult(target, index));
+      return button;
+    });
+    container.replaceChildren(...buttons);
+    container.classList.toggle("search-results", buttons.length > 0);
+    const error = this.shadowRoot.querySelector("[data-search-error]");
+    if (error) {
+      error.textContent = this._state.searchError || "";
+      error.hidden = !this._state.searchError;
+    }
   }
 
   selectSearchResult(target, index, value) {
     const rawPoint = this._state.searchResults[index];
     const point = rawPoint && {
       ...rawPoint,
+      address: rawPoint.address || rawPoint.label || "",
       latitude: Number(rawPoint.latitude ?? rawPoint.lat),
       longitude: Number(rawPoint.longitude ?? rawPoint.lon),
     };
@@ -251,11 +277,13 @@ export class CamperRoutePlannerCard extends HTMLElement {
       const response = await reverseGeocode(this._hass, { entry_id: this._config.entry_id, latitude: Number(point.latitude), longitude: Number(point.longitude) });
       const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
       if (!current || Number(current.latitude) !== Number(point.latitude) || Number(current.longitude) !== Number(point.longitude)) return;
-      current.address = response?.configured && response.address ? response.address : "";
+      // Preserve a selected search label when reverse geocoding is empty or
+      // unavailable; only a usable response may replace it.
+      if (response?.configured && response.address) current.address = response.address;
       this.render();
     } catch (_error) {
       const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
-      if (current && Number(current.latitude) === Number(point.latitude) && Number(current.longitude) === Number(point.longitude)) { current.address = ""; this.render(); }
+      if (current && Number(current.latitude) === Number(point.latitude) && Number(current.longitude) === Number(point.longitude)) this.render();
     }
   }
 
@@ -313,14 +341,15 @@ export class CamperRoutePlannerCard extends HTMLElement {
     // instance while its container and private Symbol handle are still alive.
     destroyMap(this.shadowRoot?.querySelector(".crp-map"));
     if (!this._config.entry_id) { const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing"); this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`; return; }
-    const searchResults = this._state.searchResults.length ? `<div class="search-results">${this._state.searchResults.map((item, index) => `<button data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}">${escapeHtml(item.label)}</button>`).join("")}</div>` : "";
+    const searchResultButtons = this._state.searchResults.map((item, index) => `<button type="button" data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}">${escapeHtml(item.label)}</button>`).join("");
     const pointEditor = (point, target, index = 0) => {
-      const results = target === this._state.searchTarget && index === this._state.searchSlot ? searchResults : "";
-      return `${this.renderPoint(point, target, index)}<div class="search-row"><input data-search-input="${target}" data-index="${index}" placeholder="${translate("searchPlaceholder")}" aria-label="${translate("search")}"><button type="button" data-action="search" data-target="${target}" data-index="${index}">${translate("search")}</button></div>${results}`;
+      const activeResults = target === this._state.searchTarget && index === this._state.searchSlot ? searchResultButtons : "";
+      const resultClass = activeResults ? " class=\"search-results\"" : "";
+      return `${this.renderPoint(point, target, index)}<div class="search-row"><input data-search-input="${target}" data-index="${index}" placeholder="${translate("searchPlaceholder")}" aria-label="${translate("search")}"><button type="button" data-action="search" data-target="${target}" data-index="${index}">${translate("search")}</button></div><div data-search-results data-target="${target}" data-index="${index}"${resultClass}>${activeResults}</div>`;
     };
     const vehicleKind = profile ? translate(`vehicleKind.${profile.vehicle_kind}`) : "";
     const fuelType = profile ? translate(`fuelType.${profile.fuel_type}`) : "";
-    this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} · ${escapeHtml(fuelType)}</dd></div></dl><button type="button" data-action="tracker">${translate("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">＋ ${translate("addWaypoint")}</button></div></section>${this._state.searchError ? `<p class="subtle">${escapeHtml(this._state.searchError)}</p>` : ""}<p class="privacy">${translate("geocodingPrivacy")}</p><section class="map-section"><h3>${translate("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div></div><div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportCombined")}</button></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} · ${escapeHtml(fuelType)}</dd></div></dl><button type="button" data-action="tracker">${translate("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">＋ ${translate("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate("geocodingPrivacy")}</p><section class="map-section"><h3>${translate("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div></div><div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportCombined")}</button></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
     if (result?.provider === "nakordoni_motorhome") {
       const resultPanel = this.shadowRoot.querySelector(".result");
       resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
