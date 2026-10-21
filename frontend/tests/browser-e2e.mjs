@@ -5,13 +5,34 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.4"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
+  if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
+  if (new URL(request.url, "http://127.0.0.1").pathname === "/camper_route_planner/camper-route-planner-card.js") {
+    response.writeHead(200, { "content-type": "application/javascript", "cache-control": "public, max-age=31536000" }); response.end(bundle); return;
+  }
   response.writeHead(404); response.end();
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const port = server.address().port;
 const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox"] });
+
+const resourcePage = await browser.newPage({ viewport: { width: 1024, height: 800 } });
+const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resource-test`);
+assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
+assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
+assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.4`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0-beta\.4/);
+const editorResult = await resourcePage.evaluate(() => {
+  const editor = customElements.get("camper-route-planner-card").getConfigElement();
+  editor.setConfig({ type: "custom:camper-route-planner-card", entry_id: "" });
+  document.body.append(editor);
+  return { tag: editor.tagName.toLowerCase(), hasSelect: Boolean(editor.querySelector("select")) };
+});
+assert.deepEqual(editorResult, { tag: "camper-route-planner-card-editor", hasSelect: true }, "visual editor is created by the card contract");
+await resourcePage.close();
 
 async function preparePage(viewport, colorScheme = "light") {
   const page = await browser.newPage({ viewport, colorScheme });

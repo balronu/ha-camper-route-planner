@@ -7,12 +7,14 @@ import sys
 try:
     import pytest
     from homeassistant.core import HomeAssistant
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     try:
         from homeassistant.const import CONF_NAME
     except ImportError:  # HA 2026.10 keeps the flow field name as a literal.
         CONF_NAME = "name"
     from custom_components.camper_route_planner.const import DOMAIN, PROVIDER_MOCK
+    from custom_components.camper_route_planner import FRONTEND_RESOURCE_URL, FRONTEND_URL
     from custom_components.camper_route_planner.models import VehicleProfile
     HA_AVAILABLE = True
 except ImportError as err:  # unittest discovery remains usable without pytest.
@@ -87,6 +89,41 @@ async def test_websocket_map_config_is_editor_safe(hass: HomeAssistant, hass_ws_
     assert response["success"] is True
     assert response["result"]["status"] == "configured"
     assert "browser-safe-fixture" in response["result"]["tile_url"]
+
+
+@pytest.mark.asyncio
+async def test_frontend_static_path_resource_and_reload_cleanup(
+    hass: HomeAssistant, hass_client, enable_custom_integrations
+) -> None:
+    """Exercise the installable bundle through HA's real HTTP/static path."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Frontend Planner",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client()
+    response = await client.get(FRONTEND_URL)
+    assert response.status == 200
+    body = await response.text()
+    assert f"Camper Route Planner Card v0.1.0-beta.4" in body
+    assert 'customElements.define("camper-route-planner-card"' in body
+    assert "custom:camper-route-planner-card" in body
+    assert FRONTEND_RESOURCE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert FRONTEND_RESOURCE_URL not in hass.data[DATA_EXTRA_MODULE_URL].urls
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert FRONTEND_RESOURCE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
+    response = await client.get(FRONTEND_URL)
+    assert response.status == 200
+    assert "Camper Route Planner Card v0.1.0-beta.4" in await response.text()
 
 
 @pytest.mark.asyncio

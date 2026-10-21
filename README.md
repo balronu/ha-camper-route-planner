@@ -6,9 +6,10 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** lokale Stable-Vorbereitung, noch kein veröffentlichtes Release.
-> Der aktuelle Stand verwendet ausschließlich deterministisches Mock-Routing.
-> Er ist keine geprüfte Wohnmobilnavigation.
+> **Status:** `v0.1.0-beta.4` Pre-release. Die Lovelace-Karte ist für eine
+> isolierte HA-2026.10.1-Fixture und Chromium geprüft. Der aktuelle Stand
+> verwendet ausschließlich deterministisches Mock-Routing und ist keine
+> geprüfte Wohnmobilnavigation.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 
@@ -31,7 +32,7 @@ und GPX-Export.
 - produktives Nakordoni-Routing
 - Nakordoni-`vehicle_type=motorhome`
 - verifizierte Wohnmobilnavigation
-- automatische Auslieferung der Lovelace-Karte über die Integration
+- produktive Nakordoni-/Provider-Livevalidierung
 
 Truck-Routing darf bis zur Verfügbarkeit und Prüfung des echten Motorhome-
 Profils nicht als sichere Wohnmobilnavigation dargestellt werden. Ein
@@ -39,11 +40,8 @@ stiller Fallback von Motorhome auf Truck ist ausgeschlossen.
 
 ## Installation und Konfiguration
 
-Die Struktur ist für eine spätere HACS-Custom-Integration vorbereitet. Vor
-einem regulären Release gibt es jedoch **keine Installationsfreigabe**.
-
-Nach einer späteren Freigabe wird die Integration über HACS oder manuell nach
-`custom_components/camper_route_planner/` installiert. Anschließend wird sie
+Die Beta kann als HACS-Custom-Repository oder manuell nach
+`custom_components/camper_route_planner/` installiert werden. Anschließend wird sie
 über **Einstellungen → Geräte & Dienste** eingerichtet. Im aktuellen Stand
 wird der Mock-Provider für lokale Tests verwendet.
 
@@ -114,12 +112,12 @@ npm run build
 npm run test:e2e
 ```
 
-Die Ausführungs- und Blocker-Matrix steht in
-[docs/PHASE2E-TEST-REPORT.md](docs/PHASE2E-TEST-REPORT.md). Hassfest und
+Der Beta-Installations- und Testnachweis steht in
+[docs/releases/v0.1.0-beta.4.md](docs/releases/v0.1.0-beta.4.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
-bereits durch GitHub Actions validiert. Das Ergebnis ist kein Stable- oder
-Installationsfreigabe-Gate.
+durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation
+sind nicht Bestandteil dieser Beta.
 
 ## Roadmap
 

@@ -2,10 +2,11 @@
 
 In der isolierten HA-Fixture-Umgebung wurden Config-Flow, Config-Entry-Setup,
 Response-Service, Map-Konfiguration, GPX-WebSocket-Export,
-GPX-Fehlerbehandlung und das Entladen des eigenen Runtime-Eintrags geprüft:
-**4/4 PASS**.
+GPX-Fehlerbehandlung, Static-Path/Bundle-Auslieferung, Extra-JS-Registrierung,
+Unload/Cleanup und erneutes Setup des eigenen Runtime-Eintrags geprüft:
+**7/7 PASS**.
 
-Eine echte HACS-Installation, Dashboard-Resource-Installation sowie ein
+Eine echte HACS-UI-Installation, Dashboard-Resource-Installation sowie ein
 Update-/Deinstallationslauf mit realem HA-Dateisystem wurden nicht ausgeführt.
-Sie bleiben vor einer Beta **BLOCKED/NOT RUN**. VM 104 und produktive
-Dashboards wurden nicht verwendet.
+Sie bleiben **NOT RUN**. VM 104 und produktive Dashboards wurden nicht
+verwendet.

@@ -9,10 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .const import DOMAIN, SERVICE_CALCULATE_ROUTE
+from .const import DOMAIN, SERVICE_CALCULATE_ROUTE, VERSION
 
 FRONTEND_URL = f"/{DOMAIN}/camper-route-planner-card.js"
 FRONTEND_FILE = Path(__file__).parent / "frontend" / "camper-route-planner-card.js"
+FRONTEND_RESOURCE_URL = f"{FRONTEND_URL}?v={VERSION}"
 
 try:
     from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -28,28 +29,37 @@ try:
         vol.Optional("route_name", default="manual route"): cv.string,
     })
 
-    async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-        """Set up the domain and expose one explicit response service."""
-        del config
+    async def _async_register_frontend(hass: HomeAssistant) -> None:
+        """Serve and register the card exactly once for this HA runtime."""
         domain_data = hass.data.setdefault(DOMAIN, {})
-        if not domain_data.get("_frontend_registered"):
-            if hass.http is not None:
-                from homeassistant.components.frontend import add_extra_js_url
-                from homeassistant.components.http import StaticPathConfig
+        if hass.http is None:
+            return
+        from homeassistant.components.frontend import add_extra_js_url
+        from homeassistant.components.http import StaticPathConfig
 
-                await hass.http.async_register_static_paths(
-                    [StaticPathConfig(FRONTEND_URL, str(FRONTEND_FILE), True)]
-                )
-                add_extra_js_url(hass, f"{FRONTEND_URL}?v=0.1.0-alpha.1")
-                domain_data["_frontend_registered"] = True
-            else:
-                # Some isolated HA fixtures omit the HTTP component. A real HA
-                # instance loads it; integration setup must remain testable.
-                domain_data["_frontend_registered"] = False
-        if not domain_data.get("_websocket_registered"):
-            from .websocket_api import async_register as async_register_websocket
-            async_register_websocket(hass)
-            domain_data["_websocket_registered"] = True
+        if not domain_data.get("_frontend_static_path_registered"):
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(FRONTEND_URL, str(FRONTEND_FILE), True)]
+            )
+            domain_data["_frontend_static_path_registered"] = True
+        if not domain_data.get("_frontend_registered"):
+            add_extra_js_url(hass, FRONTEND_RESOURCE_URL)
+            domain_data["_frontend_registered"] = True
+
+    def _register_websocket(hass: HomeAssistant) -> None:
+        domain_data = hass.data.setdefault(DOMAIN, {})
+        if domain_data.get("_websocket_registered"):
+            return
+        from .websocket_api import async_register as async_register_websocket
+
+        async_register_websocket(hass)
+        domain_data["_websocket_registered"] = True
+
+    async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+        """Set up the domain and expose the card/runtime APIs."""
+        del config
+        await _async_register_frontend(hass)
+        _register_websocket(hass)
 
         async def handle_service(call: ServiceCall) -> dict[str, Any]:
             entry_id = call.data["entry_id"]
@@ -71,6 +81,8 @@ try:
         """Load one config entry without starting a refresh loop."""
         from .runtime import RuntimeData
 
+        await _async_register_frontend(hass)
+        _register_websocket(hass)
         runtime = RuntimeData.from_config_entry(hass, entry)
         await runtime.async_load()
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
@@ -78,14 +90,19 @@ try:
 
     async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-        if (
-            not hass.config_entries.async_loaded_entries(DOMAIN)
-            and hass.data.get(DOMAIN, {}).get("_frontend_registered")
+        domain_data = hass.data.get(DOMAIN, {})
+        if domain_data.get("_frontend_registered") and not any(
+            key not in {
+                "_frontend_registered",
+                "_frontend_static_path_registered",
+                "_websocket_registered",
+            }
+            for key in domain_data
         ):
             from homeassistant.components.frontend import remove_extra_js_url
 
-            remove_extra_js_url(hass, f"{FRONTEND_URL}?v=0.1.0-alpha.1")
-            hass.data.get(DOMAIN, {})["_frontend_registered"] = False
+            remove_extra_js_url(hass, FRONTEND_RESOURCE_URL)
+            domain_data["_frontend_registered"] = False
         return True
 
 except ImportError:  # pragma: no cover - HA-only wrapper.

@@ -5,9 +5,9 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** local Stable preparation, no published release yet. The current
-> implementation uses deterministic mock routing only and is not verified
-> motorhome navigation.
+> **Status:** `v0.1.0-beta.4` pre-release. The Lovelace card is validated with
+> an isolated HA 2026.10.1 fixture and Chromium. The current implementation
+> uses deterministic mock routing only and is not verified motorhome navigation.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -30,7 +30,7 @@ profiles, an interactive map, saved routes, and GPX export.
 - production Nakordoni routing
 - Nakordoni `vehicle_type=motorhome`
 - verified motorhome navigation
-- automatic Lovelace card delivery from the integration
+- real Nakordoni/provider live validation
 
 Truck routing must not be presented as safe motorhome navigation before the
 real motorhome profile is available and validated. There is no silent truck
@@ -38,10 +38,9 @@ fallback for motorhome mode.
 
 ## Installation and configuration
 
-The repository is structured for a future HACS custom integration. There is no
-installation approval yet. After a future release, install through HACS or
-copy the integration to `custom_components/camper_route_planner/`, then set it
-up through **Settings → Devices & services**. The current local mode uses the
+The beta can be installed as a HACS custom repository or by copying the
+integration to `custom_components/camper_route_planner/`, then setting it up
+through **Settings → Devices & services**. The current local mode uses the
 mock provider.
 
 The map supports a browser-safe CARTO configuration and an SVG fallback. No
@@ -92,10 +91,11 @@ npm run build
 npm run test:e2e
 ```
 
-See [the Phase 2E report](docs/PHASE2E-TEST-REPORT.md) for the current test
-matrix and blockers. Hassfest and GitHub-side validation run through
+See the [beta.4 release notes](docs/releases/v0.1.0-beta.4.md) for the
+installation and test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is already validated by
-GitHub Actions. This result is not a Stable or installation-approval gate.
+GitHub Actions. A Stable release and productive HA installation are outside
+the scope of this beta.
 
 ## Roadmap
 
