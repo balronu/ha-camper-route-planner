@@ -34,6 +34,7 @@
     "step": {
       "init": {
         "title": "Camper Route Planner options",
+        "description": "Geoapify: {geocoding_status}. CARTO: {carto_status}. Nakordoni: {nakordoni_status}. Secret values are never shown.",
         "data": {
           "provider": "Routing provider",
           "api_key": "Replace Nakordoni API key (blank keeps current key)",
@@ -45,9 +46,14 @@
           "remove_geocoding_api_key": "Remove Geoapify API key"
         }
       },
+      "vehicle_menu": {
+        "title": "Manage vehicles",
+        "description": "Select an existing vehicle to edit or add a new one. Existing profile IDs and route references are preserved.",
+        "data": { "vehicle_action": "Vehicle" }
+      },
       "profile": {
-        "title": "Add vehicle profile",
-        "description": "Add one independent vehicle profile. Repeat Options Flow to add more profiles.",
+        "title": "Vehicle profile ({mode})",
+        "description": "Edit the selected vehicle or add a new one. The profile ID remains stable when editing.",
         "data": {
           "profile_id": "Stable profile ID",
           "name": "Display name",
