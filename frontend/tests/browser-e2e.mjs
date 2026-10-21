@@ -89,6 +89,31 @@ assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "
 await desktop.locator(".leaflet-container").waitFor();
 assert.equal(await desktop.locator(".metrics").count(), 0, "a basemap is visible before route calculation");
 assert.equal(await desktop.locator(".leaflet-tile").count() > 0, true, "geographic tile fixture is visible before route calculation");
+const initialTileCoverage = await desktop.evaluate(() => {
+  const map = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".leaflet-container");
+  const mapRect = map?.getBoundingClientRect();
+  const tiles = [...(map?.querySelectorAll(".leaflet-tile-loaded") || [])].map((tile) => tile.getBoundingClientRect());
+  const samples = [
+    [mapRect.left + 1, mapRect.top + 1],
+    [mapRect.right - 1, mapRect.top + 1],
+    [mapRect.left + 1, mapRect.bottom - 1],
+    [mapRect.right - 1, mapRect.bottom - 1],
+    [(mapRect.left + mapRect.right) / 2, (mapRect.top + mapRect.bottom) / 2],
+  ];
+  return {
+    width: mapRect?.width || 0,
+    height: mapRect?.height || 0,
+    tileCount: tiles.length,
+    hasTilePane: Boolean(map?.querySelector(".leaflet-tile-pane")),
+    hasMapPane: Boolean(map?.querySelector(".leaflet-map-pane")),
+    covered: Boolean(mapRect) && samples.every(([x, y]) => tiles.some((tile) => x >= tile.left && x <= tile.right && y >= tile.top && y <= tile.bottom)),
+  };
+});
+assert.ok(initialTileCoverage.width > 500 && initialTileCoverage.height > 300, "Leaflet container fills the map area");
+assert.ok(initialTileCoverage.tileCount >= 4, "Leaflet loads a tile grid rather than one isolated tile");
+assert.equal(initialTileCoverage.hasTilePane, true, "Leaflet tile pane is present");
+assert.equal(initialTileCoverage.hasMapPane, true, "Leaflet map pane is present");
+assert.equal(initialTileCoverage.covered, true, "loaded tiles cover the complete visible map container");
 const emptyTileFailure = await preparePage({ width: 1280, height: 900 }, "light", async (route) => route.fulfill({ status: 403, body: "forbidden" }));
 await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").waitFor();
 assert.equal(await emptyTileFailure.locator(".metrics").count(), 0, "tile failure before route calculation does not calculate a route");
@@ -100,9 +125,15 @@ await destinationSearch.fill(longDestination);
 await desktop.waitForTimeout(500);
 assert.equal(await destinationSearch.inputValue(), longDestination, "long destination input survives async search rendering");
 assert.equal(await destinationSearch.evaluate((input) => input === input.getRootNode().activeElement), true, "destination input keeps focus after async search rendering");
+assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').count(), 1, "search results render directly inside destination editor");
+assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "search results do not render below waypoint editor");
 await desktop.getByRole("button", { name: "Fixture address" }).click();
 assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "selected search result fills latitude");
 assert.equal(await desktop.locator('input[data-point="destination"][data-field="longitude"]').inputValue(), "11.575", "selected search result fills longitude");
+assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').count(), 0, "search results close after selection");
+assert.equal(await desktop.locator('.panel').nth(2).locator('input[data-search-input="destination"] + button').count(), 1, "destination search stays with destination editor");
+assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "destination results never render below waypoints");
+assert.ok(await desktop.locator('.leaflet-marker-icon').count() >= 2, "origin and selected destination markers are rendered");
 await desktop.evaluate(() => document.querySelector("camper-route-planner-card").useTrackerLocation(true));
 await desktop.waitForFunction(() => document.querySelector("camper-route-planner-card")._state.origin.latitude === 47.3769);
 assert.equal(await desktop.locator('input[data-point="origin"][data-field="longitude"]').inputValue(), "8.5417", "tracker point fills origin coordinates");
