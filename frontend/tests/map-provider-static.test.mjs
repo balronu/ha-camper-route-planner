@@ -14,6 +14,14 @@ test("map implementation keeps Leaflet, CARTO and SVG fallback in the bundle sou
   assert.match(source, /setView\(\[51, 10\], 5\)/);
 });
 
+test("Leaflet positioning CSS is bundled for the card shadow DOM", async () => {
+  const css = await readFile(new URL("../src/leaflet-css.js", import.meta.url), "utf8");
+  assert.match(css, /\.leaflet-map-pane/);
+  assert.match(css, /\.leaflet-tile-container/);
+  assert.match(css, /\.leaflet-tile\s*\{/);
+  assert.match(css, /\.leaflet-container\s*\{[\s\S]*?overflow:\s*hidden/);
+});
+
 test("card requests map configuration over HA WebSocket, never directly from browser HTTP", async () => {
   const source = await readFile(new URL("../src/camper-route-planner-card.js", import.meta.url), "utf8");
   assert.match(source, /camper_route_planner\/map_config/);
