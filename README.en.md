@@ -5,7 +5,7 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0-beta.4` pre-release. The Lovelace card is validated with
+> **Status:** `v0.1.0-beta.5` pre-release. The Lovelace card is validated with
 > an isolated HA 2026.10.1 fixture and Chromium. The current implementation
 > uses deterministic mock routing only and is not verified motorhome navigation.
 
@@ -91,7 +91,7 @@ npm run build
 npm run test:e2e
 ```
 
-See the [beta.4 release notes](docs/releases/v0.1.0-beta.4.md) for the
+See the [beta.5 release notes](docs/releases/v0.1.0-beta.5.md) for the
 installation and test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is already validated by
 GitHub Actions. A Stable release and productive HA installation are outside
