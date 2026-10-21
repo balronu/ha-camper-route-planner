@@ -26,6 +26,10 @@ test("German and English labels are available", () => {
   assert.equal(languageOf({ locale: { language: "en-US" } }), "en");
   assert.equal(t("de", "calculate"), "Route berechnen");
   assert.equal(t("en", "calculate"), "Calculate route");
+  assert.equal(t("de", "vehicleKind.motorhome"), "Wohnmobil");
+  assert.equal(t("de", "fuelType.electric"), "Elektro");
+  assert.equal(t("en", "vehicleKind.truck"), "Truck");
+  assert.equal(t("en", "fuelType.petrol"), "Petrol");
 });
 
 test("track export eligibility requires existing geometry", () => {

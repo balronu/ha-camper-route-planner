@@ -24,7 +24,10 @@
       "invalid_map_provider": "Select a supported map provider.",
       "carto_key_required": "A CARTO key is required for the CARTO map provider.",
       "carto_key_invalid": "The CARTO key is not valid for browser tile access.",
-      "live_routing_requires_separate_phase": "Live routing is disabled until a separately authorized phase."
+      "live_routing_requires_separate_phase": "Live routing is disabled until a separately authorized phase.",
+      "invalid_profile": "The selected vehicle profile is no longer available.",
+      "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
+      "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
     },
     "abort": {
       "already_configured": "This configuration already exists."
@@ -64,12 +67,29 @@
           "gross_weight_kg": "Permitted mass (kg)",
           "fuel_type": "Fuel type",
           "axles": "Number of axles",
-          "tracker_entity_id": "Vehicle GPS tracker entity"
+          "tracker_entity_id": "Vehicle GPS tracker entity",
+          "delete_profile": "Delete this vehicle profile"
+        }
+      },
+      "vehicle_delete": {
+        "title": "Delete vehicle {name}",
+        "description": "This permanently deletes vehicle {name}. Referenced saved routes: {route_count}. Routes are never deleted implicitly.",
+        "data": {
+          "confirm_delete": "I understand and want to delete this vehicle",
+          "delete_routes": "Also delete its referenced saved routes"
         }
       }
     },
     "error": {
-      "invalid_profile": "The vehicle profile is invalid. Check its dimensions and mass."
+      "invalid_profile": "The vehicle profile is invalid. Check its dimensions and mass.",
+      "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
+      "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
     }
+  },
+  "selector": {
+    "provider": { "options": { "mock": "Mock (offline)", "nakordoni": "Nakordoni", "nakordoni_motorhome": "Nakordoni Motorhome" } },
+    "map_provider": { "options": { "none": "No map", "carto": "CARTO" } },
+    "vehicle_kind": { "options": { "motorhome": "Motorhome", "truck": "Truck", "car": "Car" } },
+    "fuel_type": { "options": { "diesel": "Diesel", "petrol": "Petrol", "electric": "Electric", "hybrid": "Hybrid", "other": "Other" } }
   }
 }

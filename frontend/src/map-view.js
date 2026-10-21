@@ -18,7 +18,7 @@ export function renderGeometryMap(container, route, labels) {
   const points = route?.geometry?.points || [];
   if (points.length < 2) {
     const empty = document.createElement("p");
-    empty.textContent = labels.noRoute;
+    empty.textContent = labels.emptyMessage || labels.noRoute;
     container.append(empty);
     return;
   }
@@ -78,7 +78,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
       failed = true;
       destroyMap(container);
       onTileError();
-      renderGeometryMap(container, route, labels);
+      renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute });
     });
     layer.addTo(map);
     if (geometry.length >= 2) L.polyline(geometry.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
@@ -101,5 +101,8 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     map.on("click", (event) => options.onMapClick?.(event.latlng));
     return;
   }
-  renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, labels);
+  const emptyMessage = mapConfig?.provider === "carto"
+    ? (labels.mapUnavailable || labels.noRoute)
+    : (mapConfig ? labels.noRoute : (labels.mapLoading || labels.noRoute));
+  renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage });
 }

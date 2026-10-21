@@ -114,6 +114,27 @@ class ProfileRouteStore:
     def profiles(self) -> tuple[VehicleProfile, ...]:
         return tuple(VehicleProfile.from_dict(item) for item in self.data["profiles"].values())
 
+    def routes_for_profile(self, profile_id: str) -> tuple[dict[str, Any], ...]:
+        """Return saved routes referencing a profile before a destructive action."""
+        return tuple(
+            copy.deepcopy(route)
+            for route in self.data["routes"].values()
+            if route.get("profile_id") == profile_id
+        )
+
+    async def async_delete_profile(self, profile_id: str, *, delete_routes: bool = False) -> tuple[str, ...]:
+        """Delete one profile only after explicit route-reference consent."""
+        if profile_id not in self.data["profiles"]:
+            return ()
+        route_ids = tuple(route["route_id"] for route in self.routes_for_profile(profile_id))
+        if route_ids and not delete_routes:
+            raise ValueError("profile_has_routes")
+        del self.data["profiles"][profile_id]
+        for route_id in route_ids:
+            self.data["routes"].pop(route_id, None)
+        await self._store.async_save(self.data)
+        return route_ids
+
     async def async_save_route(self, route_id: str, request: Any, result: RouteResult, name: str = "manual route") -> None:
         self.data["routes"][route_id] = {
             "route_id": route_id,

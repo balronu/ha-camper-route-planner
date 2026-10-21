@@ -40,9 +40,9 @@ assert.equal(editorResult.catalogEntry.preview, true, "catalog metadata enables 
 assert.deepEqual({ tag: editorResult.tag, hasSelect: editorResult.hasSelect }, { tag: "camper-route-planner-card-editor", hasSelect: true }, "visual editor is created by the card contract");
 await resourcePage.close();
 
-async function preparePage(viewport, colorScheme = "light") {
+async function preparePage(viewport, colorScheme = "light", tileHandler = null) {
   const page = await browser.newPage({ viewport, colorScheme });
-  await page.route("https://tiles.test/**", async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
+  await page.route("https://tiles.test/**", tileHandler || (async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") })));
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.addScriptTag({ content: bundle });
   await page.evaluate(() => {
@@ -89,6 +89,11 @@ assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "
 await desktop.locator(".leaflet-container").waitFor();
 assert.equal(await desktop.locator(".metrics").count(), 0, "a basemap is visible before route calculation");
 assert.equal(await desktop.locator(".leaflet-tile").count() > 0, true, "geographic tile fixture is visible before route calculation");
+const emptyTileFailure = await preparePage({ width: 1280, height: 900 }, "light", async (route) => route.fulfill({ status: 403, body: "forbidden" }));
+await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").waitFor();
+assert.equal(await emptyTileFailure.locator(".metrics").count(), 0, "tile failure before route calculation does not calculate a route");
+assert.equal(await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").count(), 1, "empty tile failure explains the map problem");
+await emptyTileFailure.close();
 const longDestination = "Rue de la République, Strasbourg, France";
 const destinationSearch = desktop.locator('input[data-search-input="destination"]');
 await destinationSearch.fill(longDestination);

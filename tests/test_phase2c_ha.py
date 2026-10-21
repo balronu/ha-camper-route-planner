@@ -13,7 +13,7 @@ try:
         from homeassistant.const import CONF_NAME
     except ImportError:  # HA 2026.10 keeps the flow field name as a literal.
         CONF_NAME = "name"
-    from custom_components.camper_route_planner.const import DOMAIN, PROVIDER_MOCK
+    from custom_components.camper_route_planner.const import CONF_API_KEY, DOMAIN, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
     from custom_components.camper_route_planner import FRONTEND_RESOURCE_URL, FRONTEND_URL
     from custom_components.camper_route_planner.models import VehicleProfile
     HA_AVAILABLE = True
@@ -418,3 +418,117 @@ async def test_options_flow_empty_geoapify_field_keeps_key_and_remove_clears_it(
         "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
     })
     assert entry.options["geocoding_api_key"] == ""
+
+
+@pytest.mark.asyncio
+async def test_options_flow_nakordoni_key_lifecycle_and_provider_switch(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    """A key is kept in options until the explicit remove control is used."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Nakordoni options",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    key = "K" * 24
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "provider": PROVIDER_NAKORDONI, "api_key": key, "map_provider": "none",
+    })
+    assert result["step_id"] == "profile"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "key-profile", "name": "Key vehicle", "vehicle_kind": "motorhome",
+        "height_m": 3.2, "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800,
+        "fuel_type": "diesel", "axles": 2,
+    })
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_API_KEY] == key
+
+    # Switching away from Nakordoni and submitting an empty field must not clear it.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["description_placeholders"]["nakordoni_status"] == "stored"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "provider": PROVIDER_MOCK, "api_key": "", "map_provider": "none",
+    })
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "add"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "key-profile-2", "name": "Second key vehicle", "vehicle_kind": "car",
+        "height_m": 1.6, "width_m": 1.8, "length_m": 4.2, "gross_weight_kg": 1800,
+        "fuel_type": "electric", "axles": 2,
+    })
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_API_KEY] == key
+
+    # Reloading the integration leaves the options-backed secret available.
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["description_placeholders"]["nakordoni_status"] == "stored"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "provider": PROVIDER_NAKORDONI_MOTORHOME, "api_key": "", "map_provider": "none",
+    })
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "add"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "key-profile-3", "name": "Third key vehicle", "vehicle_kind": "truck",
+        "height_m": 3.8, "width_m": 2.5, "length_m": 10.0, "gross_weight_kg": 7500,
+        "fuel_type": "diesel", "axles": 3,
+    })
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_API_KEY] == key
+
+    # Only the explicit checkbox removes the secret.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "provider": PROVIDER_MOCK, "api_key": "", "remove_api_key": True, "map_provider": "none",
+    })
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "add"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "key-profile-4", "name": "Fourth key vehicle", "vehicle_kind": "car",
+        "height_m": 1.6, "width_m": 1.8, "length_m": 4.2, "gross_weight_kg": 1800,
+        "fuel_type": "electric", "axles": 2,
+    })
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_API_KEY] == ""
+
+
+@pytest.mark.asyncio
+async def test_options_flow_deletes_selected_duplicate_name_only_with_route_consent(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Delete options",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    await runtime.store.async_save_profile(VehicleProfile("keep", "Zoe", "car", 1.6, 1.8, 4.2, 1800, "electric"))
+    await runtime.store.async_save_profile(VehicleProfile("remove", "Zoe", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel"))
+    await runtime.store.async_save_route_record({
+        "route_id": "remove-route", "name": "Referenced", "provider": "mock", "distance_m": 100,
+        "duration_s": 100, "geometry": {"points": [{"latitude": 49, "longitude": 7}, {"latitude": 50, "longitude": 8}]},
+        "profile_id": "remove",
+    })
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "remove"})
+    assert result["step_id"] == "profile"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "remove", "name": "Zoe", "vehicle_kind": "motorhome", "height_m": 3.2,
+        "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
+        "delete_profile": True,
+    })
+    assert result["step_id"] == "vehicle_delete"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"confirm_delete": True})
+    assert result["step_id"] == "vehicle_delete"
+    assert result["errors"]["base"] == "profile_has_routes"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"confirm_delete": True, "delete_routes": True})
+    assert result["type"] == "create_entry"
+    assert {profile.profile_id for profile in runtime.store.profiles()} == {"keep"}
+    assert runtime.store.route("remove-route") is None
