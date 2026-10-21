@@ -11,11 +11,12 @@ Instanzen, Dashboards, Proxmox-Ressourcen oder Nakordoni-Endpunkte verwendet.
 - Frontend-Bundle wird beim Build bytegleich in
   `custom_components/camper_route_planner/frontend/` übernommen.
 - Die Integration liefert das Bundle mit HA
-  `async_register_static_paths` aus und lädt es über eine idempotente,
-  versionierte `add_extra_js_url`-Registrierung.
-- Unload entfernt die Extra-JS-Registrierung, wenn kein eigener Config Entry
-  mehr geladen ist; bestehende Dashboards und Resource-Collections bleiben
-  unverändert.
+  `async_register_static_paths` aus und registriert es im Lovelace-
+  Storage-Modus als idempotente JavaScript-Resource. Das vermeidet die
+  Scoped-Registry-Race des parallelen `add_extra_js_url`-Ladewegs.
+- Unload entfernt keine benutzerverwaltete Lovelace-Resource; bestehende
+  Ressourcen bleiben erhalten. YAML-Ressourcen werden nicht automatisch
+  verändert.
 - `after_dependencies` für `frontend` und `http` ist im Manifest gesetzt.
 - `tools/build_internal_beta.py` baut ausschließlich Laufzeitdateien in ein
   ZIP, prüft fehlende Dateien, Pfade, Symlinks, Secret-Muster und ZIP-CRC und

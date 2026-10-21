@@ -34,7 +34,6 @@ try:
         domain_data = hass.data.setdefault(DOMAIN, {})
         if hass.http is None:
             return
-        from homeassistant.components.frontend import add_extra_js_url
         from homeassistant.components.http import StaticPathConfig
 
         if not domain_data.get("_frontend_static_path_registered"):
@@ -42,9 +41,27 @@ try:
                 [StaticPathConfig(FRONTEND_URL, str(FRONTEND_FILE), True)]
             )
             domain_data["_frontend_static_path_registered"] = True
-        if not domain_data.get("_frontend_registered"):
-            add_extra_js_url(hass, FRONTEND_RESOURCE_URL)
-            domain_data["_frontend_registered"] = True
+        # Lovelace resources are imported by the Lovelace panel after HA has
+        # installed its scoped custom-element registry.  add_extra_js_url()
+        # runs in a parallel early module import and can define the card in
+        # the native registry just before HA replaces it; the result is the
+        # silent "Custom element not found" failure in HA 2026.10.x.
+        from homeassistant.components.lovelace import LOVELACE_DATA, MODE_STORAGE
+
+        lovelace = hass.data.get(LOVELACE_DATA)
+        resources = getattr(lovelace, "resources", None)
+        if getattr(lovelace, "resource_mode", None) == MODE_STORAGE and resources is not None:
+            if not resources.loaded:
+                await resources.async_load()
+                resources.loaded = True
+            matching = [
+                item for item in resources.async_items()
+                if item.get("url", "").split("?", 1)[0] == FRONTEND_URL
+            ]
+            if not matching:
+                await resources.async_create_item({"res_type": "module", "url": FRONTEND_RESOURCE_URL})
+            elif not any(item.get("url") == FRONTEND_RESOURCE_URL for item in matching):
+                await resources.async_update_item(matching[0]["id"], {"url": FRONTEND_RESOURCE_URL})
 
     def _register_websocket(hass: HomeAssistant) -> None:
         domain_data = hass.data.setdefault(DOMAIN, {})
@@ -91,18 +108,6 @@ try:
     async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         domain_data = hass.data.get(DOMAIN, {})
-        if domain_data.get("_frontend_registered") and not any(
-            key not in {
-                "_frontend_registered",
-                "_frontend_static_path_registered",
-                "_websocket_registered",
-            }
-            for key in domain_data
-        ):
-            from homeassistant.components.frontend import remove_extra_js_url
-
-            remove_extra_js_url(hass, FRONTEND_RESOURCE_URL)
-            domain_data["_frontend_registered"] = False
         return True
 
 except ImportError:  # pragma: no cover - HA-only wrapper.

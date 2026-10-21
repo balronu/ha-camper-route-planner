@@ -11,9 +11,10 @@ url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.6
 type: module
 ```
 
-Die URL wird beim Integration-Setup über die HA-Abhängigkeit `frontend`, einen
-Static Path und `add_extra_js_url` registriert. Keine manuelle Resource und
-keine Änderung bestehender Dashboards ist erforderlich.
+Die URL wird beim Integration-Setup über einen Static Path und im Storage-Modus
+als Lovelace-Resource registriert. Dadurch wird die Karte nach der HA-Registry
+geladen. Bei `resource_mode: yaml` muss sie als eigene YAML-Resource gepflegt
+werden; die Integration verändert diese Liste nicht.
 
 ## Konfiguration
 

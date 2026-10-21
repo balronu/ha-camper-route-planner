@@ -7,7 +7,7 @@ import sys
 try:
     import pytest
     from homeassistant.core import HomeAssistant
-    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+    from homeassistant.components.lovelace import LOVELACE_DATA
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     try:
         from homeassistant.const import CONF_NAME
@@ -112,15 +112,22 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert f"Camper Route Planner Card v0.1.0-beta.6" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert "custom:camper-route-planner-card" in body
-    assert FRONTEND_RESOURCE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
+    resources = hass.data[LOVELACE_DATA].resources
+    assert any(
+        item["url"] == FRONTEND_RESOURCE_URL and item["type"] == "module"
+        for item in resources.async_items()
+    )
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
-    assert FRONTEND_RESOURCE_URL not in hass.data[DATA_EXTRA_MODULE_URL].urls
+    assert any(
+        item["url"] == FRONTEND_RESOURCE_URL and item["type"] == "module"
+        for item in resources.async_items()
+    )
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert FRONTEND_RESOURCE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
+    assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     assert "Camper Route Planner Card v0.1.0-beta.6" in await response.text()
