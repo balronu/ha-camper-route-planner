@@ -80,7 +80,9 @@ def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
         "geometry": request.geometry_format,
     }
     if request.waypoints:
-        parameters["via"] = [f"{p.latitude},{p.longitude}" for p in request.waypoints]
+        # The documented Truck Route contract uses one pipe-separated via
+        # parameter, not repeated query parameters.
+        parameters["via"] = "|".join(f"{p.latitude},{p.longitude}" for p in request.waypoints)
     if FORBIDDEN_TRUCK_TIME_FIELDS.intersection(parameters):
         raise ValidationError("truck driver-time parameters are not valid for motorhomes")
     return parameters
@@ -166,6 +168,8 @@ class NakordoniMotorhomeProvider:
             raise ProviderError("Nakordoni request timed out", code="timeout", retryable=True) from exc
         except OSError as exc:
             raise ProviderError("Nakordoni network request failed", code="network_error", retryable=True) from exc
+        except ValueError as exc:
+            raise ProviderError("Nakordoni returned invalid JSON", code="invalid_response") from exc
         return self.normalize_fixture(payload, synthetic=False)
 
     def build_parameters(self, request: RouteRequest) -> dict[str, Any]:

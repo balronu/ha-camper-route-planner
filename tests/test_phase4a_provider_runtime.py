@@ -60,7 +60,7 @@ class Phase4AProviderRuntimeTests(unittest.TestCase):
         self.assertEqual(captured["height"], 3.2)
         self.assertEqual(captured["weight"], 4.8)
         self.assertEqual(captured["axles"], 2)
-        self.assertEqual(captured["via"], ["47.0,11.0"])
+        self.assertEqual(captured["via"], "47.0,11.0")
 
     def test_controlled_api_errors_never_fallback_to_mock(self):
         async def transport(_parameters):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
+from .const import CONF_API_KEY, CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
 from .coordinator import RouteCoordinator
 from .models import ProviderError, RouteRequest, RouteWaypoint
 from .map_provider import build_map_config
@@ -15,11 +15,11 @@ from .storage import ProfileRouteStore
 from .geocoding import GeoapifyGeocoder
 
 
-def build_routing_provider(values: dict[str, Any]):
+def build_routing_provider(values: dict[str, Any], *, transport: Any = None):
     """Build exactly the provider explicitly selected in entry data/options."""
     provider_name = values.get(CONF_PROVIDER)
     if provider_name == PROVIDER_NAKORDONI_MOTORHOME:
-        return NakordoniMotorhomeProvider(api_key=values.get("api_key"), live_enabled=False)
+        return NakordoniMotorhomeProvider(api_key=values.get(CONF_API_KEY), live_enabled=False, transport=transport)
     if provider_name == PROVIDER_NAKORDONI:
         return NakordoniRoutingProvider(api_key=values.get("api_key"), live_enabled=False)
     if provider_name == PROVIDER_MOCK:
@@ -58,7 +58,16 @@ class RuntimeData:
         # the flow; otherwise an options change can leave a stale provider
         # instance running while the new value appears saved in HA.
         values = {**entry.data, **getattr(entry, "options", {})}
-        provider = build_routing_provider(values)
+        transport = None
+        if values.get(CONF_API_KEY):
+            # The session is owned by Home Assistant. The provider remains
+            # explicitly disabled until Nakordoni publishes and approves the
+            # motorhome contract; constructing this transport performs no IO.
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+            from .providers.http_transport import NakordoniHttpTransport
+
+            transport = NakordoniHttpTransport(async_get_clientsession(hass), str(values[CONF_API_KEY]))
+        provider = build_routing_provider(values, transport=transport)
         geocoder = None
         if values.get("geocoding_api_key"):
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
