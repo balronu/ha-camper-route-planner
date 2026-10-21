@@ -41,6 +41,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._connection = null;
     this._reverseTimers = new Map();
     this._inputDrafts = new Map();
+    this._preserveInputDraftKeys = new Set();
     this._searchRequestIds = new Map();
     this._entryDiscoveryConnection = null;
     this._entryDiscoveryPromise = null;
@@ -140,7 +141,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (!this._config.entry_id || !this._state.profileId) return;
     try {
       const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
-      if (response?.available && response.point) { this._state.origin = response.point; this._inputDrafts.delete("point:origin:0:latitude"); this._inputDrafts.delete("point:origin:0:longitude"); this._state.originManual = false; this._state.trackerError = ""; this.scheduleReverseGeocode("origin", 0, response.point, true); }
+      if (response?.available && response.point && isValidWaypoint(response.point)) {
+        this._state.origin = response.point;
+        this._inputDrafts.set("point:origin:0:latitude", formatCoordinate(response.point.latitude));
+        this._inputDrafts.set("point:origin:0:longitude", formatCoordinate(response.point.longitude));
+        this._preserveInputDraftKeys.add("point:origin:0:latitude");
+        this._preserveInputDraftKeys.add("point:origin:0:longitude");
+        this._state.originManual = false; this._state.trackerError = ""; this.scheduleReverseGeocode("origin", 0, response.point, true);
+      }
       else if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable");
     } catch (_error) { if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable"); }
     this.render();
@@ -166,13 +174,24 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   selectSearchResult(target, index, value) {
-    const point = this._state.searchResults[index];
-    if (!point) return;
-    if (target === "waypoint") { this._state.waypoints[this._state.searchSlot] = { ...point }; }
+    const rawPoint = this._state.searchResults[index];
+    const point = rawPoint && {
+      ...rawPoint,
+      latitude: Number(rawPoint.latitude ?? rawPoint.lat),
+      longitude: Number(rawPoint.longitude ?? rawPoint.lon),
+    };
+    if (!point || !isValidWaypoint(point)) return;
+    const slot = this._state.searchSlot;
+    if (target === "waypoint") { this._state.waypoints[slot] = { ...point }; }
     else { this._state[target] = { ...point }; if (target === "origin") this._state.originManual = true; }
-    this._inputDrafts.delete(`point:${target}:${this._state.searchSlot}:latitude`);
-    this._inputDrafts.delete(`point:${target}:${this._state.searchSlot}:longitude`);
-    this._inputDrafts.delete(`${target}:${this._state.searchSlot}`);
+    // render() snapshots the current DOM inputs before replacing them. Seed
+    // the selected coordinates so stale 0/0 drafts cannot overwrite the
+    // chosen geocoding result during that snapshot.
+    this._inputDrafts.set(`point:${target}:${slot}:latitude`, formatCoordinate(point.latitude));
+    this._inputDrafts.set(`point:${target}:${slot}:longitude`, formatCoordinate(point.longitude));
+    this._preserveInputDraftKeys.add(`point:${target}:${slot}:latitude`);
+    this._preserveInputDraftKeys.add(`point:${target}:${slot}:longitude`);
+    this._inputDrafts.delete(`${target}:${slot}`);
     this._state.searchResults = []; this._state.searchTarget = target; this.render();
   }
 
@@ -187,7 +206,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
       this._inputDrafts.set(`${input.dataset.searchInput}:${input.dataset.index}`, input.value);
     });
     this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => {
-      this._inputDrafts.set(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`, input.value);
+      const key = `point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`;
+      if (!this._preserveInputDraftKeys.has(key)) this._inputDrafts.set(key, input.value);
     });
     return { activeKey, selectionStart: active?.selectionStart, selectionEnd: active?.selectionEnd };
   }
@@ -306,6 +326,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     this.bindEvents(); renderMap(this.shadowRoot.querySelector(".map-host"), result, this._state.mapConfig, { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint") }, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); }, { points: this.mapPoints(), onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) });
     this.restoreInputState(inputState);
+    this._preserveInputDraftKeys.clear();
   }
 
   bindEvents() {

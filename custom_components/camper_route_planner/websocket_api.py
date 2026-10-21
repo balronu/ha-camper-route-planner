@@ -81,7 +81,7 @@ try:
         try:
             point = {"latitude": float(state.attributes["latitude"]), "longitude": float(state.attributes["longitude"]), "label": entity_id}
             age_s = (datetime.now(timezone.utc) - state.last_updated).total_seconds() if state and state.last_updated else 0
-            available = state is not None and state.state not in {"unknown", "unavailable"} and age_s <= 86400 and -90 <= point["latitude"] <= 90 and -180 <= point["longitude"] <= 180
+            available = state is not None and state.state not in {"unknown", "unavailable"} and age_s <= 86400 and -90 <= point["latitude"] <= 90 and -180 <= point["longitude"] <= 180 and not (point["latitude"] == 0 and point["longitude"] == 0)
         except (AttributeError, KeyError, TypeError, ValueError):
             available, point = False, None
         connection.send_result(msg["id"], {"available": available, "entity_id": entity_id, "point": point if available else None, "reason": None if available else ("stale" if age_s > 86400 else "unavailable")})

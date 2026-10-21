@@ -9733,7 +9733,9 @@
     return Number.isFinite(Number(value)) && Number(value) >= -180 && Number(value) <= 180;
   }
   function isValidWaypoint(point) {
-    return point && point.latitude !== "" && point.longitude !== "" && Number.isFinite(Number(point.latitude)) && Number(point.latitude) >= -90 && Number(point.latitude) <= 90 && isValidCoordinate(point.longitude);
+    const latitude = Number(point?.latitude);
+    const longitude = Number(point?.longitude);
+    return point && point.latitude !== "" && point.longitude !== "" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 && isValidCoordinate(longitude) && !(latitude === 0 && longitude === 0);
   }
   function normalizeConfig(config = {}) {
     return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
@@ -9864,6 +9866,7 @@
   var import_leaflet = __toESM(require_leaflet_src(), 1);
   var CRP_LEAFLET_MAP = Symbol("camper-route-planner-leaflet-map");
   var CRP_LEAFLET_RESIZE_OBSERVER = Symbol("camper-route-planner-leaflet-resize-observer");
+  var CRP_LEAFLET_TILE_TIMER = Symbol("camper-route-planner-leaflet-tile-timer");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -9920,6 +9923,8 @@
   }
   function destroyMap(container) {
     if (container?.[CRP_LEAFLET_MAP]) {
+      clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+      container[CRP_LEAFLET_TILE_TIMER] = null;
       container[CRP_LEAFLET_RESIZE_OBSERVER]?.disconnect();
       container[CRP_LEAFLET_RESIZE_OBSERVER] = null;
       container[CRP_LEAFLET_MAP].remove();
@@ -9942,13 +9947,29 @@
       }
       const layer = import_leaflet.default.tileLayer(mapConfig.tile_url, { maxZoom: 19, attribution: mapConfig.tile_attribution || "" });
       let failed = false;
-      layer.on("tileerror", () => {
+      let tileLoaded = false;
+      const failTiles = () => {
         if (failed) return;
         failed = true;
+        clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+        container[CRP_LEAFLET_TILE_TIMER] = null;
         destroyMap(container);
         onTileError();
         renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute });
+      };
+      layer.on("tileload", () => {
+        tileLoaded = true;
+        clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+        container[CRP_LEAFLET_TILE_TIMER] = null;
       });
+      layer.on("tileerror", () => {
+        if (failed || tileLoaded) return;
+        clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+        container[CRP_LEAFLET_TILE_TIMER] = setTimeout(failTiles, 1500);
+      });
+      container[CRP_LEAFLET_TILE_TIMER] = setTimeout(() => {
+        if (!tileLoaded) failTiles();
+      }, 1e4);
       layer.addTo(map);
       if (geometry.length >= 2) import_leaflet.default.polyline(geometry.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
       points.forEach((point, index) => {
@@ -10030,6 +10051,7 @@
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
       this._inputDrafts = /* @__PURE__ */ new Map();
+      this._preserveInputDraftKeys = /* @__PURE__ */ new Set();
       this._searchRequestIds = /* @__PURE__ */ new Map();
       this._entryDiscoveryConnection = null;
       this._entryDiscoveryPromise = null;
@@ -10144,10 +10166,12 @@
       if (!this._config.entry_id || !this._state.profileId) return;
       try {
         const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
-        if (response?.available && response.point) {
+        if (response?.available && response.point && isValidWaypoint(response.point)) {
           this._state.origin = response.point;
-          this._inputDrafts.delete("point:origin:0:latitude");
-          this._inputDrafts.delete("point:origin:0:longitude");
+          this._inputDrafts.set("point:origin:0:latitude", formatCoordinate(response.point.latitude));
+          this._inputDrafts.set("point:origin:0:longitude", formatCoordinate(response.point.longitude));
+          this._preserveInputDraftKeys.add("point:origin:0:latitude");
+          this._preserveInputDraftKeys.add("point:origin:0:longitude");
           this._state.originManual = false;
           this._state.trackerError = "";
           this.scheduleReverseGeocode("origin", 0, response.point, true);
@@ -10182,17 +10206,25 @@
       this.render();
     }
     selectSearchResult(target, index, value) {
-      const point = this._state.searchResults[index];
-      if (!point) return;
+      const rawPoint = this._state.searchResults[index];
+      const point = rawPoint && {
+        ...rawPoint,
+        latitude: Number(rawPoint.latitude ?? rawPoint.lat),
+        longitude: Number(rawPoint.longitude ?? rawPoint.lon)
+      };
+      if (!point || !isValidWaypoint(point)) return;
+      const slot = this._state.searchSlot;
       if (target === "waypoint") {
-        this._state.waypoints[this._state.searchSlot] = { ...point };
+        this._state.waypoints[slot] = { ...point };
       } else {
         this._state[target] = { ...point };
         if (target === "origin") this._state.originManual = true;
       }
-      this._inputDrafts.delete(`point:${target}:${this._state.searchSlot}:latitude`);
-      this._inputDrafts.delete(`point:${target}:${this._state.searchSlot}:longitude`);
-      this._inputDrafts.delete(`${target}:${this._state.searchSlot}`);
+      this._inputDrafts.set(`point:${target}:${slot}:latitude`, formatCoordinate(point.latitude));
+      this._inputDrafts.set(`point:${target}:${slot}:longitude`, formatCoordinate(point.longitude));
+      this._preserveInputDraftKeys.add(`point:${target}:${slot}:latitude`);
+      this._preserveInputDraftKeys.add(`point:${target}:${slot}:longitude`);
+      this._inputDrafts.delete(`${target}:${slot}`);
       this._state.searchResults = [];
       this._state.searchTarget = target;
       this.render();
@@ -10204,7 +10236,8 @@
         this._inputDrafts.set(`${input.dataset.searchInput}:${input.dataset.index}`, input.value);
       });
       this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => {
-        this._inputDrafts.set(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`, input.value);
+        const key = `point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`;
+        if (!this._preserveInputDraftKeys.has(key)) this._inputDrafts.set(key, input.value);
       });
       return { activeKey, selectionStart: active?.selectionStart, selectionEnd: active?.selectionEnd };
     }
@@ -10385,6 +10418,7 @@
         this.render();
       }, { points: this.mapPoints(), onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) });
       this.restoreInputState(inputState);
+      this._preserveInputDraftKeys.clear();
     }
     bindEvents() {
       this.shadowRoot.querySelectorAll("input[data-point]").forEach((input) => input.addEventListener("input", (event) => this.updatePoint(event.target.dataset.point, Number(event.target.dataset.index), event.target.dataset.field, event.target.value)));

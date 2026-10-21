@@ -165,7 +165,9 @@ try:
                 action = str(user_input.get("vehicle_action", ""))
                 self._editing_profile_id = None if action == "add" else action
                 return await self.async_step_profile()
-            options = {"add": "add"} | {profile.profile_id: profile.name for profile in profiles}
+            german = str(getattr(getattr(self.hass, "config", None), "language", "en")).lower().startswith("de")
+            add_label = "Neues Fahrzeug hinzufügen" if german else "Add new vehicle"
+            options = {"add": add_label} | {profile.profile_id: profile.name for profile in profiles}
             return self.async_show_form(step_id="vehicle_menu", data_schema=vol.Schema({vol.Required("vehicle_action", default="add"): vol.In(options)}))
 
         def _profile_schema(self, profile: VehicleProfile | None = None):
@@ -218,7 +220,9 @@ try:
                     return self.async_create_entry(data=getattr(self, "_provider_input", {CONF_LIVE_ENABLED: False}))
                 except (KeyError, TypeError, ValueError):
                     errors = {"base": "invalid_profile"}
-            return self.async_show_form(step_id="profile", data_schema=self._profile_schema(existing), errors=errors, description_placeholders={"mode": "edit" if existing else "add"})
+            german = str(getattr(getattr(self.hass, "config", None), "language", "en")).lower().startswith("de")
+            mode = ("Fahrzeugprofil bearbeiten" if german else "Edit vehicle profile") if existing else ("Neues Fahrzeug hinzufügen" if german else "Add new vehicle")
+            return self.async_show_form(step_id="profile", data_schema=self._profile_schema(existing), errors=errors, description_placeholders={"mode": mode})
 
         async def async_step_vehicle_delete(self, user_input: dict[str, Any] | None = None):
             profile = getattr(self, "_deleting_profile", None)

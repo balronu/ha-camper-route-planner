@@ -68,7 +68,7 @@ class GeoapifyGeocoder:
             latitude, longitude = float(latitude), float(longitude)
         except (TypeError, ValueError) as exc:
             raise GeocodingError("invalid_coordinates") from exc
-        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180) or (latitude == 0 and longitude == 0):
             raise GeocodingError("invalid_coordinates")
         cache_key = (round(latitude, 5), round(longitude, 5))
         if cache_key in self._reverse_cache:

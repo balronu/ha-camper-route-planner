@@ -80,6 +80,10 @@ class Phase3BGeocodingTests(unittest.TestCase):
             asyncio.run(GeoapifyGeocoder("key", session=session).async_reverse(91, 7))
         self.assertEqual(str(error.exception), "invalid_coordinates")
         self.assertEqual(session.calls, [])
+        with self.assertRaises(GeocodingError) as zero_error:
+            asyncio.run(GeoapifyGeocoder("key", session=session).async_reverse(0, 0))
+        self.assertEqual(str(zero_error.exception), "invalid_coordinates")
+        self.assertEqual(session.calls, [])
 
     def test_reverse_empty_result_is_a_safe_fallback(self):
         class EmptySession(Session):
