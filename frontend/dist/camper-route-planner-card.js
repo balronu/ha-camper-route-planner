@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.0-beta.18; reproducible local bundle */
+/* Camper Route Planner Card v0.1.0-beta.19; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
