@@ -1,7 +1,7 @@
 import { languageOf, t } from "./localization.js";
 import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry } from "./card-utils.js";
 import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx } from "./services.js";
-import { renderMap } from "./map-view.js";
+import { destroyMap, renderMap } from "./map-view.js";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
@@ -26,7 +26,7 @@ class CamperRoutePlannerCardEditor extends HTMLElement {
 
 export class CamperRoutePlannerCard extends HTMLElement {
   static getConfigElement() { return document.createElement("camper-route-planner-card-editor"); }
-  static getStubConfig() { return { type: "custom:camper-route-planner-card", entry_id: "" }; }
+  static getStubConfig() { return { entry_id: "" }; }
 
   constructor() {
     super();
@@ -36,6 +36,18 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._connection = null;
     this._entryDiscoveryConnection = null;
     this._entryDiscoveryPromise = null;
+  }
+
+  connectedCallback() {
+    // A catalog preview can disconnect and reconnect the same element. Rebuild
+    // a map that was deliberately torn down during the disconnected phase.
+    if (this._config.entry_id && this._state.result) this.render();
+  }
+
+  disconnectedCallback() {
+    // Leaflet installs window listeners. Removing the host DOM alone does not
+    // call map.remove(), so clean up before HA discards a preview/card.
+    destroyMap(this.shadowRoot?.querySelector(".crp-map"));
   }
 
   setConfig(config) {
@@ -137,6 +149,9 @@ export class CamperRoutePlannerCard extends HTMLElement {
 
   render() {
     const language = languageOf(this._hass); const translate = (key) => t(language, key); const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId); const result = this._state.result;
+    // render() replaces shadowRoot.innerHTML below. Destroy the old Leaflet
+    // instance while its container and private Symbol handle are still alive.
+    destroyMap(this.shadowRoot?.querySelector(".crp-map"));
     if (!this._config.entry_id) { const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing"); this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`; return; }
     this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}" aria-label="${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(profile.vehicle_kind)} · ${escapeHtml(profile.fuel_type)}</dd></div></dl>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${this.renderPoint(this._state.origin, "origin")}</div><div class="panel"><h3>${translate("destination")}</h3>${this.renderPoint(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => this.renderPoint(point, "waypoint", index)).join("")}<button data-action="add">＋ ${translate("addWaypoint")}</button></div></section><div class="actions"><button class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${translate("mockRoute") === (result?.synthetic ? translate("mockRoute") : "") ? translate("mockRoute") : result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div><div><b>${escapeHtml(result.provider)}</b><span>${translate("provider")}</span></div></div><div class="map-host"></div><div class="export-panel"><b>${translate("navigationExport")}</b><div class="export-actions"><button data-action="export" data-mode="route">${translate("exportRoute")}</button><button data-action="export" data-mode="track" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" ${hasTrackGeometry(this._state.result) ? "" : "disabled"}>${translate("exportCombined")}</button></div></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}${result.warnings.length ? `<div class="warnings"><b>${translate("warnings")}</b><ul>${result.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button data-action="export" data-mode="track" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" data-route-id="${escapeHtml(route.route_id)}" ${hasTrackGeometry(route) ? "" : "disabled"}>${translate("exportCombined")}</button><button data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
     if (result?.provider === "nakordoni_motorhome") {
@@ -160,4 +175,4 @@ const STYLES = `:host{display:block;color:var(--primary-text-color);font-family:
 
 if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
 if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
-if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "custom:camper-route-planner-card")) window.customCards.push({ type: "custom:camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });
+if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "camper-route-planner-card")) window.customCards.push({ type: "camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });

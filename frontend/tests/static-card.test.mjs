@@ -10,8 +10,10 @@ test("card exposes HA registration and editor API", () => {
   assert.match(source, /customElements\.define\("camper-route-planner-card"/);
   assert.match(source, /static getConfigElement\(\)/);
   assert.match(source, /static getStubConfig\(\)/);
-  assert.match(source, /custom:camper-route-planner-card/);
   assert.match(source, /config-changed/);
+  assert.match(source, /getStubConfig\(\) \{ return \{ entry_id: "" \}; \}/);
+  assert.match(source, /customCards\.some\(\(card\) => card\.type === "camper-route-planner-card"\)/);
+  assert.doesNotMatch(source, /customCards\.some\(\(card\) => card\.type === "custom:camper-route-planner-card"\)/);
 });
 
 test("frontend has no provider secret or direct Nakordoni endpoint", () => {

@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.7"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.7"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -26,12 +26,18 @@ assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1,
 const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.7`);
 assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0-beta\.7/);
 const editorResult = await resourcePage.evaluate(() => {
-  const editor = customElements.get("camper-route-planner-card").getConfigElement();
+  const cardClass = customElements.get("camper-route-planner-card");
+  const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
+  const stub = cardClass.getStubConfig();
+  const editor = cardClass.getConfigElement();
   editor.setConfig({ type: "custom:camper-route-planner-card", entry_id: "" });
   document.body.append(editor);
-  return { tag: editor.tagName.toLowerCase(), hasSelect: Boolean(editor.querySelector("select")) };
+  return { stub, catalogEntry, tag: editor.tagName.toLowerCase(), hasSelect: Boolean(editor.querySelector("select")) };
 });
-assert.deepEqual(editorResult, { tag: "camper-route-planner-card-editor", hasSelect: true }, "visual editor is created by the card contract");
+assert.deepEqual(editorResult.stub, { entry_id: "" }, "picker stub omits the type field");
+assert.equal(editorResult.catalogEntry.type, "camper-route-planner-card", "catalog metadata uses the tag name without custom prefix");
+assert.equal(editorResult.catalogEntry.preview, true, "catalog metadata enables preview");
+assert.deepEqual({ tag: editorResult.tag, hasSelect: editorResult.hasSelect }, { tag: "camper-route-planner-card-editor", hasSelect: true }, "visual editor is created by the card contract");
 await resourcePage.close();
 
 async function preparePage(viewport, colorScheme = "light") {
@@ -79,6 +85,26 @@ await desktop.route("https://tiles.test/**", async (route) => route.fulfill({ st
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();
 assert.equal(await desktop.locator(".crp-map > svg").count(), 0, "successful tile mock uses Leaflet");
+const lifecycle = await desktop.evaluate(() => {
+  const card = document.querySelector("camper-route-planner-card");
+  const oldHost = card.shadowRoot.querySelector(".crp-map");
+  const oldHadLeafletClass = oldHost?.classList.contains("leaflet-container");
+  const oldHadMapPane = Boolean(oldHost?.querySelector(".leaflet-map-pane"));
+  card.render();
+  const newHost = card.shadowRoot.querySelector(".crp-map");
+  const afterRender = { oldHadLeafletClass, oldHadMapPane, oldHostClassAfterRender: oldHost?.className || "", oldHostMapPaneAfterRender: Boolean(oldHost?.querySelector(".leaflet-map-pane")), newMap: Boolean(newHost?.classList.contains("leaflet-container")) };
+  card.remove();
+  const afterDisconnect = { newMapHostChildren: newHost?.children.length || 0 };
+  document.body.append(card);
+  const afterReconnect = { reconnectedMap: Boolean(card.shadowRoot.querySelector(".crp-map.leaflet-container")) };
+  return { afterRender, afterDisconnect, afterReconnect };
+});
+assert.equal(lifecycle.afterRender.oldHadLeafletClass, true, "the test started with a Leaflet map");
+assert.equal(lifecycle.afterRender.oldHadMapPane, true, "the test started with Leaflet map DOM");
+assert.equal(lifecycle.afterRender.oldHostMapPaneAfterRender, false, "rerender removes the old Leaflet DOM");
+assert.ok(lifecycle.afterRender.newMap, "rerender preserves the visible Leaflet map");
+assert.equal(lifecycle.afterDisconnect.newMapHostChildren, 0, "disconnect leaves no stale map DOM");
+assert.ok(lifecycle.afterReconnect.reconnectedMap, "reconnect rebuilds the preview map");
 const foreignMapIsolation = await desktop.evaluate(() => {
   const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-leaflet-map");
   const map = host;
@@ -114,7 +140,7 @@ await auto.evaluate(() => {
 });
 await auto.locator(".panel").first().waitFor();
 assert.equal(await auto.evaluate(() => globalThis.__autoCard._config.entry_id), "auto-entry", "single entry is auto-selected");
-assert.equal(await auto.evaluate(() => window.customCards.filter((item) => item.type === "custom:camper-route-planner-card").length), 1, "catalog registration is idempotent");
+assert.equal(await auto.evaluate(() => window.customCards.filter((item) => item.type === "camper-route-planner-card").length), 1, "catalog registration is idempotent");
 await auto.close();
 
 for (const [label, handler] of [["403", async (route) => route.fulfill({ status: 403, body: "forbidden" })], ["429", async (route) => route.fulfill({ status: 429, body: "rate limited" })], ["timeout", async (route) => route.abort("timedout")]]) {
