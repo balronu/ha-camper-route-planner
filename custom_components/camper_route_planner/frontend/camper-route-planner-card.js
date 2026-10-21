@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.0-beta.17; reproducible local bundle */
+/* Camper Route Planner Card v0.1.0-beta.18; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -10957,8 +10957,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
         button.dataset.action = "select-search";
         button.dataset.target = target;
         button.dataset.index = String(index);
+        button.dataset.slot = String(slot);
         button.textContent = item.label || "";
-        button.addEventListener("click", () => this.selectSearchResult(target, index));
+        button.addEventListener("click", () => this.selectSearchResult(target, index, slot));
         return button;
       });
       container.replaceChildren(...buttons);
@@ -10969,7 +10970,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         error.hidden = !this._state.searchError;
       }
     }
-    selectSearchResult(target, index, value) {
+    selectSearchResult(target, index, slot = this._state.searchSlot) {
       const rawPoint = this._state.searchResults[index];
       const point = rawPoint && {
         ...rawPoint,
@@ -10978,7 +10979,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
         longitude: Number(rawPoint.longitude ?? rawPoint.lon)
       };
       if (!point || !isValidWaypoint(point)) return;
-      const slot = this._state.searchSlot;
       if (target === "waypoint") {
         this._state.waypoints[slot] = { ...point };
       } else {
@@ -11183,7 +11183,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`;
         return;
       }
-      const searchResultButtons = this._state.searchResults.map((item, index) => `<button type="button" data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}">${escapeHtml(item.label)}</button>`).join("");
+      const searchResultButtons = this._state.searchResults.map((item, index) => `<button type="button" data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}" data-slot="${this._state.searchSlot}">${escapeHtml(item.label)}</button>`).join("");
       const pointEditor = (point, target, index = 0) => {
         const activeResults = target === this._state.searchTarget && index === this._state.searchSlot ? searchResultButtons : "";
         const resultClass = activeResults ? ' class="search-results"' : "";
@@ -11238,7 +11238,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         clearTimeout(input._crpSearchTimer);
         input._crpSearchTimer = setTimeout(() => this.searchAddress(input.dataset.searchInput, input.value, Number(input.dataset.index)), 350);
       }));
-      this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index))));
+      this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index), Number(button.dataset.slot ?? this._state.searchSlot))));
       this.shadowRoot.querySelector("input[data-field=routeName]")?.addEventListener("change", (event) => {
         this._state.routeName = event.target.value;
       });

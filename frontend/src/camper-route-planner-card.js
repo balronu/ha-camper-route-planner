@@ -187,8 +187,9 @@ export class CamperRoutePlannerCard extends HTMLElement {
       button.dataset.action = "select-search";
       button.dataset.target = target;
       button.dataset.index = String(index);
+      button.dataset.slot = String(slot);
       button.textContent = item.label || "";
-      button.addEventListener("click", () => this.selectSearchResult(target, index));
+      button.addEventListener("click", () => this.selectSearchResult(target, index, slot));
       return button;
     });
     container.replaceChildren(...buttons);
@@ -200,7 +201,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }
   }
 
-  selectSearchResult(target, index, value) {
+  selectSearchResult(target, index, slot = this._state.searchSlot) {
     const rawPoint = this._state.searchResults[index];
     const point = rawPoint && {
       ...rawPoint,
@@ -209,7 +210,6 @@ export class CamperRoutePlannerCard extends HTMLElement {
       longitude: Number(rawPoint.longitude ?? rawPoint.lon),
     };
     if (!point || !isValidWaypoint(point)) return;
-    const slot = this._state.searchSlot;
     if (target === "waypoint") { this._state.waypoints[slot] = { ...point }; }
     else { this._state[target] = { ...point }; if (target === "origin") this._state.originManual = true; }
     // render() snapshots the current DOM inputs before replacing them. Seed
@@ -364,7 +364,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (preserveMap) oldMap.remove();
     else destroyMap(oldMap);
     if (!this._config.entry_id) { const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing"); this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`; return; }
-    const searchResultButtons = this._state.searchResults.map((item, index) => `<button type="button" data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}">${escapeHtml(item.label)}</button>`).join("");
+    const searchResultButtons = this._state.searchResults.map((item, index) => `<button type="button" data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}" data-slot="${this._state.searchSlot}">${escapeHtml(item.label)}</button>`).join("");
     const pointEditor = (point, target, index = 0) => {
       const activeResults = target === this._state.searchTarget && index === this._state.searchSlot ? searchResultButtons : "";
       const resultClass = activeResults ? " class=\"search-results\"" : "";
@@ -410,7 +410,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
       clearTimeout(input._crpSearchTimer);
       input._crpSearchTimer = setTimeout(() => this.searchAddress(input.dataset.searchInput, input.value, Number(input.dataset.index)), 350);
     }));
-    this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index))));
+    this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index), Number(button.dataset.slot ?? this._state.searchSlot))));
     this.shadowRoot.querySelector("input[data-field=routeName]")?.addEventListener("change", (event) => { this._state.routeName = event.target.value; });
     this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => { const action = button.dataset.action; const index = Number(button.dataset.index); if (action === "calculate") this.calculate(); if (action === "save") this.saveCurrent(); if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId)); if (action === "add") { this._state.waypoints = addWaypoint(this._state.waypoints); this._fitMapOnNextRender = true; this.render(); } if (action === "remove") { this._state.waypoints = removeWaypoint(this._state.waypoints, index); this._fitMapOnNextRender = true; this.render(); } if (action === "up") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1); this._fitMapOnNextRender = true; this.render(); } if (action === "down") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1); this._fitMapOnNextRender = true; this.render(); } if (action === "load") this.loadRoute(button.dataset.routeId); if (action === "delete") this.deleteRoute(button.dataset.routeId); }));
   }
