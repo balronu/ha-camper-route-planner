@@ -6,6 +6,7 @@ import { languageOf, t } from "../src/localization.js";
 test("coordinates and waypoint ordering are validated deterministically", () => {
   assert.equal(isValidWaypoint({ latitude: 49, longitude: 7 }), true);
   assert.equal(isValidWaypoint({ latitude: 91, longitude: 7 }), false);
+  assert.equal(isValidWaypoint({ latitude: 0, longitude: 0 }), false);
   assert.equal(isValidWaypoint({ latitude: "", longitude: "" }), false);
   const points = addWaypoint([]);
   assert.equal(points.length, 1);

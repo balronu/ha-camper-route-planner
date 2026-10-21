@@ -57,8 +57,8 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null) 
         if (message.type.endsWith("/list_profiles")) return { profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
-        if (message.type.endsWith("/tracker_position")) return { available: false, point: null };
-        if (message.type.endsWith("/geocode")) { await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: false, results: [] }; }
+        if (message.type.endsWith("/tracker_position")) return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } };
+        if (message.type.endsWith("/geocode")) { await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: true, results: [{ label: "Fixture address", latitude: 48.137, longitude: 11.575 }] }; }
         if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: true, address: `Fixture address ${message.latitude},${message.longitude}` }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
@@ -100,12 +100,21 @@ await destinationSearch.fill(longDestination);
 await desktop.waitForTimeout(500);
 assert.equal(await destinationSearch.inputValue(), longDestination, "long destination input survives async search rendering");
 assert.equal(await destinationSearch.evaluate((input) => input === input.getRootNode().activeElement), true, "destination input keeps focus after async search rendering");
+await desktop.getByRole("button", { name: "Fixture address" }).click();
+assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "selected search result fills latitude");
+assert.equal(await desktop.locator('input[data-point="destination"][data-field="longitude"]').inputValue(), "11.575", "selected search result fills longitude");
+await desktop.evaluate(() => document.querySelector("camper-route-planner-card").useTrackerLocation(true));
+await desktop.waitForFunction(() => document.querySelector("camper-route-planner-card")._state.origin.latitude === 47.3769);
+assert.equal(await desktop.locator('input[data-point="origin"][data-field="longitude"]').inputValue(), "8.5417", "tracker point fills origin coordinates");
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();
 await desktop.waitForFunction(() => globalThis.__crp.reverseCalls > 0);
 await desktop.locator(".point-address").first().waitFor();
 assert.ok(await desktop.evaluate(() => globalThis.__crp.reverseCalls > 0), "valid points use backend reverse geocoding");
 assert.equal(await desktop.locator(".crp-map > svg").count(), 0, "successful tile mock uses Leaflet");
+await desktop.setViewportSize({ width: 700, height: 900 });
+await desktop.waitForFunction(() => { const node = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".leaflet-container"); return node?.clientWidth > 0 && node?.clientHeight > 0; });
+assert.equal(await desktop.locator(".leaflet-container").evaluate((node) => node.clientWidth > 0 && node.clientHeight > 0), true, "Leaflet map remains sized after viewport resize");
 const lifecycle = await desktop.evaluate(() => {
   const card = document.querySelector("camper-route-planner-card");
   const oldHost = card.shadowRoot.querySelector(".crp-map");

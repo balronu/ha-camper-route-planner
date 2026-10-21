@@ -5,6 +5,7 @@ import L from "leaflet";
 // their own map; exposing that name makes them able to invalidate this map.
 const CRP_LEAFLET_MAP = Symbol("camper-route-planner-leaflet-map");
 const CRP_LEAFLET_RESIZE_OBSERVER = Symbol("camper-route-planner-leaflet-resize-observer");
+const CRP_LEAFLET_TILE_TIMER = Symbol("camper-route-planner-leaflet-tile-timer");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -51,6 +52,8 @@ export function renderGeometryMap(container, route, labels) {
 
 export function destroyMap(container) {
   if (container?.[CRP_LEAFLET_MAP]) {
+    clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+    container[CRP_LEAFLET_TILE_TIMER] = null;
     container[CRP_LEAFLET_RESIZE_OBSERVER]?.disconnect();
     container[CRP_LEAFLET_RESIZE_OBSERVER] = null;
     container[CRP_LEAFLET_MAP].remove();
@@ -73,13 +76,30 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     }
     const layer = L.tileLayer(mapConfig.tile_url, { maxZoom: 19, attribution: mapConfig.tile_attribution || "" });
     let failed = false;
-    layer.on("tileerror", () => {
+    let tileLoaded = false;
+    const failTiles = () => {
       if (failed) return;
       failed = true;
+      clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+      container[CRP_LEAFLET_TILE_TIMER] = null;
       destroyMap(container);
       onTileError();
       renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute });
+    };
+    layer.on("tileload", () => {
+      tileLoaded = true;
+      clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+      container[CRP_LEAFLET_TILE_TIMER] = null;
     });
+    layer.on("tileerror", () => {
+      if (failed || tileLoaded) return;
+      // One transient tile failure must not replace an otherwise usable map.
+      // If all initial tiles fail, the short grace period produces the SVG
+      // fallback without leaving a partially grey Leaflet surface visible.
+      clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
+      container[CRP_LEAFLET_TILE_TIMER] = setTimeout(failTiles, 1500);
+    });
+    container[CRP_LEAFLET_TILE_TIMER] = setTimeout(() => { if (!tileLoaded) failTiles(); }, 10000);
     layer.addTo(map);
     if (geometry.length >= 2) L.polyline(geometry.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
     points.forEach((point, index) => {

@@ -55,7 +55,7 @@
         "data": { "vehicle_action": "Vehicle" }
       },
       "profile": {
-        "title": "Vehicle profile ({mode})",
+        "title": "{mode}",
         "description": "Edit the selected vehicle or add a new one. The profile ID remains stable when editing.",
         "data": {
           "profile_id": "Stable profile ID",
