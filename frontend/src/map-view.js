@@ -55,10 +55,11 @@ export function destroyMap(container) {
   }
 }
 
-export function renderMap(container, route, mapConfig, labels, onTileError = () => {}) {
+export function renderMap(container, route, mapConfig, labels, onTileError = () => {}, options = {}) {
   destroyMap(container);
-  const points = route?.geometry?.points || [];
-  if (mapConfig?.provider === "carto" && mapConfig.status === "configured" && mapConfig.tile_url && points.length >= 2) {
+  const points = options.points || route?.geometry?.points || [];
+  const geometry = route?.geometry?.points || [];
+  if (mapConfig?.provider === "carto" && mapConfig.status === "configured" && mapConfig.tile_url && points.length >= 1) {
     container.replaceChildren();
     container.className = "crp-map crp-leaflet-map";
     const map = L.map(container, { zoomControl: true, attributionControl: true });
@@ -74,12 +75,16 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
       renderGeometryMap(container, route, labels);
     });
     layer.addTo(map);
-    L.polyline(points.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
-    L.circleMarker([Number(points[0].latitude), Number(points[0].longitude)], { radius: 8, color: "#43a047" }).addTo(map).bindTooltip(labels.start);
-    L.circleMarker([Number(points.at(-1).latitude), Number(points.at(-1).longitude)], { radius: 8, color: "#e53935" }).addTo(map).bindTooltip(labels.destination);
-    points.slice(1, -1).forEach((point, index) => L.circleMarker([Number(point.latitude), Number(point.longitude)], { radius: 6, color: "#fb8c00" }).addTo(map).bindTooltip(`${labels.waypoint} ${index + 1}`));
-    map.fitBounds(bounds, { padding: [20, 20] });
+    if (geometry.length >= 2) L.polyline(geometry.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
+    points.forEach((point, index) => {
+      const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
+      const marker = L.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange) });
+        marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
+      marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
+    });
+    if (points.length === 1) map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12); else map.fitBounds(bounds, { padding: [20, 20] });
+    map.on("click", (event) => options.onMapClick?.(event.latlng));
     return;
   }
-  renderGeometryMap(container, route, labels);
+  renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, labels);
 }

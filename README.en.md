@@ -5,7 +5,7 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0-beta.8` pre-release. The Lovelace card is validated with
+> **Status:** `v0.1.0-beta.9` pre-release. The Lovelace card is validated with
 > an isolated HA 2026.10.1 fixture and Chromium. The current implementation
 > uses deterministic mock routing only and is not verified motorhome navigation.
 
@@ -24,6 +24,9 @@ profiles, an interactive map, saved routes, and GPX export.
 - saving and loading synthetic routes
 - GPX route, track, and combined export
 - German and English UI text
+- always-visible Leaflet map with draggable markers and map selection
+- per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
+- Geoapify address search and reverse geocoding through the HA Options Flow (backend-only, mockable)
 
 ## Not available yet
 
@@ -47,6 +50,23 @@ The map supports a browser-safe CARTO configuration and an SVG fallback. No
 credentials belong in the frontend, screenshots, logs, GPX files, or Git.
 Route calculation is manual only; GPS changes, Home Assistant startup,
 reloads, and opening the card do not trigger routing.
+
+### Geoapify address search and privacy
+
+The Phase 3B candidate uses Geoapify Address Autocomplete behind a backend
+Home Assistant WebSocket boundary. The Geoapify key is stored only through the
+Home Assistant Options Flow and is never sent to Lovelace, the browser, logs,
+diagnostic exports, or GitHub. Queries are sent to Geoapify when search is
+enabled; the UI displays a privacy notice and Geoapify/OpenStreetMap
+attribution. Debouncing, result limits, local rate limiting, and caching reduce
+unnecessary requests. Without a key, the map, GPS, and manual coordinates remain
+available. Reverse geocoding resolves GPS, map, and dragged marker positions to
+readable addresses after a short delay; repeated coordinates use the cache.
+Coordinates remain authoritative when no address is returned.
+
+Beta.9 contains the Phase 3B/3C candidate changes. Live Geoapify calls and the
+productive HA presentation have not been validated; VM 104 and the productive
+Home Assistant system remain unchanged.
 
 ## Nakordoni status
 
@@ -91,7 +111,7 @@ npm run build
 npm run test:e2e
 ```
 
-See the [beta.8 release notes](docs/releases/v0.1.0-beta.8.md) for the
+See the [beta.9 release notes](docs/releases/v0.1.0-beta.9.md) for the
 installation and test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is already validated by
 GitHub Actions. A Stable release and productive HA installation are outside

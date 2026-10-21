@@ -3,7 +3,7 @@ export function isValidCoordinate(value) {
 }
 
 export function isValidWaypoint(point) {
-  return point && Number.isFinite(Number(point.latitude)) && Number(point.latitude) >= -90 && Number(point.latitude) <= 90 && isValidCoordinate(point.longitude);
+  return point && point.latitude !== "" && point.longitude !== "" && Number.isFinite(Number(point.latitude)) && Number(point.latitude) >= -90 && Number(point.latitude) <= 90 && isValidCoordinate(point.longitude);
 }
 
 export function normalizeConfig(config = {}) {

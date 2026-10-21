@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from .config_flow_support import normalize_api_key, validate_user_input
-from .const import (CONF_API_KEY, CONF_CARTO_API_KEY, CONF_LIVE_ENABLED, CONF_MAP_PROVIDER,
+from .const import (CONF_API_KEY, CONF_CARTO_API_KEY, CONF_GEOCODING_API_KEY, CONF_LIVE_ENABLED, CONF_MAP_PROVIDER,
                     CONF_PROVIDER, CONF_REMOVE_API_KEY, CONF_REMOVE_CARTO_API_KEY, DOMAIN, MAP_PROVIDER_CARTO,
-                    MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME)
+                    MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME, CONF_REMOVE_GEOCODING_API_KEY, DEFAULT_ZOE_TRACKER)
 from .models import VehicleProfile
 
 try:  # Home Assistant is intentionally not required by the offline test runner.
@@ -40,6 +40,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                         CONF_LIVE_ENABLED: False,
                         CONF_MAP_PROVIDER: user_input.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE),
                         CONF_CARTO_API_KEY: user_input.get(CONF_CARTO_API_KEY, "").strip(),
+                        CONF_GEOCODING_API_KEY: "",
                     })
             schema = vol.Schema({vol.Required(CONF_NAME, default="Camper Route Planner"): str, vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str})
             return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
@@ -73,6 +74,12 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                     submitted[CONF_CARTO_API_KEY] = current.get(CONF_CARTO_API_KEY, "")
                 if user_input.get(CONF_REMOVE_CARTO_API_KEY):
                     submitted[CONF_CARTO_API_KEY] = ""
+                if user_input.get(CONF_REMOVE_GEOCODING_API_KEY):
+                    submitted[CONF_GEOCODING_API_KEY] = ""
+                elif str(user_input.get(CONF_GEOCODING_API_KEY, "")).strip():
+                    submitted[CONF_GEOCODING_API_KEY] = user_input[CONF_GEOCODING_API_KEY].strip()
+                else:
+                    submitted[CONF_GEOCODING_API_KEY] = current.get(CONF_GEOCODING_API_KEY, "")
                 errors = validate_user_input(submitted)
                 if not errors:
                     if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
@@ -90,7 +97,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
 
         def _schema(self):
             current = self._current_values()
-            return vol.Schema({vol.Required(CONF_PROVIDER, default=current.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_REMOVE_API_KEY, default=False): bool, vol.Optional(CONF_MAP_PROVIDER, default=current.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool})
+            return vol.Schema({vol.Required(CONF_PROVIDER, default=current.get(CONF_PROVIDER, PROVIDER_MOCK)): vol.In([PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME]), vol.Optional(CONF_API_KEY): _api_key_selector(), vol.Optional(CONF_REMOVE_API_KEY, default=False): bool, vol.Optional(CONF_MAP_PROVIDER, default=current.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): vol.In([MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO]), vol.Optional(CONF_CARTO_API_KEY, default=""): str, vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool, vol.Optional(CONF_GEOCODING_API_KEY): _api_key_selector(), vol.Optional(CONF_REMOVE_GEOCODING_API_KEY, default=False): bool})
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
             errors: dict[str, str] = {}
@@ -101,6 +108,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                         height_m=float(user_input["height_m"]), width_m=float(user_input["width_m"]), length_m=float(user_input["length_m"]),
                         gross_weight_kg=int(user_input["gross_weight_kg"]), fuel_type=user_input["fuel_type"],
                         axles=int(user_input.get("axles", 2)),
+                        tracker_entity_id=(user_input.get("tracker_entity_id") or (DEFAULT_ZOE_TRACKER if str(user_input["name"]).strip().casefold() == "zoe" else None)),
                     )
                     runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
                     if runtime is not None:
@@ -118,6 +126,7 @@ try:  # Home Assistant is intentionally not required by the offline test runner.
                 vol.Required("gross_weight_kg", default=4800): vol.Coerce(int),
                 vol.Required("fuel_type", default="diesel"): vol.In(["diesel", "petrol", "electric", "hybrid", "other"]),
                 vol.Required("axles", default=2): vol.Coerce(int),
+                vol.Optional("tracker_entity_id", default=""): str,
             })
             return self.async_show_form(step_id="profile", data_schema=schema, errors=errors)
 

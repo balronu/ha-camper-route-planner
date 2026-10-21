@@ -6,7 +6,7 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0-beta.8` Pre-release. Die Lovelace-Karte ist für eine
+> **Status:** `v0.1.0-beta.9` Pre-release. Die Lovelace-Karte ist für eine
 > isolierte HA-2026.10.1-Fixture und Chromium geprüft. Der aktuelle Stand
 > verwendet ausschließlich deterministisches Mock-Routing und ist keine
 > geprüfte Wohnmobilnavigation.
@@ -26,6 +26,9 @@ und GPX-Export.
 - Speicherung und Laden synthetischer Routen
 - GPX-Export als Route, Track oder kombiniert
 - deutsche und englische UI-Texte
+- dauerhaft sichtbare Leaflet-Karte mit Marker-Drag und Kartenauswahl
+- GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
+- Geoapify-Adresssuche und Reverse-Geocoding über den HA-Options-Flow (Backend-only, mockbar)
 
 ## Noch nicht verfügbar
 
@@ -58,6 +61,24 @@ Die Berechnung wird ausschließlich über die Schaltfläche bzw. die explizite
 Service-Grenze ausgelöst. GPS-Änderungen, HA-Start, Reload oder das Öffnen der
 Karte starten keine Berechnung. Der GPX-Export arbeitet auf der gespeicherten
 normalisierten Route und enthält keine Zugangsdaten.
+
+### Geoapify-Adresssuche und Datenschutz
+
+Die Phase-3B-Kandidatenimplementierung nutzt Geoapify Address Autocomplete über
+eine Backend-WebSocket-Grenze. Der Geoapify-Key wird ausschließlich im
+Home-Assistant-Options-Flow gespeichert und niemals an Lovelace, Browser,
+Logs, Diagnoseexporte oder GitHub übertragen. Suchtexte werden an Geoapify
+übermittelt, wenn die Funktion aktiviert ist; die Oberfläche zeigt deshalb
+einen Datenschutzhinweis und Geoapify/OpenStreetMap-Attribution. Debounce,
+Ergebnislimit, lokales Rate-Limiting und Cache reduzieren unnötige Abfragen.
+Reverse-Geocoding löst GPS-, Karten- und verschobene Marker nach einer kurzen
+Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
+Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
+sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
+
+Beta.9 enthält die Phase-3B/3C-Kandidatenänderungen. Geoapify-Live-Aufrufe
+und die produktive HA-Darstellung wurden nicht geprüft; VM 104 und das
+produktive Home-Assistant-System bleiben unverändert.
 
 ## Nakordoni-Status
 
@@ -113,7 +134,7 @@ npm run test:e2e
 ```
 
 Der Beta-Installations- und Testnachweis steht in
-[docs/releases/v0.1.0-beta.8.md](docs/releases/v0.1.0-beta.8.md). Hassfest und
+[docs/releases/v0.1.0-beta.9.md](docs/releases/v0.1.0-beta.9.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation

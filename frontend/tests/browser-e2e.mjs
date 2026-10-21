@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.8"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.9"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.8`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0-beta\.8/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.9`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0-beta\.9/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -48,6 +48,7 @@ async function preparePage(viewport, colorScheme = "light") {
     const card = document.querySelector("camper-route-planner-card");
     card.setConfig({ type: "custom:camper-route-planner-card", entry_id: "test-entry" });
     let calculateCalls = 0;
+    let reverseCalls = 0;
     card.hass = {
       language: "en",
       connection: {},
@@ -55,6 +56,8 @@ async function preparePage(viewport, colorScheme = "light") {
         if (message.type.endsWith("/list_profiles")) return { profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
+        if (message.type.endsWith("/tracker_position")) return { available: false, point: null };
+        if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: true, address: `Fixture address ${message.latitude},${message.longitude}` }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
@@ -63,7 +66,7 @@ async function preparePage(viewport, colorScheme = "light") {
         return {};
       }
     };
-    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; } };
+    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; } };
   });
   await page.locator(".panel").first().waitFor();
   return page;
@@ -81,9 +84,14 @@ async function calculate(page) {
 const desktop = await preparePage({ width: 1280, height: 900 });
 assert.equal(await desktop.locator(".metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
+// Phase 3B renders the map before calculation, so install the offline tile
+// fixture before entering coordinates as well as before the route click.
 await desktop.route("https://tiles.test/**", async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();
+await desktop.waitForFunction(() => globalThis.__crp.reverseCalls > 0);
+await desktop.locator(".point-address").first().waitFor();
+assert.ok(await desktop.evaluate(() => globalThis.__crp.reverseCalls > 0), "valid points use backend reverse geocoding");
 assert.equal(await desktop.locator(".crp-map > svg").count(), 0, "successful tile mock uses Leaflet");
 const lifecycle = await desktop.evaluate(() => {
   const card = document.querySelector("camper-route-planner-card");

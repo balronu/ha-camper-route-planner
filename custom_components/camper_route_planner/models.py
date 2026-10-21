@@ -57,6 +57,7 @@ class VehicleProfile:
     trailer: bool = False
     trailer_length_m: float | None = None
     preferences: dict[str, Any] = field(default_factory=dict)
+    tracker_entity_id: str | None = None
     schema_version: int = 1
 
     def __post_init__(self) -> None:
@@ -83,6 +84,8 @@ class VehicleProfile:
             raise ValidationError("trailer_length_m must be between 2 and 30")
         if not self.trailer and self.trailer_length_m is not None:
             raise ValidationError("trailer_length_m requires trailer=true")
+        if self.tracker_entity_id is not None and (not self.tracker_entity_id.startswith("device_tracker.") or len(self.tracker_entity_id) > 255):
+            raise ValidationError("tracker_entity_id must be a device_tracker entity")
         if self.schema_version != 1:
             raise ValidationError("unsupported vehicle profile schema")
 
@@ -102,6 +105,7 @@ class VehicleProfile:
             "trailer": self.trailer,
             "trailer_length_m": self.trailer_length_m,
             "preferences": dict(self.preferences),
+            "tracker_entity_id": self.tracker_entity_id,
             "schema_version": self.schema_version,
         }
 

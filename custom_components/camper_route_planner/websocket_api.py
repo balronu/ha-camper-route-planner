@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 try:
     import voluptuous as vol
     from homeassistant.components import websocket_api
-    from .const import DOMAIN
+    from .const import DEFAULT_ZOE_TRACKER, DOMAIN
     from .gpx import GpxExportError, export_gpx, filename_for_route
+    from .geocoding import GeocodingError
 
     @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/list_entries"})
     @websocket_api.async_response
@@ -36,6 +38,53 @@ try:
     async def ws_map_config(hass, connection, msg) -> None:
         runtime = hass.data.get("camper_route_planner", {}).get(msg["entry_id"])
         connection.send_result(msg["id"], runtime.map_config() if runtime else {"provider": "none", "status": "not_configured"})
+
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/geocode", vol.Required("entry_id"): str, vol.Required("text"): str, vol.Optional("limit", default=5): vol.All(vol.Coerce(int), vol.Range(min=1, max=10))})
+    @websocket_api.async_response
+    async def ws_geocode(hass, connection, msg) -> None:
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        if runtime is None or runtime.geocoder is None:
+            connection.send_result(msg["id"], {"configured": False, "results": []})
+            return
+        try:
+            results = await runtime.geocoder.async_search(msg["text"], limit=msg.get("limit", 5))
+        except GeocodingError as exc:
+            connection.send_error(msg["id"], str(exc), "Address search unavailable")
+            return
+        connection.send_result(msg["id"], {"configured": True, "results": results})
+
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/reverse_geocode", vol.Required("entry_id"): str, vol.Required("latitude"): vol.Coerce(float), vol.Required("longitude"): vol.Coerce(float)})
+    @websocket_api.async_response
+    async def ws_reverse_geocode(hass, connection, msg) -> None:
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        if runtime is None or runtime.geocoder is None:
+            connection.send_result(msg["id"], {"configured": False, "address": None})
+            return
+        try:
+            address = await runtime.geocoder.async_reverse(msg["latitude"], msg["longitude"])
+        except GeocodingError as exc:
+            if str(exc) == "invalid_coordinates":
+                connection.send_error(msg["id"], str(exc), "Invalid coordinates")
+            else:
+                connection.send_error(msg["id"], str(exc), "Address lookup unavailable")
+            return
+        connection.send_result(msg["id"], {"configured": True, "address": address})
+
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/tracker_position", vol.Required("entry_id"): str, vol.Required("profile_id"): str})
+    @websocket_api.async_response
+    async def ws_tracker_position(hass, connection, msg) -> None:
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        profile = next((item for item in runtime.store.profiles() if item.profile_id == msg["profile_id"]), None) if runtime else None
+        entity_id = profile.tracker_entity_id if profile and profile.tracker_entity_id else (DEFAULT_ZOE_TRACKER if profile and profile.name.strip().casefold() == "zoe" else None)
+        state = hass.states.get(entity_id) if entity_id else None
+        age_s = 0.0
+        try:
+            point = {"latitude": float(state.attributes["latitude"]), "longitude": float(state.attributes["longitude"]), "label": entity_id}
+            age_s = (datetime.now(timezone.utc) - state.last_updated).total_seconds() if state and state.last_updated else 0
+            available = state is not None and state.state not in {"unknown", "unavailable"} and age_s <= 86400 and -90 <= point["latitude"] <= 90 and -180 <= point["longitude"] <= 180
+        except (AttributeError, KeyError, TypeError, ValueError):
+            available, point = False, None
+        connection.send_result(msg["id"], {"available": available, "entity_id": entity_id, "point": point if available else None, "reason": None if available else ("stale" if age_s > 86400 else "unavailable")})
 
     @websocket_api.websocket_command({
         vol.Required("type"): "camper_route_planner/export_gpx",
@@ -92,7 +141,7 @@ try:
         connection.send_result(msg["id"], {"route_id": route_id})
 
     def async_register(hass) -> None:
-        for command in (ws_list_entries, ws_list_profiles, ws_list_routes, ws_map_config, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
+        for command in (ws_list_entries, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
             websocket_api.async_register_command(hass, command)
 
 except ImportError:  # pragma: no cover - HA-only wrapper.
