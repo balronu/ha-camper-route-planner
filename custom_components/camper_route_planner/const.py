@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "camper_route_planner"
 NAME: Final = "Camper Route Planner"
-VERSION: Final = "0.1.0-beta.11"
+VERSION: Final = "0.1.0-beta.12"
 
 CONF_PROVIDER: Final = "provider"
 CONF_API_KEY: Final = "api_key"
