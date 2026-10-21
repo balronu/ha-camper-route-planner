@@ -5,7 +5,7 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0-beta.8` pre-release. The Lovelace card is validated with
+> **Status:** `v0.1.0-beta.9` pre-release. The Lovelace card is validated with
 > an isolated HA 2026.10.1 fixture and Chromium. The current implementation
 > uses deterministic mock routing only and is not verified motorhome navigation.
 
@@ -64,9 +64,9 @@ available. Reverse geocoding resolves GPS, map, and dragged marker positions to
 readable addresses after a short delay; repeated coordinates use the cache.
 Coordinates remain authoritative when no address is returned.
 
-These Phase 3B changes are an unmerged candidate branch. They do not change VM
-104 or a productive Home Assistant system and perform no live Geoapify or
-Nakordoni requests.
+Beta.9 contains the Phase 3B/3C candidate changes. Live Geoapify calls and the
+productive HA presentation have not been validated; VM 104 and the productive
+Home Assistant system remain unchanged.
 
 ## Nakordoni status
 
@@ -111,7 +111,7 @@ npm run build
 npm run test:e2e
 ```
 
-See the [beta.8 release notes](docs/releases/v0.1.0-beta.8.md) for the
+See the [beta.9 release notes](docs/releases/v0.1.0-beta.9.md) for the
 installation and test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is already validated by
 GitHub Actions. A Stable release and productive HA installation are outside

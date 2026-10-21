@@ -7,7 +7,7 @@ Das Bundle liegt im installierbaren Paket unter
 Die Integration liefert und lädt es über einen versionierten HA-Static-Path:
 
 ```yaml
-url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.8
+url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.9
 type: module
 ```
 
@@ -37,8 +37,9 @@ anderen Config Entry und keine produktive IP-/Entity-Hardcodierung.
 6. Mit **Route speichern** explizit persistieren; gespeicherte Routen können
    geladen oder nach Bestätigung gelöscht werden.
 
-Freitext-Orte und Geocoding sind nicht enthalten, weil dafür in Phase 2B keine
-getestete Schnittstelle vorhanden ist.
+Freitext-Orte und Reverse-Geocoding werden über den konfigurierten Geoapify-
+Provider und die Backend-WebSocket-Grenze angeboten. Ohne API-Key bleiben
+Koordinaten- und Karteneingabe verfügbar.
 ## Kartenanbieter
 
 Die Karte fragt die Kartenkonfiguration über den HA-WebSocket-Befehl

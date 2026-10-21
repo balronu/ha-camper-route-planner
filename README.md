@@ -6,7 +6,7 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0-beta.8` Pre-release. Die Lovelace-Karte ist für eine
+> **Status:** `v0.1.0-beta.9` Pre-release. Die Lovelace-Karte ist für eine
 > isolierte HA-2026.10.1-Fixture und Chromium geprüft. Der aktuelle Stand
 > verwendet ausschließlich deterministisches Mock-Routing und ist keine
 > geprüfte Wohnmobilnavigation.
@@ -76,9 +76,9 @@ Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
 Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
 sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
 
-Diese Phase-3B-Änderungen sind ein ungemergter Kandidatenbranch; sie ändern
-weder VM 104 noch ein produktives Home-Assistant-System und führen keine
-Live-Geoapify- oder Nakordoni-Abfragen aus.
+Beta.9 enthält die Phase-3B/3C-Kandidatenänderungen. Geoapify-Live-Aufrufe
+und die produktive HA-Darstellung wurden nicht geprüft; VM 104 und das
+produktive Home-Assistant-System bleiben unverändert.
 
 ## Nakordoni-Status
 
@@ -134,7 +134,7 @@ npm run test:e2e
 ```
 
 Der Beta-Installations- und Testnachweis steht in
-[docs/releases/v0.1.0-beta.8.md](docs/releases/v0.1.0-beta.8.md). Hassfest und
+[docs/releases/v0.1.0-beta.9.md](docs/releases/v0.1.0-beta.9.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation
