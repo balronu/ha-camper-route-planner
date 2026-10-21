@@ -11212,6 +11212,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
           this.render();
         }, mapOptions);
       }
+      this.bindEvents();
       this._fitMapOnNextRender = false;
       this.restoreInputState(inputState);
       this._preserveInputDraftKeys.clear();
@@ -11227,6 +11228,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelectorAll("button[data-action=tracker]").forEach((button) => button.addEventListener("click", () => this.useTrackerLocation(true)));
       this.shadowRoot.querySelectorAll("button[data-action=search]").forEach((button) => button.addEventListener("click", () => {
         const input = this.shadowRoot.querySelector(`input[data-search-input="${button.dataset.target}"][data-index="${button.dataset.index}"]`);
+        input?.focus({ preventScroll: true });
         this.searchAddress(button.dataset.target, input?.value, Number(button.dataset.index));
       }));
       this.shadowRoot.querySelectorAll("input[data-search-input]").forEach((input) => input.addEventListener("input", () => {
