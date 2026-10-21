@@ -79,7 +79,7 @@ class Phase2ATests(unittest.TestCase):
         request = RouteRequest(RouteWaypoint(49, 7), RouteWaypoint(50, 8), carthago_fixture())
         with self.assertRaises(ProviderError) as context:
             asyncio.run(provider.calculate(request))
-        self.assertEqual(context.exception.code, "live_routing_disabled")
+        self.assertEqual(context.exception.code, "missing_api_key")
         result = provider.normalize_fixture({"ok": True, "data": {"route": {"distance_m": 1234, "duration_s": 321, "geometry": [[49, 7], [50, 8]]}}})
         self.assertFalse(result.synthetic)
         self.assertEqual(provider.build_parameters(request)["weight"], 4.8)

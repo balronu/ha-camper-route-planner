@@ -22,6 +22,11 @@ test("frontend has no provider secret or direct Nakordoni endpoint", () => {
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest|WebSocket\(/);
 });
 
+test("frontend labels the provider returned by the backend", () => {
+  assert.match(source, /translate\("provider"\).*result\.provider/);
+  assert.match(source, /result\.synthetic.*mockDataNotice/);
+});
+
 test("installable integration contains the same built bundle", () => {
   const packaged = readFileSync(new URL("../../custom_components/camper_route_planner/frontend/camper-route-planner-card.js", import.meta.url), "utf8");
   const built = readFileSync(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");

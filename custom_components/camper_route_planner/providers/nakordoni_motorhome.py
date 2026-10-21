@@ -152,6 +152,12 @@ class NakordoniMotorhomeProvider:
 
     async def calculate(self, request: RouteRequest) -> RouteResult:
         parameters = build_motorhome_parameters(request)
+        if not self.api_key:
+            raise ProviderError(
+                "Nakordoni API key is missing; configure it in the integration options.",
+                code="missing_api_key",
+                status=401,
+            )
         if not self.live_enabled or self.transport is None:
             raise ProviderError("Nakordoni Motorhome live routing is not enabled in Phase 2G", code="live_routing_disabled", status=403)
         try:

@@ -6,13 +6,33 @@ from typing import Any
 
 from .const import CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
 from .coordinator import RouteCoordinator
-from .models import RouteRequest, RouteWaypoint
+from .models import ProviderError, RouteRequest, RouteWaypoint
 from .map_provider import build_map_config
 from .providers.mock import MockRoutingProvider
 from .providers.nakordoni import NakordoniRoutingProvider
 from .providers.nakordoni_motorhome import NakordoniMotorhomeProvider
 from .storage import ProfileRouteStore
 from .geocoding import GeoapifyGeocoder
+
+
+def build_routing_provider(values: dict[str, Any]):
+    """Build exactly the provider explicitly selected in entry data/options."""
+    provider_name = values.get(CONF_PROVIDER)
+    if provider_name == PROVIDER_NAKORDONI_MOTORHOME:
+        return NakordoniMotorhomeProvider(api_key=values.get("api_key"), live_enabled=False)
+    if provider_name == PROVIDER_NAKORDONI:
+        return NakordoniRoutingProvider(api_key=values.get("api_key"), live_enabled=False)
+    if provider_name == PROVIDER_MOCK:
+        return MockRoutingProvider()
+    if provider_name is None:
+        raise ProviderError(
+            "No routing provider is configured; select Mock or Nakordoni.",
+            code="provider_not_configured",
+        )
+    raise ProviderError(
+        f"Unsupported routing provider: {provider_name}",
+        code="provider_not_supported",
+    )
 
 
 class RuntimeData:
@@ -33,14 +53,12 @@ class RuntimeData:
             from .storage import MemoryStore
             store_backend = MemoryStore()
         store = ProfileRouteStore(store_backend)
-        provider_name = entry.data.get(CONF_PROVIDER, PROVIDER_MOCK)
-        if provider_name == PROVIDER_NAKORDONI_MOTORHOME:
-            provider = NakordoniMotorhomeProvider(api_key=entry.data.get("api_key"), live_enabled=False)
-        elif provider_name == PROVIDER_NAKORDONI:
-            provider = NakordoniRoutingProvider(api_key=entry.data.get("api_key"), live_enabled=False)
-        else:
-            provider = MockRoutingProvider()
+        # Options Flow values override the original entry data.  Provider
+        # selection must use the same merged snapshot as the secret status in
+        # the flow; otherwise an options change can leave a stale provider
+        # instance running while the new value appears saved in HA.
         values = {**entry.data, **getattr(entry, "options", {})}
+        provider = build_routing_provider(values)
         geocoder = None
         if values.get("geocoding_api_key"):
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
