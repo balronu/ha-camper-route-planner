@@ -4,6 +4,11 @@ import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, re
 import { destroyMap, renderMap } from "./map-view.js";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+const formatCoordinate = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value ?? "");
+  return number.toFixed(6).replace(/\.?0+$/, "");
+};
 
 class CamperRoutePlannerCardEditor extends HTMLElement {
   setConfig(config) { this.config = { ...config }; this.render(); }
@@ -35,20 +40,39 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._connection = null;
     this._reverseTimers = new Map();
+    this._inputDrafts = new Map();
+    this._searchRequestIds = new Map();
     this._entryDiscoveryConnection = null;
     this._entryDiscoveryPromise = null;
   }
 
   connectedCallback() {
+    this._resizeObserver?.disconnect();
+    if (globalThis.ResizeObserver) {
+      this._resizeObserver = new ResizeObserver(() => this.updateResponsiveClass());
+      this._resizeObserver.observe(this);
+    }
+    this.updateResponsiveClass();
     // A catalog preview can disconnect and reconnect the same element. Rebuild
     // a map that was deliberately torn down during the disconnected phase.
     if (this._config.entry_id && this._state.result) this.render();
   }
 
   disconnectedCallback() {
+    this._resizeObserver?.disconnect();
     // Leaflet installs window listeners. Removing the host DOM alone does not
     // call map.remove(), so clean up before HA discards a preview/card.
     destroyMap(this.shadowRoot?.querySelector(".crp-map"));
+  }
+
+  updateResponsiveClass() {
+    const width = this.getBoundingClientRect().width;
+    const narrow = width > 0 && width <= 600;
+    const tiny = width > 0 && width <= 360;
+    this.classList.toggle("crp-narrow", narrow);
+    this.classList.toggle("crp-tiny", tiny);
+    const grid = this.shadowRoot?.querySelector(".grid");
+    if (grid) grid.style.gridTemplateColumns = narrow ? "1fr" : "repeat(2, minmax(0, 1fr))";
   }
 
   setConfig(config) {
@@ -116,20 +140,28 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (!this._config.entry_id || !this._state.profileId) return;
     try {
       const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
-      if (response?.available && response.point) { this._state.origin = response.point; this._state.originManual = false; this._state.trackerError = ""; this.scheduleReverseGeocode("origin", 0, response.point, true); }
+      if (response?.available && response.point) { this._state.origin = response.point; this._inputDrafts.delete("point:origin:0:latitude"); this._inputDrafts.delete("point:origin:0:longitude"); this._state.originManual = false; this._state.trackerError = ""; this.scheduleReverseGeocode("origin", 0, response.point, true); }
       else if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable");
     } catch (_error) { if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable"); }
     this.render();
   }
 
   async searchAddress(target, text, slot = 0) {
+    const key = `${target}:${slot}`;
+    const query = String(text || "");
     this._state.searchTarget = target; this._state.searchSlot = slot; this._state.searchError = "";
-    if (String(text || "").trim().length < 2) return;
+    const requestId = (this._searchRequestIds.get(key) || 0) + 1;
+    this._searchRequestIds.set(key, requestId);
+    if (query.trim().length < 2) { this._state.searchResults = []; return; }
     try {
-      const response = await geocode(this._hass, { entry_id: this._config.entry_id, text: String(text).trim(), limit: 5 });
+      const response = await geocode(this._hass, { entry_id: this._config.entry_id, text: query.trim(), limit: 5 });
+      if (this._searchRequestIds.get(key) !== requestId || this._inputDrafts.get(key) !== query) return;
       this._state.searchResults = response?.results || [];
       if (response && response.configured === false) this._state.searchError = t(languageOf(this._hass), "geocodingNotConfigured");
-    } catch (_error) { this._state.searchResults = []; this._state.searchError = t(languageOf(this._hass), "providerUnavailable"); }
+    } catch (_error) {
+      if (this._searchRequestIds.get(key) !== requestId || this._inputDrafts.get(key) !== query) return;
+      this._state.searchResults = []; this._state.searchError = t(languageOf(this._hass), "providerUnavailable");
+    }
     this.render();
   }
 
@@ -138,7 +170,50 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (!point) return;
     if (target === "waypoint") { this._state.waypoints[this._state.searchSlot] = { ...point }; }
     else { this._state[target] = { ...point }; if (target === "origin") this._state.originManual = true; }
+    this._inputDrafts.delete(`point:${target}:${this._state.searchSlot}:latitude`);
+    this._inputDrafts.delete(`point:${target}:${this._state.searchSlot}:longitude`);
+    this._inputDrafts.delete(`${target}:${this._state.searchSlot}`);
     this._state.searchResults = []; this._state.searchTarget = target; this.render();
+  }
+
+  captureInputState() {
+    const active = this.shadowRoot?.activeElement;
+    const activeKey = active?.dataset?.searchInput
+      ? `search:${active.dataset.searchInput}:${active.dataset.index}`
+      : active?.dataset?.point
+        ? `point:${active.dataset.point}:${active.dataset.index}:${active.dataset.field}`
+        : active?.dataset?.field || "";
+    this.shadowRoot?.querySelectorAll("input[data-search-input]").forEach((input) => {
+      this._inputDrafts.set(`${input.dataset.searchInput}:${input.dataset.index}`, input.value);
+    });
+    this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => {
+      this._inputDrafts.set(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`, input.value);
+    });
+    return { activeKey, selectionStart: active?.selectionStart, selectionEnd: active?.selectionEnd };
+  }
+
+  restoreInputState(state) {
+    this.shadowRoot?.querySelectorAll("input[data-search-input]").forEach((input) => {
+      const value = this._inputDrafts.get(`${input.dataset.searchInput}:${input.dataset.index}`);
+      if (value !== undefined) input.value = value;
+    });
+    this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => {
+      const value = this._inputDrafts.get(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`);
+      if (value !== undefined) input.value = value;
+    });
+    if (!state?.activeKey) return;
+    let input;
+    if (state.activeKey.startsWith("search:")) {
+      const [, target, index] = state.activeKey.split(":");
+      input = this.shadowRoot?.querySelector(`input[data-search-input="${target}"][data-index="${index}"]`);
+    } else if (state.activeKey.startsWith("point:")) {
+      const [, target, index, field] = state.activeKey.split(":");
+      input = this.shadowRoot?.querySelector(`input[data-point="${target}"][data-index="${index}"][data-field="${field}"]`);
+    } else input = this.shadowRoot?.querySelector(`input[data-field="${state.activeKey}"]`);
+    if (input) {
+      input.focus({ preventScroll: true });
+      if (state.selectionStart != null) input.setSelectionRange(state.selectionStart, state.selectionEnd ?? state.selectionStart);
+    }
   }
 
   scheduleReverseGeocode(target, index, point, immediate = false) {
@@ -203,21 +278,23 @@ export class CamperRoutePlannerCard extends HTMLElement {
   onMapPointChange(target, index, latlng) {
     const point = target === "waypoint" ? { ...this._state.waypoints[index] } : { ...this._state[target] };
     point.latitude = latlng.lat; point.longitude = latlng.lng; point.address = "";
+    this._inputDrafts.delete(`point:${target}:${index}:latitude`); this._inputDrafts.delete(`point:${target}:${index}:longitude`);
     if (target === "waypoint") this._state.waypoints[index] = point; else { this._state[target] = point; if (target === "origin") this._state.originManual = true; }
     this.render(); this.scheduleReverseGeocode(target, index, point);
   }
 
-  renderPoint(point, target, index = 0) { const address = isValidWaypoint(point) ? (point.address || t(languageOf(this._hass), "addressUnavailable")) : ""; return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(point.latitude)}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(point.longitude)}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">↑</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">↓</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>${address ? `<small class="point-address">${escapeHtml(address)}</small>` : ""}`; }
+  renderPoint(point, target, index = 0) { const address = isValidWaypoint(point) ? (point.address || t(languageOf(this._hass), "addressUnavailable")) : ""; const coordinate = (field) => this._inputDrafts.get(`point:${target}:${index}:${field}`) ?? formatCoordinate(point[field]); return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(coordinate("latitude"))}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(coordinate("longitude"))}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">↑</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">↓</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>${address ? `<small class="point-address">${escapeHtml(address)}</small>` : ""}`; }
 
   render() {
     const language = languageOf(this._hass); const translate = (key) => t(language, key); const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId); const result = this._state.result;
+    const inputState = this.captureInputState();
     // render() replaces shadowRoot.innerHTML below. Destroy the old Leaflet
     // instance while its container and private Symbol handle are still alive.
     destroyMap(this.shadowRoot?.querySelector(".crp-map"));
     if (!this._config.entry_id) { const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing"); this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`; return; }
     const pointEditor = (point, target, index = 0) => `${this.renderPoint(point, target, index)}<div class="search-row"><input data-search-input="${target}" data-index="${index}" placeholder="${translate("searchPlaceholder")}" aria-label="${translate("search")}"><button data-action="search" data-target="${target}" data-index="${index}">${translate("search")}</button></div>`;
     const searchResults = this._state.searchResults.length ? `<div class="search-results">${this._state.searchResults.map((item, index) => `<button data-action="select-search" data-target="${this._state.searchTarget}" data-index="${index}">${escapeHtml(item.label)}</button>`).join("")}</div>` : "";
-    this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(profile.vehicle_kind)} · ${escapeHtml(profile.fuel_type)}</dd></div></dl><button data-action="tracker">${translate("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button data-action="add">＋ ${translate("addWaypoint")}</button></div></section>${searchResults}${this._state.searchError ? `<p class="subtle">${escapeHtml(this._state.searchError)}</p>` : ""}<p class="privacy">${translate("geocodingPrivacy")}</p><section class="map-section"><h3>${translate("map")}</h3><div class="map-host"></div></section><div class="actions"><button class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div></div><div class="export-actions"><button data-action="export" data-mode="route">${translate("exportRoute")}</button><button data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportCombined")}</button></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(profile.vehicle_kind)} · ${escapeHtml(profile.fuel_type)}</dd></div></dl><button data-action="tracker">${translate("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button data-action="add">＋ ${translate("addWaypoint")}</button></div></section>${searchResults}${this._state.searchError ? `<p class="subtle">${escapeHtml(this._state.searchError)}</p>` : ""}<p class="privacy">${translate("geocodingPrivacy")}</p><section class="map-section"><h3>${translate("map")}</h3><div class="map-host"></div></section><div class="actions"><button class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? escapeHtml(result.provider) : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div></div><div class="export-actions"><button data-action="export" data-mode="route">${translate("exportRoute")}</button><button data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportTrack")}</button><button data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportCombined")}</button></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
     if (result?.provider === "nakordoni_motorhome") {
       const resultPanel = this.shadowRoot.querySelector(".result");
       resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
@@ -226,6 +303,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     this.bindEvents(); renderMap(this.shadowRoot.querySelector(".map-host"), result, this._state.mapConfig, { noRoute: translate("noRoute"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint") }, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); }, { points: this.mapPoints(), onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) });
+    this.restoreInputState(inputState);
   }
 
   bindEvents() {
@@ -233,7 +311,13 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelector("select[data-action=profile]")?.addEventListener("change", (event) => { this._state.profileId = event.target.value; this._state.originManual = false; this.useTrackerLocation(false); this.render(); });
     this.shadowRoot.querySelectorAll("button[data-action=tracker]").forEach((button) => button.addEventListener("click", () => this.useTrackerLocation(true)));
     this.shadowRoot.querySelectorAll("button[data-action=search]").forEach((button) => button.addEventListener("click", () => { const input = this.shadowRoot.querySelector(`input[data-search-input="${button.dataset.target}"][data-index="${button.dataset.index}"]`); this.searchAddress(button.dataset.target, input?.value, Number(button.dataset.index)); }));
-    this.shadowRoot.querySelectorAll("input[data-search-input]").forEach((input) => input.addEventListener("input", () => { clearTimeout(this._searchTimer); this._searchTimer = setTimeout(() => this.searchAddress(input.dataset.searchInput, input.value, Number(input.dataset.index)), 350); }));
+    this.shadowRoot.querySelectorAll("input[data-search-input]").forEach((input) => input.addEventListener("input", () => {
+      const key = `${input.dataset.searchInput}:${input.dataset.index}`;
+      this._inputDrafts.set(key, input.value);
+      this._searchRequestIds.set(key, (this._searchRequestIds.get(key) || 0) + 1);
+      clearTimeout(input._crpSearchTimer);
+      input._crpSearchTimer = setTimeout(() => this.searchAddress(input.dataset.searchInput, input.value, Number(input.dataset.index)), 350);
+    }));
     this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index))));
     this.shadowRoot.querySelector("input[data-field=routeName]")?.addEventListener("change", (event) => { this._state.routeName = event.target.value; });
     this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => { const action = button.dataset.action; const index = Number(button.dataset.index); if (action === "calculate") this.calculate(); if (action === "save") this.saveCurrent(); if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId)); if (action === "add") { this._state.waypoints = addWaypoint(this._state.waypoints); this.render(); } if (action === "remove") { this._state.waypoints = removeWaypoint(this._state.waypoints, index); this.render(); } if (action === "up") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1); this.render(); } if (action === "down") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1); this.render(); } if (action === "load") this.loadRoute(button.dataset.routeId); if (action === "delete") this.deleteRoute(button.dataset.routeId); }));
@@ -241,6 +325,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
 }
 
 const STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.content{padding:16px}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
+const RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions{min-width:0}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
 
 if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
 if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);

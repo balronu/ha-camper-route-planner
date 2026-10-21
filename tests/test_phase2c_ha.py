@@ -320,6 +320,11 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
         result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "remove_carto_api_key": True}
     )
     assert result["type"] == "form"
+    assert result["step_id"] == "vehicle_menu"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"vehicle_action": "add"}
+    )
+    assert result["type"] == "form"
     assert result["step_id"] == "profile"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -337,3 +342,79 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     )
     assert result["type"] == "create_entry"
     assert entry.options["carto_api_key"] == ""
+
+
+@pytest.mark.asyncio
+async def test_options_flow_edits_existing_vehicle_without_changing_id_or_routes(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Vehicle options",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": "", "geocoding_api_key": "old-geo-key"},
+        options={"geocoding_api_key": "old-geo-key"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    await runtime.store.async_save_profile(VehicleProfile("zoe", "Zoe", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", tracker_entity_id="device_tracker.wohnmobil_zoe"))
+    await runtime.store.async_save_route_record({
+        "route_id": "zoe-route", "name": "Keep reference", "provider": "mock", "distance_m": 100,
+        "duration_s": 100, "geometry": {"points": [{"latitude": 49, "longitude": 7}, {"latitude": 50, "longitude": 8}]},
+        "profile_id": "zoe",
+    })
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == "init"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": "new-geo-key",
+    })
+    assert result["step_id"] == "vehicle_menu"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "zoe"})
+    assert result["step_id"] == "profile"
+    defaults = {getattr(key, "schema", None): getattr(key, "default", None)() for key in result["data_schema"].schema if callable(getattr(key, "default", None))}
+    assert defaults["profile_id"] == "zoe"
+    assert defaults["tracker_entity_id"] == "device_tracker.wohnmobil_zoe"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "must-not-change-id", "name": "Zoe Wohnmobil", "vehicle_kind": "motorhome",
+        "height_m": 3.25, "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4900,
+        "fuel_type": "diesel", "axles": 2, "tracker_entity_id": "device_tracker.wohnmobil_zoe",
+    })
+    assert result["type"] == "create_entry"
+    assert entry.options["geocoding_api_key"] == "new-geo-key"
+    profile = next(item for item in runtime.store.profiles() if item.profile_id == "zoe")
+    assert profile.name == "Zoe Wohnmobil"
+    assert profile.tracker_entity_id == "device_tracker.wohnmobil_zoe"
+    assert runtime.store.route("zoe-route")["profile_id"] == "zoe"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_empty_geoapify_field_keeps_key_and_remove_clears_it(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Geo options",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": "stored-geo-key"},
+        options={"geocoding_api_key": "stored-geo-key"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": ""})
+    assert result["step_id"] == "profile"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "geo-profile", "name": "Geo vehicle", "vehicle_kind": "motorhome", "height_m": 3.2,
+        "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
+    })
+    assert entry.options["geocoding_api_key"] == "stored-geo-key"
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "remove_geocoding_api_key": True})
+    assert result["step_id"] == "vehicle_menu"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "geo-profile"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "profile_id": "geo-profile", "name": "Geo vehicle", "vehicle_kind": "motorhome", "height_m": 3.2,
+        "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
+    })
+    assert entry.options["geocoding_api_key"] == ""
