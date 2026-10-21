@@ -114,6 +114,9 @@ assert.ok(initialTileCoverage.tileCount >= 4, "Leaflet loads a tile grid rather 
 assert.equal(initialTileCoverage.hasTilePane, true, "Leaflet tile pane is present");
 assert.equal(initialTileCoverage.hasMapPane, true, "Leaflet map pane is present");
 assert.equal(initialTileCoverage.covered, true, "loaded tiles cover the complete visible map container");
+const attributionFlag = await desktop.locator(".leaflet-attribution-flag").evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, inAttribution: Boolean(node.closest(".leaflet-control-attribution")) }));
+assert.ok(attributionFlag.width <= 20 && attributionFlag.height <= 12, "Leaflet attribution flag keeps its intrinsic size instead of becoming a map-sized rectangle");
+assert.equal(attributionFlag.inAttribution, true, "attribution flag remains inside the attribution control");
 const emptyTileFailure = await preparePage({ width: 1280, height: 900 }, "light", async (route) => route.fulfill({ status: 403, body: "forbidden" }));
 await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").waitFor();
 assert.equal(await emptyTileFailure.locator(".metrics").count(), 0, "tile failure before route calculation does not calculate a route");
