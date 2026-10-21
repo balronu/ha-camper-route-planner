@@ -41,6 +41,8 @@ test("search drafts and request generations protect active user input", () => {
   assert.match(source, /selectionStart/);
   assert.match(source, /updateSearchResults\(\)/);
   assert.match(source, /data-search-results/);
+  assert.match(source, /updateMapPoints/);
+  assert.match(source, /updateSelectedPointDom/);
 });
 
 test("GPX export is explicit, backend-mediated and supports mobile share fallback", () => {

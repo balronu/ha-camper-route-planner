@@ -1,7 +1,7 @@
 import { languageOf, t } from "./localization.js";
 import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry } from "./card-utils.js";
 import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
-import { destroyMap, renderMap } from "./map-view.js";
+import { destroyMap, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -219,7 +219,28 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._preserveInputDraftKeys.add(`point:${target}:${slot}:latitude`);
     this._preserveInputDraftKeys.add(`point:${target}:${slot}:longitude`);
     this._inputDrafts.delete(`${target}:${slot}`);
-    this._state.searchResults = []; this._state.searchTarget = target; this.render();
+    this._state.searchResults = []; this._state.searchTarget = target;
+    this.updateSelectedPointDom(target, slot, point);
+    updateMapPoints(this.shadowRoot?.querySelector(".crp-map"), this.mapPoints(), { start: t(languageOf(this._hass), "start"), destination: t(languageOf(this._hass), "destination"), waypoint: t(languageOf(this._hass), "waypoint") }, { onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
+    this.updateSearchResults();
+  }
+
+  updateSelectedPointDom(target, index, point) {
+    const input = this.shadowRoot?.querySelector(`input[data-point="${target}"][data-index="${index}"][data-field="latitude"]`);
+    const longitude = this.shadowRoot?.querySelector(`input[data-point="${target}"][data-index="${index}"][data-field="longitude"]`);
+    if (!input || !longitude) return;
+    input.value = formatCoordinate(point.latitude);
+    longitude.value = formatCoordinate(point.longitude);
+    const row = input.closest(".point-row");
+    const searchRow = row?.parentElement?.querySelector(`.search-row input[data-search-input="${target}"][data-index="${index}"]`)?.parentElement;
+    if (!row || !searchRow) return;
+    let address = row.nextElementSibling?.classList.contains("point-address") ? row.nextElementSibling : null;
+    if (!address) {
+      address = document.createElement("small");
+      address.className = "point-address";
+      searchRow.before(address);
+    }
+    address.textContent = point.address || t(languageOf(this._hass), "addressUnavailable");
   }
 
   captureInputState() {
