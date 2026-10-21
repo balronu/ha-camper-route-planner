@@ -9630,6 +9630,7 @@
       unknown: "Unbekannt",
       mapLoading: "Karte wird geladen\u2026",
       mapUnavailable: "Kartenkacheln nicht verf\xFCgbar; bitte Kartenanbieter und Key pr\xFCfen.",
+      previewLine: "Luftlinien-Vorschau \u2013 noch keine Stra\xDFenroute",
       vehicleKind: { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw" },
       fuelType: { diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" },
       latitude: "Breitengrad",
@@ -9700,6 +9701,7 @@
       unknown: "Unknown",
       mapLoading: "Loading map\u2026",
       mapUnavailable: "Map tiles are unavailable; check the map provider and key.",
+      previewLine: "Straight-line preview \u2013 not a road route yet",
       vehicleKind: { motorhome: "Motorhome", truck: "Truck", car: "Car" },
       fuelType: { diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" },
       latitude: "Latitude",
@@ -9870,6 +9872,7 @@
   var CRP_LEAFLET_MARKERS = Symbol("camper-route-planner-leaflet-markers");
   var CRP_LEAFLET_OPTIONS = Symbol("camper-route-planner-leaflet-options");
   var CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
+  var CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -9935,9 +9938,21 @@
     }
     if (container) {
       container[CRP_LEAFLET_MARKERS] = null;
+      container[CRP_LEAFLET_ROUTE] = null;
       container[CRP_LEAFLET_OPTIONS] = null;
       container[CRP_LEAFLET_LABELS] = null;
     }
+  }
+  function markerIcon(target) {
+    const kind = target === "origin" ? "start" : target === "destination" ? "destination" : "waypoint";
+    const glyph = target === "origin" ? "S" : target === "destination" ? "Z" : "W";
+    return import_leaflet.default.divIcon({
+      className: `crp-marker crp-marker-${kind}`,
+      html: `<span aria-hidden="true">${glyph}</span>`,
+      iconSize: [30, 38],
+      iconAnchor: [15, 36],
+      tooltipAnchor: [0, -30]
+    });
   }
   function updateLeafletMarkers(container, points) {
     const map = container?.[CRP_LEAFLET_MAP];
@@ -9947,7 +9962,7 @@
     const options = container[CRP_LEAFLET_OPTIONS] || {};
     const markers = points.map((point, index) => {
       const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
-      const marker = import_leaflet.default.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange) });
+      const marker = import_leaflet.default.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange), icon: markerIcon(target) });
       marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
       marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
       return marker;
@@ -9955,11 +9970,44 @@
     container[CRP_LEAFLET_MARKERS] = markers;
     return true;
   }
+  function updateLeafletRoute(container, route, points = []) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map) return false;
+    container[CRP_LEAFLET_ROUTE]?.remove();
+    container[CRP_LEAFLET_ROUTE] = null;
+    const geometry = route?.geometry?.points || [];
+    const preview = geometry.length < 2 && points.length >= 2;
+    const linePoints = preview ? points : geometry;
+    if (linePoints.length < 2) return true;
+    const line = import_leaflet.default.polyline(linePoints.map((point) => [Number(point.latitude), Number(point.longitude)]), {
+      color: "var(--primary-color, #03a9f4)",
+      weight: 5,
+      opacity: preview ? 0.75 : 1,
+      dashArray: preview ? "7 9" : void 0,
+      className: preview ? "crp-preview-line" : "crp-route-line"
+    }).addTo(map);
+    if (preview) line.bindTooltip(container[CRP_LEAFLET_LABELS]?.previewLine || "Straight-line preview");
+    container[CRP_LEAFLET_ROUTE] = line;
+    return true;
+  }
+  function fitMapToPoints(container, points, force = false) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map || !force || !points.length) return false;
+    map.invalidateSize({ pan: false });
+    const coordinates = points.map((point) => [Number(point.latitude), Number(point.longitude)]);
+    if (coordinates.length === 1) map.setView(coordinates[0], 12, { animate: false });
+    else map.fitBounds(import_leaflet.default.latLngBounds(coordinates), { padding: [32, 32], maxZoom: 15, animate: false });
+    return true;
+  }
   function updateMapPoints(container, points, labels = {}, options = {}) {
     if (!container?.[CRP_LEAFLET_MAP]) return false;
     container[CRP_LEAFLET_OPTIONS] = { ...container[CRP_LEAFLET_OPTIONS], ...options };
     container[CRP_LEAFLET_LABELS] = { ...container[CRP_LEAFLET_LABELS], ...labels };
-    return updateLeafletMarkers(container, points || []);
+    const validPoints = points || [];
+    updateLeafletRoute(container, options.route, validPoints);
+    updateLeafletMarkers(container, validPoints);
+    fitMapToPoints(container, validPoints, Boolean(options.fitBounds));
+    return true;
   }
   function renderMap(container, route, mapConfig, labels, onTileError = () => {
   }, options = {}) {
@@ -9986,8 +10034,8 @@
         clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
         container[CRP_LEAFLET_TILE_TIMER] = null;
         destroyMap(container);
-        onTileError();
         renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute });
+        onTileError();
       };
       layer.on("tileload", () => {
         tileLoaded = true;
@@ -10003,12 +10051,12 @@
         if (!tileLoaded) failTiles();
       }, 1e4);
       layer.addTo(map);
-      if (geometry.length >= 2) import_leaflet.default.polyline(geometry.map((point) => [Number(point.latitude), Number(point.longitude)]), { color: "var(--primary-color, #03a9f4)", weight: 5 }).addTo(map);
+      updateLeafletRoute(container, route, points);
       updateLeafletMarkers(container, points);
       if (points.length === 1) {
         map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
       } else if (points.length > 1) {
-        map.fitBounds(import_leaflet.default.latLngBounds(points.map((point) => [Number(point.latitude), Number(point.longitude)])), { padding: [20, 20] });
+        map.fitBounds(import_leaflet.default.latLngBounds(points.map((point) => [Number(point.latitude), Number(point.longitude)])), { padding: [32, 32], maxZoom: 15 });
       } else {
         map.setView([51, 10], 5);
       }
@@ -10744,6 +10792,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._inputDrafts = /* @__PURE__ */ new Map();
       this._preserveInputDraftKeys = /* @__PURE__ */ new Set();
       this._searchRequestIds = /* @__PURE__ */ new Map();
+      this._fitMapOnNextRender = false;
       this._entryDiscoveryConnection = null;
       this._entryDiscoveryPromise = null;
     }
@@ -10944,7 +10993,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._state.searchResults = [];
       this._state.searchTarget = target;
       this.updateSelectedPointDom(target, slot, point);
-      updateMapPoints(this.shadowRoot?.querySelector(".crp-map"), this.mapPoints(), { start: t(languageOf(this._hass), "start"), destination: t(languageOf(this._hass), "destination"), waypoint: t(languageOf(this._hass), "waypoint") }, { onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
+      updateMapPoints(this.shadowRoot?.querySelector(".crp-map"), this.mapPoints(), { start: t(languageOf(this._hass), "start"), destination: t(languageOf(this._hass), "destination"), waypoint: t(languageOf(this._hass), "waypoint"), previewLine: t(languageOf(this._hass), "previewLine") }, { route: this._state.result, fitBounds: true, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
       this.updateSearchResults();
     }
     updateSelectedPointDom(target, index, point) {
@@ -11125,7 +11174,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId);
       const result = this._state.result;
       const inputState = this.captureInputState();
-      destroyMap(this.shadowRoot?.querySelector(".crp-map"));
+      const oldMap = this.shadowRoot?.querySelector(".crp-map");
+      const preserveMap = Boolean(oldMap?.classList.contains("leaflet-container") && this._state.mapConfig?.provider === "carto" && this._state.mapConfig?.status === "configured");
+      if (preserveMap) oldMap.remove();
+      else destroyMap(oldMap);
       if (!this._config.entry_id) {
         const message = this._state.entryStatus === "multiple" ? translate("multipleEntries") : translate("configMissing");
         this.shadowRoot.innerHTML = `<ha-card><div class="content"><p>${message}</p></div></ha-card>`;
@@ -11147,12 +11199,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
         resultPanel?.insertAdjacentHTML("beforeend", `<div class="notice"><b>${translate("tolls")}</b>: ${tolls?.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "")}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}` : tolls?.complete === false ? translate("tollIncomplete") : translate("tollUnavailable")}</div>`);
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
-      this.bindEvents();
-      renderMap(this.shadowRoot.querySelector(".map-host"), result, this._state.mapConfig, { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint") }, () => {
-        this._state.mapError = translate("mapTileError");
-        this._state.mapConfig = { ...this._state.mapConfig || {}, status: "invalid" };
-        this.render();
-      }, { points: this.mapPoints(), onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) });
+      const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine") };
+      const mapOptions = { points: this.mapPoints(), route: result, fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const mapHost = this.shadowRoot.querySelector(".map-host");
+      if (preserveMap) {
+        mapHost.append(oldMap);
+        updateMapPoints(oldMap, mapOptions.points, mapLabels, mapOptions);
+      } else {
+        renderMap(mapHost, result, this._state.mapConfig, mapLabels, () => {
+          this._state.mapError = translate("mapTileError");
+          this._state.mapConfig = { ...this._state.mapConfig || {}, status: "invalid" };
+          this.render();
+        }, mapOptions);
+      }
+      this._fitMapOnNextRender = false;
       this.restoreInputState(inputState);
       this._preserveInputDraftKeys.clear();
     }
@@ -11188,18 +11248,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
         if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId));
         if (action === "add") {
           this._state.waypoints = addWaypoint(this._state.waypoints);
+          this._fitMapOnNextRender = true;
           this.render();
         }
         if (action === "remove") {
           this._state.waypoints = removeWaypoint(this._state.waypoints, index);
+          this._fitMapOnNextRender = true;
           this.render();
         }
         if (action === "up") {
           this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1);
+          this._fitMapOnNextRender = true;
           this.render();
         }
         if (action === "down") {
           this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1);
+          this._fitMapOnNextRender = true;
           this.render();
         }
         if (action === "load") this.loadRoute(button.dataset.routeId);
@@ -11207,7 +11271,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }));
     }
   };
-  var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.content{padding:16px}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
+  var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.content{padding:16px}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
   var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions{min-width:0}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
