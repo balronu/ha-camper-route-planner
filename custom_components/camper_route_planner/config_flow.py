@@ -161,6 +161,7 @@ try:
                 "axles": profile.axles if profile else 2,
                 "tracker_entity_id": profile.tracker_entity_id if profile else "",
             }
+            tracker_key = vol.Optional("tracker_entity_id", default=profile.tracker_entity_id) if profile and profile.tracker_entity_id else vol.Optional("tracker_entity_id")
             return vol.Schema({
                 vol.Required("profile_id", default=defaults["profile_id"]): str,
                 vol.Required("name", default=defaults["name"]): str,
@@ -171,7 +172,7 @@ try:
                 vol.Required("gross_weight_kg", default=defaults["gross_weight_kg"]): vol.Coerce(int),
                 vol.Required("fuel_type", default=defaults["fuel_type"]): vol.In(["diesel", "petrol", "electric", "hybrid", "other"]),
                 vol.Required("axles", default=defaults["axles"]): vol.Coerce(int),
-                vol.Optional("tracker_entity_id", default=defaults["tracker_entity_id"]): _entity_selector(),
+                tracker_key: _entity_selector(),
             })
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
