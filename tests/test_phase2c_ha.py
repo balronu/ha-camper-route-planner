@@ -109,7 +109,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert f"Camper Route Planner Card v0.1.0-beta.6" in body
+    assert f"Camper Route Planner Card v0.1.0-beta.7" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert "custom:camper-route-planner-card" in body
     resources = hass.data[LOVELACE_DATA].resources
@@ -130,7 +130,57 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.0-beta.6" in await response.text()
+    assert "Camper Route Planner Card v0.1.0-beta.7" in await response.text()
+
+
+@pytest.mark.asyncio
+async def test_frontend_resource_preserves_existing_entries_and_updates_old_version(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    """Only the integration's own resource is normalized, never the collection."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Resource Planner",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    resources = hass.data[LOVELACE_DATA].resources
+    await resources.async_create_item({"res_type": "module", "url": "/local/unrelated-card.js?v=1"})
+    own = next(item for item in resources.async_items() if item["url"] == FRONTEND_RESOURCE_URL)
+    await resources.async_update_item(own["id"], {"url": f"{FRONTEND_URL}?v=old"})
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    items = resources.async_items()
+    assert any(item["url"] == "/local/unrelated-card.js?v=1" for item in items)
+    assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in items) == 1
+    assert not any(item["url"] == f"{FRONTEND_URL}?v=old" for item in items)
+
+
+@pytest.mark.asyncio
+async def test_frontend_resource_is_shared_by_multiple_entries(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    """Multiple entries must not create duplicate resource records."""
+    entries = [
+        MockConfigEntry(
+            domain=DOMAIN,
+            title=f"Planner {index}",
+            data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+        )
+        for index in (1, 2)
+    ]
+    for entry in entries:
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    resources = hass.data[LOVELACE_DATA].resources
+    assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
 
 
 @pytest.mark.asyncio
