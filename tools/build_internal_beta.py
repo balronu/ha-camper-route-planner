@@ -13,7 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "camper_route_planner"
-PACKAGE_VERSION = "0.1.0-internal-beta.3"
+PACKAGE_VERSION = os.environ.get("PACKAGE_VERSION", "0.1.0-internal-beta.3")
 OUTPUT = ROOT / "artifacts" / f"camper-route-planner-{PACKAGE_VERSION}.zip"
 EXPECTED = (
     "__init__.py",

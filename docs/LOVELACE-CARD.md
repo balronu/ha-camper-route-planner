@@ -7,13 +7,13 @@ Das Bundle liegt im installierbaren Paket unter
 Die Integration liefert und lädt es über einen versionierten HA-Static-Path:
 
 ```yaml
-url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-alpha.1
+url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.4
 type: module
 ```
 
-Die URL wird beim Integration-Setup über `add_extra_js_url` registriert. Keine
-manuelle Resource und keine Änderung bestehender Dashboards ist erforderlich;
-der reale HA-Neustart-/Browsernachweis bleibt NOT RUN.
+Die URL wird beim Integration-Setup über die HA-Abhängigkeit `frontend`, einen
+Static Path und `add_extra_js_url` registriert. Keine manuelle Resource und
+keine Änderung bestehender Dashboards ist erforderlich.
 
 ## Konfiguration
 

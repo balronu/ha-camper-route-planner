@@ -1,6 +1,6 @@
 # HACS- und manuelle Installationsstruktur
 
-Die Struktur ist für eine spätere HACS-Custom-Integration vorbereitet:
+Die Struktur ist für die HACS-Custom-Integration `v0.1.0-beta.4` geprüft:
 
 - `custom_components/camper_route_planner/` enthält die Integration;
 - Manifest, Config Flow, Übersetzungen und `services.yaml` sind vorhanden;
@@ -8,10 +8,10 @@ Die Struktur ist für eine spätere HACS-Custom-Integration vorbereitet:
 - das Frontend-Bundle wird reproduzierbar gebaut und in die Integration unter
   `custom_components/camper_route_planner/frontend/` übernommen;
 
-Eine HACS-Installation, ein GitHub-Release und eine Veröffentlichung wurden
-in Phase 2E nicht durchgeführt. Die Dokumentations- und Issue-URLs im
-Manifest zeigen auf das geplante Repository; ein Release existiert noch nicht.
+Für die Beta wird das Repository in HACS als Custom repository hinzugefügt und
+die Pre-release-Version ausgewählt. Ein Stable-Release existiert weiterhin
+nicht. Die Dokumentations- und Issue-URLs im Manifest zeigen auf das Repository.
 Die Integration liefert die Karte über einen HA-Static-Path und registriert
 die versionierte Extra-JS-URL idempotent. Bestehende Dashboards werden nicht
-verändert. Der reale HA-Neustart-/Update-Nachweis bleibt vor der Beta
-NOT RUN.
+verändert. Die isolierte HA-Fixture prüft HTTP 200, Bundle-Inhalt, Unload und
+erneutes Setup; HACS-UI und iOS Safari bleiben separat ungetestet.
