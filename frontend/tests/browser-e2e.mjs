@@ -174,7 +174,7 @@ assert.equal(await desktop.evaluate(() => window.scrollY), destinationIdentity.s
 await destinationSearch.fill("Second fixture address");
 await desktop.evaluate((query) => { const card = document.querySelector("camper-route-planner-card"); card._inputDrafts.set("destination:0", query); return card.searchAddress("destination", query, 0); }, "Second fixture address");
 await desktop.locator('.panel').nth(2).locator('.search-results').waitFor();
-await desktop.getByRole("button", { name: "Second fixture address", exact: true }).click();
+await desktop.locator('.panel').nth(2).locator('.search-results').getByRole("button", { name: "Second fixture address", exact: true }).click();
 assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.138", "repeated target selection updates latitude");
 assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Second fixture address", "repeated target selection updates the address");
 const afterSecondSelection = await desktop.evaluate(() => {
@@ -195,8 +195,8 @@ const waypointMapState = await desktop.evaluate(() => {
 const selectWaypoint = async (query, resultName) => {
   await desktop.locator('.waypoints input[data-search-input="waypoint"]').fill(query);
   await desktop.locator('.waypoints button[data-action="search"][data-index="0"]').click();
-  await desktop.locator('.waypoints .search-results').waitFor();
-  await desktop.getByRole("button", { name: resultName, exact: true }).click();
+  await desktop.locator('.waypoints [data-search-results][data-index="0"].search-results').waitFor();
+  await desktop.locator('.waypoints [data-search-results][data-index="0"].search-results').getByRole("button", { name: resultName, exact: true }).click();
 };
 await selectWaypoint("Waypoint fixture", "Fixture address");
 const afterWaypointSelection = await desktop.evaluate(() => {
@@ -337,17 +337,21 @@ await buttonFlow.locator('.waypoints button[data-action="add"]').click();
 await buttonFlow.locator('.waypoints input[data-search-input="waypoint"][data-index="0"]').waitFor();
 await buttonFlow.locator('.waypoints input[data-search-input="waypoint"][data-index="0"]').fill("Waypoint one");
 await buttonFlow.locator('.waypoints button[data-action="search"][data-index="0"]').click();
-await buttonFlow.locator('.waypoints .search-results').waitFor();
-await buttonFlow.getByRole("button", { name: "Second fixture address", exact: true }).click();
+await buttonFlow.locator('.waypoints [data-search-results][data-index="0"].search-results').waitFor();
+await buttonFlow.locator('.waypoints [data-search-results][data-index="0"].search-results').getByRole("button", { name: "Second fixture address", exact: true }).click();
 assert.equal(await buttonFlow.locator('input[data-point="waypoint"][data-index="0"][data-field="latitude"]').inputValue(), "48.138", "real waypoint search button returns valid latitude");
 assert.equal(await buttonFlow.locator(".leaflet-marker-icon").count(), 3, "button flow renders origin, waypoint, and destination markers");
 assert.equal(await buttonFlow.locator(".crp-preview-line").count(), 1, "button flow renders a straight preview line");
 await buttonFlow.locator('.waypoints button[data-action="add"]').click();
 await buttonFlow.locator('.waypoints input[data-search-input="waypoint"][data-index="1"]').fill("Waypoint two");
 await buttonFlow.locator('.waypoints button[data-action="search"][data-index="1"]').click();
-await buttonFlow.locator('.waypoints .search-results').waitFor();
-await buttonFlow.locator('.waypoints .search-results').getByRole("button", { name: "Fixture address", exact: true }).click();
+await buttonFlow.locator('.waypoints [data-search-results][data-index="1"].search-results').waitFor();
+await buttonFlow.locator('.waypoints [data-search-results][data-index="1"].search-results').getByRole("button", { name: "Fixture address", exact: true }).click();
 assert.equal(await buttonFlow.locator('.waypoints input[data-point="waypoint"]').count(), 4, "button flow preserves both waypoint coordinate pairs");
+await buttonFlow.waitForFunction(() => {
+  const addresses = document.querySelector("camper-route-planner-card")._state.waypoints.map((point) => point.address);
+  return addresses.includes("Fixture address") && addresses.includes("Second fixture address");
+});
 await buttonFlow.locator('.waypoints button[data-action="down"][data-index="0"]').click();
 assert.deepEqual(await buttonFlow.evaluate(() => document.querySelector("camper-route-planner-card")._state.waypoints.map((point) => point.address)), ["Fixture address", "Second fixture address"], "waypoint down button reorders points");
 await buttonFlow.locator('.waypoints button[data-action="remove"][data-index="1"]').click();
