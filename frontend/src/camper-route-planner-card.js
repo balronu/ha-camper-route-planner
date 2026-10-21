@@ -389,6 +389,10 @@ export class CamperRoutePlannerCard extends HTMLElement {
     } else {
       renderMap(mapHost, result, this._state.mapConfig, mapLabels, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); }, mapOptions);
     }
+    // The DOM is rebuilt for the card controls while the Leaflet host is
+    // preserved separately. Rebind every control after each render so
+    // search, waypoint, and route actions remain usable after DOM updates.
+    this.bindEvents();
     this._fitMapOnNextRender = false;
     this.restoreInputState(inputState);
     this._preserveInputDraftKeys.clear();
@@ -398,7 +402,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelectorAll("input[data-point]").forEach((input) => input.addEventListener("input", (event) => this.updatePoint(event.target.dataset.point, Number(event.target.dataset.index), event.target.dataset.field, event.target.value)));
     this.shadowRoot.querySelector("select[data-action=profile]")?.addEventListener("change", (event) => { this._state.profileId = event.target.value; this._state.originManual = false; this.useTrackerLocation(false); this.render(); });
     this.shadowRoot.querySelectorAll("button[data-action=tracker]").forEach((button) => button.addEventListener("click", () => this.useTrackerLocation(true)));
-    this.shadowRoot.querySelectorAll("button[data-action=search]").forEach((button) => button.addEventListener("click", () => { const input = this.shadowRoot.querySelector(`input[data-search-input="${button.dataset.target}"][data-index="${button.dataset.index}"]`); this.searchAddress(button.dataset.target, input?.value, Number(button.dataset.index)); }));
+    this.shadowRoot.querySelectorAll("button[data-action=search]").forEach((button) => button.addEventListener("click", () => { const input = this.shadowRoot.querySelector(`input[data-search-input="${button.dataset.target}"][data-index="${button.dataset.index}"]`); input?.focus({ preventScroll: true }); this.searchAddress(button.dataset.target, input?.value, Number(button.dataset.index)); }));
     this.shadowRoot.querySelectorAll("input[data-search-input]").forEach((input) => input.addEventListener("input", () => {
       const key = `${input.dataset.searchInput}:${input.dataset.index}`;
       this._inputDrafts.set(key, input.value);
