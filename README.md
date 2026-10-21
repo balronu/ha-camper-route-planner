@@ -28,7 +28,7 @@ und GPX-Export.
 - deutsche und englische UI-Texte
 - dauerhaft sichtbare Leaflet-Karte mit Marker-Drag und Kartenauswahl
 - GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
-- Geoapify-Adresssuche über den HA-Options-Flow (Backend-only, mockbar)
+- Geoapify-Adresssuche und Reverse-Geocoding über den HA-Options-Flow (Backend-only, mockbar)
 
 ## Noch nicht verfügbar
 
@@ -71,7 +71,10 @@ Logs, Diagnoseexporte oder GitHub übertragen. Suchtexte werden an Geoapify
 übermittelt, wenn die Funktion aktiviert ist; die Oberfläche zeigt deshalb
 einen Datenschutzhinweis und Geoapify/OpenStreetMap-Attribution. Debounce,
 Ergebnislimit, lokales Rate-Limiting und Cache reduzieren unnötige Abfragen.
-Ohne Key bleiben Karte, GPS und manuelle Koordinaten aktiv.
+Reverse-Geocoding löst GPS-, Karten- und verschobene Marker nach einer kurzen
+Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
+Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
+sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
 
 Diese Phase-3B-Änderungen sind ein ungemergter Kandidatenbranch; sie ändern
 weder VM 104 noch ein produktives Home-Assistant-System und führen keine

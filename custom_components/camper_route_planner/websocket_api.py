@@ -53,6 +53,23 @@ try:
             return
         connection.send_result(msg["id"], {"configured": True, "results": results})
 
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/reverse_geocode", vol.Required("entry_id"): str, vol.Required("latitude"): vol.Coerce(float), vol.Required("longitude"): vol.Coerce(float)})
+    @websocket_api.async_response
+    async def ws_reverse_geocode(hass, connection, msg) -> None:
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        if runtime is None or runtime.geocoder is None:
+            connection.send_result(msg["id"], {"configured": False, "address": None})
+            return
+        try:
+            address = await runtime.geocoder.async_reverse(msg["latitude"], msg["longitude"])
+        except GeocodingError as exc:
+            if str(exc) == "invalid_coordinates":
+                connection.send_error(msg["id"], str(exc), "Invalid coordinates")
+            else:
+                connection.send_error(msg["id"], str(exc), "Address lookup unavailable")
+            return
+        connection.send_result(msg["id"], {"configured": True, "address": address})
+
     @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/tracker_position", vol.Required("entry_id"): str, vol.Required("profile_id"): str})
     @websocket_api.async_response
     async def ws_tracker_position(hass, connection, msg) -> None:
@@ -124,7 +141,7 @@ try:
         connection.send_result(msg["id"], {"route_id": route_id})
 
     def async_register(hass) -> None:
-        for command in (ws_list_entries, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
+        for command in (ws_list_entries, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
             websocket_api.async_register_command(hass, command)
 
 except ImportError:  # pragma: no cover - HA-only wrapper.

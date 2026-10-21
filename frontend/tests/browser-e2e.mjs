@@ -48,6 +48,7 @@ async function preparePage(viewport, colorScheme = "light") {
     const card = document.querySelector("camper-route-planner-card");
     card.setConfig({ type: "custom:camper-route-planner-card", entry_id: "test-entry" });
     let calculateCalls = 0;
+    let reverseCalls = 0;
     card.hass = {
       language: "en",
       connection: {},
@@ -55,6 +56,8 @@ async function preparePage(viewport, colorScheme = "light") {
         if (message.type.endsWith("/list_profiles")) return { profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
+        if (message.type.endsWith("/tracker_position")) return { available: false, point: null };
+        if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: true, address: `Fixture address ${message.latitude},${message.longitude}` }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
@@ -63,7 +66,7 @@ async function preparePage(viewport, colorScheme = "light") {
         return {};
       }
     };
-    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; } };
+    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; } };
   });
   await page.locator(".panel").first().waitFor();
   return page;
@@ -86,6 +89,9 @@ assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "
 await desktop.route("https://tiles.test/**", async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
 await calculate(desktop);
 await desktop.locator(".leaflet-container").waitFor();
+await desktop.waitForFunction(() => globalThis.__crp.reverseCalls > 0);
+await desktop.locator(".point-address").first().waitFor();
+assert.ok(await desktop.evaluate(() => globalThis.__crp.reverseCalls > 0), "valid points use backend reverse geocoding");
 assert.equal(await desktop.locator(".crp-map > svg").count(), 0, "successful tile mock uses Leaflet");
 const lifecycle = await desktop.evaluate(() => {
   const card = document.querySelector("camper-route-planner-card");

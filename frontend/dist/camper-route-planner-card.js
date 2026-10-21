@@ -1969,7 +1969,7 @@
             return 1 - Math.pow(1 - t2, this._easeOutPower);
           }
         });
-        var Map = Evented.extend({
+        var Map2 = Evented.extend({
           options: {
             // @section Map State Options
             // @option crs: CRS = L.CRS.EPSG3857
@@ -3183,7 +3183,7 @@
           }
         });
         function createMap(id, options) {
-          return new Map(id, options);
+          return new Map2(id, options);
         }
         var Control = Class.extend({
           // @section
@@ -3262,7 +3262,7 @@
         var control = function(options) {
           return new Control(options);
         };
-        Map.include({
+        Map2.include({
           // @method addControl(control: Control): this
           // Adds the given control to the map
           addControl: function(control2) {
@@ -3675,10 +3675,10 @@
             }
           }
         });
-        Map.mergeOptions({
+        Map2.mergeOptions({
           zoomControl: true
         });
-        Map.addInitHook(function() {
+        Map2.addInitHook(function() {
           if (this.options.zoomControl) {
             this.zoomControl = new Zoom();
             this.addControl(this.zoomControl);
@@ -3856,10 +3856,10 @@
             this._container.innerHTML = prefixAndAttribs.join(' <span aria-hidden="true">|</span> ');
           }
         });
-        Map.mergeOptions({
+        Map2.mergeOptions({
           attributionControl: true
         });
-        Map.addInitHook(function() {
+        Map2.addInitHook(function() {
           if (this.options.attributionControl) {
             new Attribution().addTo(this);
           }
@@ -4480,7 +4480,7 @@
             map.fire("layeradd", { layer: this });
           }
         });
-        Map.include({
+        Map2.include({
           // @method addLayer(layer: Layer): this
           // Adds the given layer to the map
           addLayer: function(layer) {
@@ -6582,7 +6582,7 @@
             return [0, 0];
           }
         });
-        Map.include({
+        Map2.include({
           _initOverlay: function(OverlayClass, content, latlng, options) {
             var overlay = content;
             if (!(overlay instanceof OverlayClass)) {
@@ -6795,10 +6795,10 @@
         var popup = function(options, source) {
           return new Popup(options, source);
         };
-        Map.mergeOptions({
+        Map2.mergeOptions({
           closePopupOnClick: true
         });
-        Map.include({
+        Map2.include({
           // @method openPopup(popup: Popup): this
           // Opens the specified popup while closing the previously opened (to make sure only one is opened at one time for usability).
           // @alternative
@@ -7039,7 +7039,7 @@
         var tooltip = function(options, source) {
           return new Tooltip(options, source);
         };
-        Map.include({
+        Map2.include({
           // @method openTooltip(tooltip: Tooltip): this
           // Opens the specified tooltip.
           // @alternative
@@ -8788,7 +8788,7 @@
         function svg(options) {
           return Browser.svg || Browser.vml ? new SVG(options) : null;
         }
-        Map.include({
+        Map2.include({
           // @namespace Map; @method getRenderer(layer: Path): Renderer
           // Returns the instance of `Renderer` that should be used to render the given
           // `Path`. It will ensure that the `renderer` options of the map and paths
@@ -8849,7 +8849,7 @@
         GeoJSON.latLngsToCoords = latLngsToCoords;
         GeoJSON.getFeature = getFeature;
         GeoJSON.asFeature = asFeature;
-        Map.mergeOptions({
+        Map2.mergeOptions({
           // @option boxZoom: Boolean = true
           // Whether the map can be zoomed to a rectangular area specified by
           // dragging the mouse while pressing the shift key.
@@ -8953,8 +8953,8 @@
             }
           }
         });
-        Map.addInitHook("addHandler", "boxZoom", BoxZoom);
-        Map.mergeOptions({
+        Map2.addInitHook("addHandler", "boxZoom", BoxZoom);
+        Map2.mergeOptions({
           // @option doubleClickZoom: Boolean|String = true
           // Whether the map can be zoomed in by double clicking on it and
           // zoomed out by double clicking while holding shift. If passed
@@ -8978,8 +8978,8 @@
             }
           }
         });
-        Map.addInitHook("addHandler", "doubleClickZoom", DoubleClickZoom);
-        Map.mergeOptions({
+        Map2.addInitHook("addHandler", "doubleClickZoom", DoubleClickZoom);
+        Map2.mergeOptions({
           // @option dragging: Boolean = true
           // Whether the map is draggable with mouse/touch or not.
           dragging: true,
@@ -9138,8 +9138,8 @@
             }
           }
         });
-        Map.addInitHook("addHandler", "dragging", Drag);
-        Map.mergeOptions({
+        Map2.addInitHook("addHandler", "dragging", Drag);
+        Map2.mergeOptions({
           // @option keyboard: Boolean = true
           // Makes the map focusable and allows users to navigate the map with keyboard
           // arrows and `+`/`-` keys.
@@ -9266,8 +9266,8 @@
             stop(e);
           }
         });
-        Map.addInitHook("addHandler", "keyboard", Keyboard);
-        Map.mergeOptions({
+        Map2.addInitHook("addHandler", "keyboard", Keyboard);
+        Map2.mergeOptions({
           // @section Mouse wheel options
           // @option scrollWheelZoom: Boolean|String = true
           // Whether the map can be zoomed by using the mouse wheel. If passed `'center'`,
@@ -9320,9 +9320,9 @@
             }
           }
         });
-        Map.addInitHook("addHandler", "scrollWheelZoom", ScrollWheelZoom);
+        Map2.addInitHook("addHandler", "scrollWheelZoom", ScrollWheelZoom);
         var tapHoldDelay = 600;
-        Map.mergeOptions({
+        Map2.mergeOptions({
           // @section Touch interaction options
           // @option tapHold: Boolean
           // Enables simulation of `contextmenu` event, default is `true` for mobile Safari.
@@ -9391,8 +9391,8 @@
             e.target.dispatchEvent(simulatedEvent);
           }
         });
-        Map.addInitHook("addHandler", "tapHold", TapHold);
-        Map.mergeOptions({
+        Map2.addInitHook("addHandler", "tapHold", TapHold);
+        Map2.mergeOptions({
           // @section Touch interaction options
           // @option touchZoom: Boolean|String = *
           // Whether the map can be zoomed by touch-dragging with two fingers. If
@@ -9480,14 +9480,14 @@
             }
           }
         });
-        Map.addInitHook("addHandler", "touchZoom", TouchZoom);
-        Map.BoxZoom = BoxZoom;
-        Map.DoubleClickZoom = DoubleClickZoom;
-        Map.Drag = Drag;
-        Map.Keyboard = Keyboard;
-        Map.ScrollWheelZoom = ScrollWheelZoom;
-        Map.TapHold = TapHold;
-        Map.TouchZoom = TouchZoom;
+        Map2.addInitHook("addHandler", "touchZoom", TouchZoom);
+        Map2.BoxZoom = BoxZoom;
+        Map2.DoubleClickZoom = DoubleClickZoom;
+        Map2.Drag = Drag;
+        Map2.Keyboard = Keyboard;
+        Map2.ScrollWheelZoom = ScrollWheelZoom;
+        Map2.TapHold = TapHold;
+        Map2.TouchZoom = TouchZoom;
         exports2.Bounds = Bounds;
         exports2.Browser = Browser;
         exports2.CRS = CRS;
@@ -9513,7 +9513,7 @@
         exports2.Layer = Layer;
         exports2.LayerGroup = LayerGroup;
         exports2.LineUtil = LineUtil;
-        exports2.Map = Map;
+        exports2.Map = Map2;
         exports2.Marker = Marker;
         exports2.Mixin = Mixin;
         exports2.Path = Path;
@@ -9591,6 +9591,7 @@
       geocodingNotConfigured: "Adresssuche nicht konfiguriert; Koordinaten oder Karte verwenden",
       geocodingPrivacy: "Adresssuche \xFCbermittelt die Eingabe an Geoapify.",
       geocodingAttribution: "Geoapify / OpenStreetMap",
+      addressUnavailable: "Adresse nicht verf\xFCgbar \u2013 Koordinaten werden verwendet",
       noSearchResults: "Keine Treffer",
       calculate: "Route berechnen",
       save: "Route speichern",
@@ -9656,6 +9657,7 @@
       geocodingNotConfigured: "Address search is not configured; use coordinates or the map",
       geocodingPrivacy: "Address searches send the query to Geoapify.",
       geocodingAttribution: "Geoapify / OpenStreetMap",
+      addressUnavailable: "Address unavailable \u2013 coordinates are used",
       noSearchResults: "No results",
       calculate: "Calculate route",
       save: "Save route",
@@ -9822,6 +9824,9 @@
   function geocode(hass, data) {
     return callWebsocket(hass, { type: "camper_route_planner/geocode", ...data });
   }
+  function reverseGeocode(hass, data) {
+    return callWebsocket(hass, { type: "camper_route_planner/reverse_geocode", ...data });
+  }
   function trackerPosition(hass, data) {
     return callWebsocket(hass, { type: "camper_route_planner/tracker_position", ...data });
   }
@@ -9934,7 +9939,7 @@
       points.forEach((point, index) => {
         const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
         const marker = import_leaflet.default.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange) });
-        marker.addTo(map).bindTooltip(point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
+        marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
         marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
       });
       if (points.length === 1) map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
@@ -9996,6 +10001,7 @@
       this._config = normalizeConfig();
       this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._connection = null;
+      this._reverseTimers = /* @__PURE__ */ new Map();
       this._entryDiscoveryConnection = null;
       this._entryDiscoveryPromise = null;
     }
@@ -10097,6 +10103,7 @@
           this._state.origin = response.point;
           this._state.originManual = false;
           this._state.trackerError = "";
+          this.scheduleReverseGeocode("origin", 0, response.point, true);
         } else if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable");
       } catch (_error) {
         if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable");
@@ -10130,6 +10137,29 @@
       this._state.searchResults = [];
       this._state.searchTarget = target;
       this.render();
+    }
+    scheduleReverseGeocode(target, index, point, immediate = false) {
+      if (!isValidWaypoint(point) || !this._config.entry_id) return;
+      const key = `${target}:${index}`;
+      clearTimeout(this._reverseTimers.get(key));
+      const run = () => this.resolvePointAddress(target, index, point);
+      this._reverseTimers.set(key, immediate ? null : setTimeout(run, 350));
+      if (immediate) run();
+    }
+    async resolvePointAddress(target, index, point) {
+      try {
+        const response = await reverseGeocode(this._hass, { entry_id: this._config.entry_id, latitude: Number(point.latitude), longitude: Number(point.longitude) });
+        const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
+        if (!current || Number(current.latitude) !== Number(point.latitude) || Number(current.longitude) !== Number(point.longitude)) return;
+        current.address = response?.configured && response.address ? response.address : "";
+        this.render();
+      } catch (_error) {
+        const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
+        if (current && Number(current.latitude) === Number(point.latitude) && Number(current.longitude) === Number(point.longitude)) {
+          current.address = "";
+          this.render();
+        }
+      }
     }
     async saveCurrent() {
       if (!this._state.result || !this._hass) return;
@@ -10198,6 +10228,7 @@
       const list = target === "waypoint" ? [...this._state.waypoints] : [{ ...this._state[target] }];
       const point = target === "waypoint" ? { ...list[index] } : list[0];
       point[field] = value;
+      point.address = "";
       if (target === "waypoint") list[index] = point;
       else {
         this._state[target] = point;
@@ -10205,16 +10236,27 @@
       }
       if (target === "waypoint") this._state.waypoints = list;
       this.render();
+      this.scheduleReverseGeocode(target, index, point);
     }
     mapPoints() {
       return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point));
     }
     onMapPointChange(target, index, latlng) {
-      this.updatePoint(target, index, "latitude", latlng.lat);
-      this.updatePoint(target, index, "longitude", latlng.lng);
+      const point = target === "waypoint" ? { ...this._state.waypoints[index] } : { ...this._state[target] };
+      point.latitude = latlng.lat;
+      point.longitude = latlng.lng;
+      point.address = "";
+      if (target === "waypoint") this._state.waypoints[index] = point;
+      else {
+        this._state[target] = point;
+        if (target === "origin") this._state.originManual = true;
+      }
+      this.render();
+      this.scheduleReverseGeocode(target, index, point);
     }
     renderPoint(point, target, index = 0) {
-      return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(point.latitude)}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(point.longitude)}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">\u2191</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">\u2193</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>`;
+      const address = isValidWaypoint(point) ? point.address || t(languageOf(this._hass), "addressUnavailable") : "";
+      return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(point.latitude)}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(point.longitude)}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">\u2191</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">\u2193</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>${address ? `<small class="point-address">${escapeHtml(address)}</small>` : ""}`;
     }
     render() {
       const language = languageOf(this._hass);

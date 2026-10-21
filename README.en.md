@@ -26,7 +26,7 @@ profiles, an interactive map, saved routes, and GPX export.
 - German and English UI text
 - always-visible Leaflet map with draggable markers and map selection
 - per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
-- Geoapify address search through the HA Options Flow (backend-only, mockable)
+- Geoapify address search and reverse geocoding through the HA Options Flow (backend-only, mockable)
 
 ## Not available yet
 
@@ -60,7 +60,9 @@ diagnostic exports, or GitHub. Queries are sent to Geoapify when search is
 enabled; the UI displays a privacy notice and Geoapify/OpenStreetMap
 attribution. Debouncing, result limits, local rate limiting, and caching reduce
 unnecessary requests. Without a key, the map, GPS, and manual coordinates remain
-available.
+available. Reverse geocoding resolves GPS, map, and dragged marker positions to
+readable addresses after a short delay; repeated coordinates use the cache.
+Coordinates remain authoritative when no address is returned.
 
 These Phase 3B changes are an unmerged candidate branch. They do not change VM
 104 or a productive Home Assistant system and perform no live Geoapify or

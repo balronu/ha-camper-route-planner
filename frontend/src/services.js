@@ -17,6 +17,10 @@ export function geocode(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/geocode", ...data });
 }
 
+export function reverseGeocode(hass, data) {
+  return callWebsocket(hass, { type: "camper_route_planner/reverse_geocode", ...data });
+}
+
 export function trackerPosition(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/tracker_position", ...data });
 }

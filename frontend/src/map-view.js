@@ -79,7 +79,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     points.forEach((point, index) => {
       const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
       const marker = L.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange) });
-        marker.addTo(map).bindTooltip(point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
+        marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
       marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
     });
     if (points.length === 1) map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12); else map.fitBounds(bounds, { padding: [20, 20] });

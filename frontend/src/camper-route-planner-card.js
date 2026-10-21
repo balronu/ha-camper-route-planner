@@ -1,6 +1,6 @@
 import { languageOf, t } from "./localization.js";
 import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry } from "./card-utils.js";
-import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, trackerPosition } from "./services.js";
+import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, renderMap } from "./map-view.js";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -34,6 +34,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._config = normalizeConfig();
     this._state = { profiles: [], routes: [], mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._connection = null;
+    this._reverseTimers = new Map();
     this._entryDiscoveryConnection = null;
     this._entryDiscoveryPromise = null;
   }
@@ -115,7 +116,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (!this._config.entry_id || !this._state.profileId) return;
     try {
       const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
-      if (response?.available && response.point) { this._state.origin = response.point; this._state.originManual = false; this._state.trackerError = ""; }
+      if (response?.available && response.point) { this._state.origin = response.point; this._state.originManual = false; this._state.trackerError = ""; this.scheduleReverseGeocode("origin", 0, response.point, true); }
       else if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable");
     } catch (_error) { if (showErrors) this._state.trackerError = t(languageOf(this._hass), "trackerUnavailable"); }
     this.render();
@@ -138,6 +139,28 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (target === "waypoint") { this._state.waypoints[this._state.searchSlot] = { ...point }; }
     else { this._state[target] = { ...point }; if (target === "origin") this._state.originManual = true; }
     this._state.searchResults = []; this._state.searchTarget = target; this.render();
+  }
+
+  scheduleReverseGeocode(target, index, point, immediate = false) {
+    if (!isValidWaypoint(point) || !this._config.entry_id) return;
+    const key = `${target}:${index}`;
+    clearTimeout(this._reverseTimers.get(key));
+    const run = () => this.resolvePointAddress(target, index, point);
+    this._reverseTimers.set(key, immediate ? null : setTimeout(run, 350));
+    if (immediate) run();
+  }
+
+  async resolvePointAddress(target, index, point) {
+    try {
+      const response = await reverseGeocode(this._hass, { entry_id: this._config.entry_id, latitude: Number(point.latitude), longitude: Number(point.longitude) });
+      const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
+      if (!current || Number(current.latitude) !== Number(point.latitude) || Number(current.longitude) !== Number(point.longitude)) return;
+      current.address = response?.configured && response.address ? response.address : "";
+      this.render();
+    } catch (_error) {
+      const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
+      if (current && Number(current.latitude) === Number(point.latitude) && Number(current.longitude) === Number(point.longitude)) { current.address = ""; this.render(); }
+    }
   }
 
   async saveCurrent() {
@@ -173,13 +196,18 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.render();
   }
 
-  updatePoint(target, index, field, value) { const list = target === "waypoint" ? [...this._state.waypoints] : [{ ...this._state[target] }]; const point = target === "waypoint" ? { ...list[index] } : list[0]; point[field] = value; if (target === "waypoint") list[index] = point; else { this._state[target] = point; if (target === "origin") this._state.originManual = true; } if (target === "waypoint") this._state.waypoints = list; this.render(); }
+  updatePoint(target, index, field, value) { const list = target === "waypoint" ? [...this._state.waypoints] : [{ ...this._state[target] }]; const point = target === "waypoint" ? { ...list[index] } : list[0]; point[field] = value; point.address = ""; if (target === "waypoint") list[index] = point; else { this._state[target] = point; if (target === "origin") this._state.originManual = true; } if (target === "waypoint") this._state.waypoints = list; this.render(); this.scheduleReverseGeocode(target, index, point); }
 
   mapPoints() { return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point)); }
 
-  onMapPointChange(target, index, latlng) { this.updatePoint(target, index, "latitude", latlng.lat); this.updatePoint(target, index, "longitude", latlng.lng); }
+  onMapPointChange(target, index, latlng) {
+    const point = target === "waypoint" ? { ...this._state.waypoints[index] } : { ...this._state[target] };
+    point.latitude = latlng.lat; point.longitude = latlng.lng; point.address = "";
+    if (target === "waypoint") this._state.waypoints[index] = point; else { this._state[target] = point; if (target === "origin") this._state.originManual = true; }
+    this.render(); this.scheduleReverseGeocode(target, index, point);
+  }
 
-  renderPoint(point, target, index = 0) { return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(point.latitude)}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(point.longitude)}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">↑</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">↓</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>`; }
+  renderPoint(point, target, index = 0) { const address = isValidWaypoint(point) ? (point.address || t(languageOf(this._hass), "addressUnavailable")) : ""; return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(point.latitude)}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(point.longitude)}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">↑</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">↓</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>${address ? `<small class="point-address">${escapeHtml(address)}</small>` : ""}`; }
 
   render() {
     const language = languageOf(this._hass); const translate = (key) => t(language, key); const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId); const result = this._state.result;
