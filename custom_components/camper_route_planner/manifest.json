@@ -1,9 +1,9 @@
 {
   "domain": "camper_route_planner",
   "name": "Camper Route Planner",
-  "dependencies": ["frontend", "http"],
   "codeowners": [],
   "config_flow": true,
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/balronu/ha-camper-route-planner",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/balronu/ha-camper-route-planner/issues",
