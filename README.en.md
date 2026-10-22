@@ -23,6 +23,7 @@ profiles, an interactive map, saved routes, and GPX export.
 - deterministic mock routing for offline tests
 - saving and loading synthetic routes
 - GPX route, track, and combined export
+- Navigation handoff to iOS/Android map apps with a desktop fallback; GPX export remains available
 - German and English UI text
 - always-visible Leaflet map with draggable markers and map selection
 - per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`

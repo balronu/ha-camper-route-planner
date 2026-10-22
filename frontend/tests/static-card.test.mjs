@@ -57,3 +57,12 @@ test("GPX export is explicit, backend-mediated and supports mobile share fallbac
   assert.match(services, /navigator\.share/);
   assert.doesNotMatch(source, /exportRoute\(.*connectedCallback/);
 });
+
+test("navigation handoff is local, platform-aware and keeps GPX export", () => {
+  assert.match(source, /data-action="navigation"/);
+  assert.match(source, /buildNavigationLink/);
+  assert.match(source, /navigationSafety/);
+  assert.match(source, /navigationWaypointsUnsupported/);
+  assert.match(services, /export_gpx/);
+  assert.doesNotMatch(source, /calculateRoute\([^)]*navigation/);
+});

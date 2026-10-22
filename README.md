@@ -25,6 +25,7 @@ und GPX-Export.
 - deterministisches Mock-Routing für Offline-Tests
 - Speicherung und Laden synthetischer Routen
 - GPX-Export als Route, Track oder kombiniert
+- Navigationsübergabe an iOS-/Android-Karten-Apps und Desktop-Fallback; GPX-Export bleibt erhalten
 - deutsche und englische UI-Texte
 - dauerhaft sichtbare Leaflet-Karte mit Marker-Drag und Kartenauswahl
 - GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
