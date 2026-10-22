@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.20"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.21"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.20`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0-beta\.20/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.21`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0-beta\.21/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -230,6 +230,11 @@ await desktop.waitForFunction(() => document.querySelector("camper-route-planner
 assert.equal(await desktop.locator('input[data-point="origin"][data-field="longitude"]').inputValue(), "8.5417", "tracker point fills origin coordinates");
 await desktop.evaluate(() => document.querySelector("camper-route-planner-card").calculate());
 await desktop.locator(".metrics").waitFor();
+const desktopNavigation = desktop.locator('.navigation-actions .navigation-link');
+assert.equal(await desktopNavigation.count(), 1, "a valid route renders a direct navigation link");
+assert.match(await desktopNavigation.getAttribute("href"), /^https:\/\/www\.openstreetmap\.org\/directions\?route=/, "desktop uses the browser fallback");
+assert.equal(await desktopNavigation.getAttribute("target"), "_blank", "navigation opens from the user-activated link");
+assert.equal(await desktopNavigation.getAttribute("rel"), "noopener noreferrer", "navigation link is isolated from the opener");
 await desktop.locator(".leaflet-container").waitFor();
 await desktop.waitForFunction(() => globalThis.__crp.reverseCalls > 0);
 await desktop.locator(".point-address").first().waitFor();

@@ -6,7 +6,7 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0-beta.20` Test-Beta (Pre-release). Die Lovelace-Karte ist für eine
+> **Status:** `v0.1.0-beta.21` Test-Beta (Pre-release). Die Lovelace-Karte ist für eine
 > isolierte HA-2026.10.1-Fixture und Chromium geprüft. Nakordoni-Motorhome-Routing
 > bleibt eine ausdrücklich manuelle Beta-Funktion ohne automatische Fallbacks.
 
@@ -76,8 +76,11 @@ Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
 Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
 sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
 
-Beta.20 enthält die Navigationsübergabe, die bereinigte Provider-Auswahl und
-den nicht-destruktiven Fahrzeug-Options-Flow. Geoapify- und Nakordoni-Live-
+Beta.21 korrigiert die Navigationsübergabe für iOS und Android anhand des
+bewährten direkten HTTPS-Anchor-Musters aus Mobile Fuel Stations und behebt
+die Fahrzeugverwaltungs-Übersetzungen im ersten Options-Flow-Schritt. Die
+bereinigte Provider-Auswahl und der nicht-destruktive Fahrzeug-Options-Flow
+bleiben erhalten. Geoapify- und Nakordoni-Live-
 Aufrufe wurden nicht durch dieses Projekt ausgeführt; VM 104 und das
 produktive Home-Assistant-System bleiben unverändert.
 
@@ -137,7 +140,7 @@ npm run test:e2e
 ```
 
 Der Beta-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.0-beta.20.md](docs/releases/v0.1.0-beta.20.md). Hassfest und
+    [docs/releases/v0.1.0-beta.21.md](docs/releases/v0.1.0-beta.21.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation

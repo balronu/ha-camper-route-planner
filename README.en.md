@@ -5,7 +5,7 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0-beta.20` test beta (pre-release). The Lovelace card is validated
+> **Status:** `v0.1.0-beta.21` test beta (pre-release). The Lovelace card is validated
 > with an isolated HA 2026.10.1 fixture and Chromium. Nakordoni motorhome routing
 > remains an explicitly manual beta feature with no automatic fallback.
 
@@ -65,8 +65,11 @@ available. Reverse geocoding resolves GPS, map, and dragged marker positions to
 readable addresses after a short delay; repeated coordinates use the cache.
 Coordinates remain authoritative when no address is returned.
 
-Beta.20 contains the navigation handoff, the cleaned provider selection, and the
-non-destructive vehicle Options Flow. This project made no live Geoapify or
+Beta.21 fixes the iOS and Android navigation handoff using the proven direct
+HTTPS-anchor pattern from Mobile Fuel Stations and corrects the vehicle
+management labels on the first Options Flow step. The cleaned provider
+selection and non-destructive vehicle Options Flow remain in place. This
+project made no live Geoapify or
 Nakordoni calls; VM 104 and the productive Home Assistant system remain unchanged.
 
 ## Nakordoni status
@@ -113,7 +116,7 @@ npm run build
 npm run test:e2e
 ```
 
-See the [beta.20 release notes](docs/releases/v0.1.0-beta.20.md) for the
+See the [beta.21 release notes](docs/releases/v0.1.0-beta.21.md) for the
 installation and test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is already validated by
 GitHub Actions. A Stable release and productive HA installation are outside

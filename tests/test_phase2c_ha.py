@@ -156,7 +156,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert f"Camper Route Planner Card v0.1.0-beta.20" in body
+    assert f"Camper Route Planner Card v0.1.0-beta.21" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert 'return { entry_id: "" }' in body
     assert 'card.type === "camper-route-planner-card"' in body
@@ -179,7 +179,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.0-beta.20" in await response.text()
+    assert "Camper Route Planner Card v0.1.0-beta.21" in await response.text()
 
 
 @pytest.mark.asyncio
@@ -384,6 +384,41 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     )
     assert result["type"] == "create_entry"
     assert entry.options["carto_api_key"] == ""
+
+
+@pytest.mark.asyncio
+async def test_options_flow_vehicle_action_uses_user_facing_labels(
+    hass: HomeAssistant, enable_custom_integrations
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Vehicle labels",
+        data={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    vehicle_key = next(key for key in result["data_schema"].schema if getattr(key, "schema", None) == "vehicle_action")
+    vehicle_validator = result["data_schema"].schema[vehicle_key]
+    assert vehicle_validator.container == {
+        "none": "No vehicle changes",
+        "edit": "Edit existing vehicle",
+        "add": "Add new vehicle",
+    }
+    assert vehicle_key.default() == "none"
+
+    hass.config_entries.options.async_abort(result["flow_id"])
+    hass.config.language = "de"
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    vehicle_key = next(key for key in result["data_schema"].schema if getattr(key, "schema", None) == "vehicle_action")
+    vehicle_validator = result["data_schema"].schema[vehicle_key]
+    assert vehicle_validator.container == {
+        "none": "Keine Änderungen an Fahrzeugen",
+        "edit": "Vorhandenes Fahrzeug bearbeiten",
+        "add": "Neues Fahrzeug hinzufügen",
+    }
 
 
 @pytest.mark.asyncio

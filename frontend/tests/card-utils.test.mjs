@@ -56,11 +56,14 @@ test("navigation links use existing route points without an API request", () => 
     waypoints: [{ latitude: 49.5, longitude: 8.6, label: "München & Süd" }]
   };
   const ios = buildNavigationLink(route, {}, "ios");
-  assert.match(ios.url, /^maps:\/\//);
-  assert.match(ios.url, /daddr=48\.135100%2C11\.582000/);
+  assert.match(ios.url, /^https:\/\/maps\.apple\.com\/directions\?/);
+  assert.match(ios.url, /destination=48\.135100%2C11\.582000/);
+  assert.match(ios.url, /mode=driving/);
   assert.equal(ios.omittedWaypoints, true);
   const android = buildNavigationLink(route, {}, "android");
-  assert.match(android.url, /^geo:0,0\?q=/);
+  assert.match(android.url, /^https:\/\/www\.google\.com\/maps\/dir\/\?/);
+  assert.match(android.url, /destination=48\.135100%2C11\.582000/);
+  assert.match(android.url, /dir_action=navigate/);
   assert.equal(android.omittedWaypoints, true);
   const desktop = buildNavigationLink(route, {}, "desktop");
   assert.match(desktop.url, /^https:\/\/www\.openstreetmap\.org\/directions\?route=/);

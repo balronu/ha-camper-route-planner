@@ -158,10 +158,16 @@ try:
         def _schema(self):
             current = self._current_values()
             current_provider = current.get(CONF_PROVIDER, PROVIDER_MOCK)
+            german = str(getattr(getattr(self.hass, "config", None), "language", "en")).lower().startswith("de")
             # ``nakordoni`` is the old disabled skeleton. Keep it intact in
             # stored entries and require an explicit user choice before any
             # transition; never reinterpret it as the motorhome provider.
             provider_default = current_provider if current_provider in _VISIBLE_PROVIDERS else PROVIDER_MOCK
+            vehicle_action_labels = {
+                VEHICLE_ACTION_NONE: "Keine Änderungen an Fahrzeugen" if german else "No vehicle changes",
+                VEHICLE_ACTION_EDIT: "Vorhandenes Fahrzeug bearbeiten" if german else "Edit existing vehicle",
+                VEHICLE_ACTION_ADD: "Neues Fahrzeug hinzufügen" if german else "Add new vehicle",
+            }
             return vol.Schema({
                 vol.Required(CONF_PROVIDER, default=provider_default): _select_selector(_VISIBLE_PROVIDERS, "provider"),
                 vol.Optional(CONF_API_KEY): _api_key_selector(),
@@ -171,7 +177,10 @@ try:
                 vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool,
                 vol.Optional(CONF_GEOCODING_API_KEY): _api_key_selector(),
                 vol.Optional(CONF_REMOVE_GEOCODING_API_KEY, default=False): bool,
-                vol.Required(CONF_VEHICLE_ACTION, default=VEHICLE_ACTION_NONE): _select_selector(_VEHICLE_ACTIONS, "vehicle_action"),
+                # Explicit labels are required here because HA's selector
+                # option translation is not applied reliably on this first
+                # Options Flow step in the Companion UI. Values stay stable.
+                vol.Required(CONF_VEHICLE_ACTION, default=VEHICLE_ACTION_NONE): vol.In(vehicle_action_labels),
             })
 
         async def async_step_vehicle_menu(self, user_input: dict[str, Any] | None = None):
