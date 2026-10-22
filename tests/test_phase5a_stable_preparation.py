@@ -1,6 +1,8 @@
 """Phase 5A regressions for provider labels and non-destructive options."""
 
 import asyncio
+import json
+from pathlib import Path
 import unittest
 
 from custom_components.camper_route_planner.config_flow_support import validate_user_input
@@ -20,6 +22,20 @@ from custom_components.camper_route_planner.storage import MemoryStore, ProfileR
 
 
 class Phase5AStablePreparationTests(unittest.TestCase):
+    def test_provider_translations_expose_only_mock_and_motorhome(self):
+        translation_paths = [
+            Path(__file__).parents[1] / "custom_components" / "camper_route_planner" / "strings.json",
+            *(Path(__file__).parents[1] / "custom_components" / "camper_route_planner" / "translations" / f"{language}.json" for language in ("de", "en")),
+        ]
+        for path in translation_paths:
+            payload = json.loads(
+                path.read_text(encoding="utf-8")
+            )
+            options = payload["selector"]["provider"]["options"]
+            self.assertEqual(set(options), {PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME})
+            self.assertEqual(options[PROVIDER_MOCK], "Mock (offline)")
+            self.assertEqual(options[PROVIDER_NAKORDONI_MOTORHOME], "Nakordoni")
+
     def test_visible_nakordoni_value_uses_motorhome_adapter(self):
         provider = build_routing_provider({CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME, "api_key": "K" * 24})
         self.assertIsInstance(provider, NakordoniMotorhomeProvider)

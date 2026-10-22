@@ -6,10 +6,9 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0-beta.19` Kandidat (noch nicht veröffentlicht). Die Lovelace-Karte ist für eine
-> isolierte HA-2026.10.1-Fixture und Chromium geprüft. Der aktuelle Stand
-> verwendet ausschließlich deterministisches Mock-Routing und ist keine
-> geprüfte Wohnmobilnavigation.
+> **Status:** `v0.1.0-beta.20` Test-Beta (Pre-release). Die Lovelace-Karte ist für eine
+> isolierte HA-2026.10.1-Fixture und Chromium geprüft. Nakordoni-Motorhome-Routing
+> bleibt eine ausdrücklich manuelle Beta-Funktion ohne automatische Fallbacks.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 
@@ -31,10 +30,8 @@ und GPX-Export.
 - GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
 - Geoapify-Adresssuche und Reverse-Geocoding über den HA-Options-Flow (Backend-only, mockbar)
 
-## Noch nicht verfügbar
+## Beta-Grenzen
 
-- produktives Nakordoni-Routing
-- Nakordoni-`vehicle_type=motorhome`
 - verifizierte Wohnmobilnavigation
 - produktive Nakordoni-/Provider-Livevalidierung
 
@@ -44,10 +41,12 @@ stiller Fallback von Motorhome auf Truck ist ausgeschlossen.
 
 ## Installation und Konfiguration
 
-Die Beta kann als HACS-Custom-Repository oder manuell nach
+Die Pre-release-Beta kann als HACS-Custom-Repository oder manuell nach
 `custom_components/camper_route_planner/` installiert werden. Anschließend wird sie
-über **Einstellungen → Geräte & Dienste** eingerichtet. Im aktuellen Stand
-wird der Mock-Provider für lokale Tests verwendet.
+über **Einstellungen → Geräte & Dienste** eingerichtet. Im Options Flow stehen
+`Nakordoni` (intern `nakordoni_motorhome`) und `Mock (offline)` zur Auswahl.
+Fahrzeugänderungen sind standardmäßig deaktiviert; Provider-/Key-Änderungen
+verändern vorhandene Profile, IDs und Tracker-Zuordnungen nicht.
 
 ### Karten
 
@@ -77,9 +76,9 @@ Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
 Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
 sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
 
-Beta.11 enthält die Branding-, Karten-, Fahrzeug-, Übersetzungs- und
-Options-Flow-Korrekturen aus Phase 3H. Geoapify-Live-Aufrufe
-und die produktive HA-Darstellung wurden nicht geprüft; VM 104 und das
+Beta.20 enthält die Navigationsübergabe, die bereinigte Provider-Auswahl und
+den nicht-destruktiven Fahrzeug-Options-Flow. Geoapify- und Nakordoni-Live-
+Aufrufe wurden nicht durch dieses Projekt ausgeführt; VM 104 und das
 produktive Home-Assistant-System bleiben unverändert.
 
 ## Nakordoni-Status
@@ -96,7 +95,8 @@ vorhandenen Zugang zugänglich. Das Projekt hat dafür keinen Live-Aufruf
 ausgeführt. Das Truck-Routing besitzt ein separates Tageskontingent (Explorer
 10, Starter 300 Routen/Tag; Zusatzkontingente möglich).
 
-`vehicle_type=motorhome` ist als Beta dokumentiert. Das Profil verwendet
+`vehicle_type=motorhome` ist als Beta dokumentiert und wird nur über den
+explizit sichtbaren Provider `Nakordoni` verwendet. Das Profil verwendet
 7,65 m × 2,34 m × 3,20 m, 4,8 t und zwei Achsen; Lkw-Lenk- und Ruhezeitfelder
 werden nicht übertragen. Der kontrollierte Laufzeitpfad verwendet den
 persönlichen Key über den HA-Transport; Mock ist kein automatischer Fallback.
@@ -137,7 +137,7 @@ npm run test:e2e
 ```
 
 Der Beta-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.0-beta.19.md](docs/releases/v0.1.0-beta.19.md). Hassfest und
+    [docs/releases/v0.1.0-beta.20.md](docs/releases/v0.1.0-beta.20.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation
