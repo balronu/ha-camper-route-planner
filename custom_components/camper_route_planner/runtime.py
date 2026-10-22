@@ -19,7 +19,7 @@ def build_routing_provider(values: dict[str, Any], *, transport: Any = None):
     """Build exactly the provider explicitly selected in entry data/options."""
     provider_name = values.get(CONF_PROVIDER)
     if provider_name == PROVIDER_NAKORDONI_MOTORHOME:
-        return NakordoniMotorhomeProvider(api_key=values.get(CONF_API_KEY), live_enabled=False, transport=transport)
+        return NakordoniMotorhomeProvider(api_key=values.get(CONF_API_KEY), live_enabled=True, transport=transport)
     if provider_name == PROVIDER_NAKORDONI:
         return NakordoniRoutingProvider(api_key=values.get("api_key"), live_enabled=False)
     if provider_name == PROVIDER_MOCK:

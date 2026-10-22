@@ -116,6 +116,7 @@ class Phase2ATests(unittest.TestCase):
         self.assertEqual(validate_user_input({"provider": "mock"}), {})
         self.assertEqual(validate_user_input({"provider": "nakordoni"}), {"api_key": "invalid_api_key"})
         self.assertEqual(validate_user_input({"provider": "nakordoni", "api_key": "x", "live_enabled": True}), {"base": "live_routing_requires_separate_phase"})
+        self.assertEqual(validate_user_input({"provider": "nakordoni_motorhome", "api_key": "K" * 24, "live_enabled": True}), {})
 
     def test_no_fixture_is_written_to_integration_source(self):
         source = "\n".join(path.read_text(encoding="utf-8") for path in Path("custom_components/camper_route_planner").rglob("*.py"))

@@ -36,9 +36,22 @@ class Phase4AProviderRuntimeTests(unittest.TestCase):
         new = build_routing_provider({CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME, "api_key": "K" * 24})
         self.assertIsInstance(old, MockRoutingProvider)
         self.assertIsInstance(new, NakordoniMotorhomeProvider)
-        with self.assertRaises(ProviderError) as ctx:
-            asyncio.run(new.calculate(route_request()))
-        self.assertEqual(ctx.exception.code, "live_routing_disabled")
+        self.assertTrue(new.live_enabled)
+        self.assertIsNone(new.transport)
+
+    def test_runtime_motorhome_provider_uses_injected_transport(self):
+        async def transport(_parameters):
+            return {"ok": True, "data": {"route": {
+                "distance_m": 123, "duration_s": 45, "geometry": [[48.137, 11.575], [45.438, 10.992]],
+            }}}
+
+        provider = build_routing_provider(
+            {CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME, "api_key": "K" * 24},
+            transport=transport,
+        )
+        result = asyncio.run(provider.calculate(route_request()))
+        self.assertFalse(result.synthetic)
+        self.assertEqual(result.provider, PROVIDER_NAKORDONI_MOTORHOME)
 
     def test_controlled_transport_receives_motorhome_dimensions_and_waypoints(self):
         captured = {}

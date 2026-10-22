@@ -164,7 +164,7 @@ class NakordoniMotorhomeProvider:
                 status=401,
             )
         if not self.live_enabled or self.transport is None:
-            raise ProviderError("Nakordoni Motorhome live routing is not enabled in Phase 2G", code="live_routing_disabled", status=403)
+            raise ProviderError("Nakordoni Motorhome live routing is not configured", code="live_routing_disabled", status=403)
         try:
             payload = await self.transport(parameters)
         except TimeoutError as exc:
