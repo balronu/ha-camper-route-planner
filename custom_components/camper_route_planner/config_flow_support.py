@@ -26,7 +26,7 @@ def validate_user_input(user_input: dict[str, Any]) -> dict[str, str]:
     provider = str(user_input.get("provider", "")).strip()
     if provider not in (PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
         return {"base": "invalid_provider"}
-    if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME) and user_input.get("live_enabled", False):
+    if provider == PROVIDER_NAKORDONI and user_input.get("live_enabled", False):
         return {"base": "live_routing_requires_separate_phase"}
     if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
         try:

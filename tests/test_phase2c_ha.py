@@ -17,7 +17,6 @@ try:
     from custom_components.camper_route_planner import FRONTEND_RESOURCE_URL, FRONTEND_URL
     from custom_components.camper_route_planner.models import VehicleProfile
     from custom_components.camper_route_planner.providers.nakordoni_motorhome import NakordoniMotorhomeProvider
-    from custom_components.camper_route_planner.models import ProviderError
     HA_AVAILABLE = True
 except ImportError as err:  # unittest discovery remains usable without pytest.
     print(f"HA fixture imports unavailable: {err!r}", file=sys.stderr)
@@ -102,13 +101,23 @@ async def test_provider_options_override_entry_data_and_reload_before_next_route
 
     runtime = hass.data[DOMAIN][entry.entry_id]
     assert isinstance(runtime.coordinator.provider, NakordoniMotorhomeProvider)
-    with pytest.raises(ProviderError, match="not enabled"):
-        await runtime.async_calculate_service({
-            "profile_id": "zoe",
-            "origin": {"latitude": 49, "longitude": 7},
-            "destination": {"latitude": 50, "longitude": 8},
-            "via": [{"latitude": 49.5, "longitude": 7.5}],
-        })
+
+    async def transport(_parameters):
+        return {"ok": True, "data": {"route": {
+            "distance_m": 12345,
+            "duration_s": 678,
+            "geometry": [[49, 7], [49.5, 7.5], [50, 8]],
+        }}}
+
+    runtime.coordinator.provider.transport = transport
+    result = await runtime.async_calculate_service({
+        "profile_id": "zoe",
+        "origin": {"latitude": 49, "longitude": 7},
+        "destination": {"latitude": 50, "longitude": 8},
+        "via": [{"latitude": 49.5, "longitude": 7.5}],
+    })
+    assert result["provider"] == PROVIDER_NAKORDONI_MOTORHOME
+    assert result["synthetic"] is False
 
 
 @pytest.mark.asyncio

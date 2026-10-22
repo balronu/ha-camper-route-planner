@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Camper Route Planner",
-        "description": "Configure an independent routing provider. Live Nakordoni routing is disabled in Phase 2A.",
+        "description": "Configure an independent routing provider. Nakordoni Motorhome routing runs only after an explicit manual action.",
         "data": {
           "name": "Name",
           "provider": "Routing provider",
@@ -24,7 +24,7 @@
       "invalid_map_provider": "Select a supported map provider.",
       "carto_key_required": "A CARTO key is required for the CARTO map provider.",
       "carto_key_invalid": "The CARTO key is not valid for browser tile access.",
-      "live_routing_requires_separate_phase": "Live routing is disabled until a separately authorized phase.",
+      "live_routing_requires_separate_phase": "This Nakordoni provider is not enabled for live routing.",
       "invalid_profile": "The selected vehicle profile is no longer available.",
       "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
       "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
