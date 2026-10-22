@@ -2,7 +2,7 @@
 
 ## Status
 
-**Beta-Kandidat:** `v0.1.0-beta.20`. Die Lovelace-Installationskette ist für
+**Beta-Kandidat:** `v0.1.0-beta.21`. Die Lovelace-Installationskette ist für
 HA 2026.10.1 isoliert geprüft. `v0.1.0 Stable` ist weiterhin nicht
 veröffentlicht. Der Plan für Phase 2F–2I steht in
 `docs/PHASE2F-2I-PLAN.md`.

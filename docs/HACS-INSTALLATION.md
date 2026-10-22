@@ -1,6 +1,6 @@
 # HACS- und manuelle Installationsstruktur
 
-Die Struktur ist für die HACS-Custom-Integration `v0.1.0-beta.20` geprüft:
+Die Struktur ist für die HACS-Custom-Integration `v0.1.0-beta.21` geprüft:
 
 - `custom_components/camper_route_planner/` enthält die Integration;
 - Manifest, Config Flow, Übersetzungen und `services.yaml` sind vorhanden;

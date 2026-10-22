@@ -7,7 +7,7 @@ Das Bundle liegt im installierbaren Paket unter
 Die Integration liefert und lädt es über einen versionierten HA-Static-Path:
 
 ```yaml
-url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.20
+url: /camper_route_planner/camper-route-planner-card.js?v=0.1.0-beta.21
 type: module
 ```
 
@@ -55,6 +55,11 @@ stehen **GPX-Route**, **GPX-Track** und – bei vorhandener Geometrie –
 **GPX kombiniert** zur Verfügung. Der Export wird über den HA-WebSocket-Befehl
 `camper_route_planner/export_gpx` erzeugt und erst durch den Button ausgelöst.
 Die Karte berechnet beim Rendern, bei GPS-Änderungen oder beim Kartenwechsel
-keine Route und erzeugt keinen Export automatisch. iOS nutzt, sofern verfügbar,
-die systemeigene Teilen-Funktion; ein nicht dokumentierter Sygic-Deep-Link ist
-nicht Bestandteil der Integration.
+keine Route und erzeugt keinen Export automatisch. Der Button **Im Navi öffnen**
+verwendet den direkten HTTPS-Anchor-Mechanismus aus Mobile Fuel Stations:
+Apple Maps Directions auf iOS, Google Maps Directions auf Android und
+OpenStreetMap Directions als Desktop-Fallback. Auf iOS/Android wird nur das
+gültige Ziel übergeben; Zwischenziele werden dort nicht behauptet. Externe
+Navigations-Apps können die Route neu berechnen und Fahrzeugmaße, Gewicht oder
+Achszahl ignorieren. GPX bleibt der Übergabeweg für komplexe Wohnmobilrouten;
+ein direkter Sygic-Link ist nicht Bestandteil der Integration.

@@ -115,12 +115,14 @@ export function buildNavigationLink(route = {}, state = {}, platform = navigatio
   const point = (value) => `${Number(value.latitude).toFixed(6)},${Number(value.longitude).toFixed(6)}`;
   const destinationValue = point(destination);
   if (platform === "ios") {
-    const params = new URLSearchParams({ daddr: destinationValue });
-    if (validOrigin) params.set("saddr", point(validOrigin));
-    return { url: `maps://?${params.toString()}`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
+    // Use the direct HTTPS Directions link proven by Mobile Fuel Stations.
+    // Proprietary maps:// URLs are unreliable inside the Home Assistant iOS WebView.
+    return { url: `https://maps.apple.com/directions?destination=${encodeURIComponent(destinationValue)}&mode=driving`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
   }
   if (platform === "android") {
-    return { url: `geo:0,0?q=${encodeURIComponent(destinationValue)}`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
+    // This is also a normal browser URL, so the Android Companion WebView can
+    // hand it to Google Maps without relying on geo: URI handling.
+    return { url: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationValue)}&travelmode=driving&dir_action=navigate`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
   }
   const routePoints = [validOrigin, ...validWaypoints, destination].filter(Boolean).map(point).join(";");
   return { url: `https://www.openstreetmap.org/directions?route=${encodeURIComponent(routePoints)}`, platform: "desktop", supportsWaypoints: true, omittedWaypoints: false };
