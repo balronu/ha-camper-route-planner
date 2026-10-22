@@ -6,9 +6,10 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0-beta.21` Test-Beta (Pre-release). Die Lovelace-Karte ist für eine
-> isolierte HA-2026.10.1-Fixture und Chromium geprüft. Nakordoni-Motorhome-Routing
-> bleibt eine ausdrücklich manuelle Beta-Funktion ohne automatische Fallbacks.
+> **Status:** `v0.1.0` Stable. Die Lovelace-Karte ist für eine isolierte
+> HA-2026.10.1-Fixture, Chromium und den praktischen iPhone-Navigationstest
+> geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
+> automatische Fallbacks.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 
@@ -22,7 +23,8 @@ und GPX-Export.
 - manuelle Berechnung ausschließlich nach Benutzeraktion
 - CARTO-Kartenintegration mit SVG-Fallback
 - deterministisches Mock-Routing für Offline-Tests
-- Speicherung und Laden synthetischer Routen
+- Nakordoni-Motorhome-Routing mit konfigurierten Fahrzeugparametern
+- Speicherung und Laden berechneter Routen
 - GPX-Export als Route, Track oder kombiniert
 - Navigationsübergabe an iOS-/Android-Karten-Apps und Desktop-Fallback; GPX-Export bleibt erhalten
 - deutsche und englische UI-Texte
@@ -30,10 +32,11 @@ und GPX-Export.
 - GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
 - Geoapify-Adresssuche und Reverse-Geocoding über den HA-Options-Flow (Backend-only, mockbar)
 
-## Beta-Grenzen
+## Unterstützte Grenzen
 
-- verifizierte Wohnmobilnavigation
-- produktive Nakordoni-/Provider-Livevalidierung
+- Die Routenberechnung wird ausschließlich durch eine Benutzeraktion gestartet.
+- Externe Navigations-Apps können Strecken neu berechnen und Fahrzeugparameter
+  ignorieren; für komplexe Wohnmobilrouten bleibt GPX der zuverlässige Exportweg.
 
 Truck-Routing darf bis zur Verfügbarkeit und Prüfung des echten Motorhome-
 Profils nicht als sichere Wohnmobilnavigation dargestellt werden. Ein
@@ -41,7 +44,7 @@ stiller Fallback von Motorhome auf Truck ist ausgeschlossen.
 
 ## Installation und Konfiguration
 
-Die Pre-release-Beta kann als HACS-Custom-Repository oder manuell nach
+Die Stable-Version kann als HACS-Custom-Repository oder manuell nach
 `custom_components/camper_route_planner/` installiert werden. Anschließend wird sie
 über **Einstellungen → Geräte & Dienste** eingerichtet. Im Options Flow stehen
 `Nakordoni` (intern `nakordoni_motorhome`) und `Mock (offline)` zur Auswahl.
@@ -76,13 +79,13 @@ Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
 Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
 sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
 
-Beta.21 korrigiert die Navigationsübergabe für iOS und Android anhand des
-bewährten direkten HTTPS-Anchor-Musters aus Mobile Fuel Stations und behebt
-die Fahrzeugverwaltungs-Übersetzungen im ersten Options-Flow-Schritt. Die
-bereinigte Provider-Auswahl und der nicht-destruktive Fahrzeug-Options-Flow
-bleiben erhalten. Geoapify- und Nakordoni-Live-
-Aufrufe wurden nicht durch dieses Projekt ausgeführt; VM 104 und das
-produktive Home-Assistant-System bleiben unverändert.
+Die Stable-Version enthält die korrigierte Navigationsübergabe für iOS und
+Android anhand des bewährten direkten HTTPS-Anchor-Musters aus Mobile Fuel
+Stations, vollständige Fahrzeugverwaltungs-Übersetzungen, bereinigte Provider-
+Auswahl, Mehrfahrzeugverwaltung, GPX-Route/Track/kombinierten Export und den
+nicht-destruktiven Options Flow. Die Live-Routenprüfung und der iPhone-Test
+wurden vom Nutzer erfolgreich durchgeführt; automatisierte Tests verwenden
+weiterhin ausschließlich Mock-Daten und isolierte Fixtures.
 
 ## Nakordoni-Status
 
@@ -107,8 +110,8 @@ Das isolierte Werkzeug startet standardmäßig im Dry-Run; der
 [Live-Testplan](docs/PHASE2I-LIVE-TEST-PLAN.md) begrenzt den ersten Tag auf
 acht Abfragen.
 
-OAuth/PKCE bleibt als spätere Alternative vorbereitet und ist für v0.1.0
-Stable optional. Der Client von Mobile Fuel Stations wird nicht übernommen.
+OAuth/PKCE bleibt als spätere optionale Alternative vorbereitet. Der Client von
+Mobile Fuel Stations wird nicht übernommen.
 Jeder Nutzer verwendet seinen eigenen Zugang und sein eigenes Routing-
 Kontingent. Die Surface-Registrierung im Nakordoni-Dashboard ist vorbereitet,
 aber nicht in einem fremden Account durchgeführt.
@@ -121,7 +124,7 @@ Details: [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md)
 
 - keine produktiven Secrets oder Tokens im Repository
 - keine direkten Browser-Aufrufe zu Nakordoni
-- keine Live-Routing- oder Live-CARTO-Anfragen in dieser Entwicklungsphase
+- keine automatische Routenberechnung oder Mock-Fallbacks bei Providerfehlern
 - keine automatische Routenberechnung
 - unbekannte Restriktionen werden nicht als freie Strecke interpretiert
 - Truck-Maut, Truck-Fahrverbote und Ruheplanung sind nicht automatisch auf
@@ -139,34 +142,27 @@ npm run build
 npm run test:e2e
 ```
 
-Der Beta-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.0-beta.21.md](docs/releases/v0.1.0-beta.21.md). Hassfest und
+Der Stable-Installations- und Testnachweis steht in
+    [docs/releases/v0.1.0.md](docs/releases/v0.1.0.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
-durch GitHub Actions validiert. Ein Stable-Release und produktive HA-Installation
-sind nicht Bestandteil dieser Beta.
+durch GitHub Actions validiert. Die Installation in produktiven HA-Systemen
+erfolgt weiterhin manuell durch den jeweiligen Betreiber.
 
 ## Roadmap
 
-1. **Phase 2F:** eigenständiges Repository, Branding, Dokumentation und
-   Validierung.
-2. **Phase 2G:** Offline-Vorbereitung des Nakordoni-Motorhome-Beta-Providers,
-   OAuth-/PKCE-, Quoten- und Mautvertrag.
-3. **Phase 2H:** Offline-Provider, OAuth-/PKCE-Vorbereitung und CI.
-4. **Phase 2I:** persönliche API-Keys, Dry-Run-Testwerkzeug und Live-Testplan;
-   kein Release ohne Ergebnisbericht und dokumentierte Freigabe.
-5. **Phase 2J:** isolierte interne-Beta-Installation, Lifecycle- und
-   Rücknahmeplanung; noch keine Installation oder Live-Abfrage.
-6. **Phase 2K:** eingebettetes Frontend, installierbares internes ZIP und
-   isolierte Paketprüfung; noch keine Installation oder Live-Abfrage.
+1. Stable `v0.1.0` ist veröffentlicht und bleibt als eigenständige
+   Rückfallbasis erhalten.
+2. Weitere Funktionen werden erst nach einem separaten Änderungsauftrag
+   entwickelt.
+3. Eine mögliche Camper-Suite-Migration ist nicht Bestandteil dieses Releases.
 
-## Phase 2G/2H: Nakordoni Motorhome-Beta (historischer Aufbau)
+## Nakordoni Motorhome (Anbieterstatus)
 
-Der Provider `nakordoni_motorhome` ist der interne Laufzeitpfad hinter der sichtbaren Bezeichnung `Nakordoni`. Nakordoni Motorhome ist eine Beta; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider.
+Der Provider `nakordoni_motorhome` ist der interne Laufzeitpfad hinter der sichtbaren Bezeichnung `Nakordoni`. Der Anbieterstatus des Motorhome-Profils kann weiterhin Beta sein; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider.
 
-OAuth/PKCE bleibt als spätere Alternative vorbereitet und ist für v0.1.0
-Stable optional. Der OAuth-Client von Mobile Fuel Stations wird nicht verwendet.
-Keine Live-Routingabfragen wurden in Phase 2I ausgeführt.
+OAuth/PKCE bleibt als spätere optionale Alternative vorbereitet. Der
+OAuth-Client von Mobile Fuel Stations wird nicht verwendet.
 
 Routendaten werden mit [Data by nakordoni.eu](https://nakordoni.eu) attribuiert. Die Routing-API ist offiziell unter `nakordoni.eu` dokumentiert; OAuth und Account Usage unter `api.nakordoni.dev`. Details: [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API-Hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [Kontingente](docs/NAKORDONI-QUOTAS.md), [Maut](docs/NAKORDONI-TOLLS.md).
 

@@ -5,9 +5,9 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0-beta.21` test beta (pre-release). The Lovelace card is validated
-> with an isolated HA 2026.10.1 fixture and Chromium. Nakordoni motorhome routing
-> remains an explicitly manual beta feature with no automatic fallback.
+> **Status:** `v0.1.0` Stable. The Lovelace card is validated with an isolated
+> HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
+> Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -21,7 +21,8 @@ profiles, an interactive map, saved routes, and GPX export.
 - manual calculation after explicit user action
 - CARTO map integration with SVG fallback
 - deterministic mock routing for offline tests
-- saving and loading synthetic routes
+- Nakordoni motorhome routing with configured vehicle parameters
+- saving and loading calculated routes
 - GPX route, track, and combined export
 - Navigation handoff to iOS/Android map apps with a desktop fallback; GPX export remains available
 - German and English UI text
@@ -29,10 +30,11 @@ profiles, an interactive map, saved routes, and GPX export.
 - per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
 - Geoapify address search and reverse geocoding through the HA Options Flow (backend-only, mockable)
 
-## Beta limitations
+## Supported limitations
 
-- verified motorhome navigation
-- real Nakordoni/provider live validation
+- Route calculation starts only after an explicit user action.
+- External navigation apps may recalculate routes and ignore vehicle parameters;
+  GPX remains the reliable handoff for complex motorhome routes.
 
 Truck routing must not be presented as safe motorhome navigation before the
 real motorhome profile is available and validated. There is no silent truck
@@ -40,7 +42,7 @@ fallback for motorhome mode.
 
 ## Installation and configuration
 
-The pre-release beta can be installed as a HACS custom repository or by copying the
+The Stable release can be installed as a HACS custom repository or by copying the
 integration to `custom_components/camper_route_planner/`, then setting it up
 through **Settings → Devices & services**. The Options Flow offers `Nakordoni`
 (internally `nakordoni_motorhome`) and `Mock (offline)`. Vehicle changes default
@@ -65,12 +67,12 @@ available. Reverse geocoding resolves GPS, map, and dragged marker positions to
 readable addresses after a short delay; repeated coordinates use the cache.
 Coordinates remain authoritative when no address is returned.
 
-Beta.21 fixes the iOS and Android navigation handoff using the proven direct
-HTTPS-anchor pattern from Mobile Fuel Stations and corrects the vehicle
-management labels on the first Options Flow step. The cleaned provider
-selection and non-destructive vehicle Options Flow remain in place. This
-project made no live Geoapify or
-Nakordoni calls; VM 104 and the productive Home Assistant system remain unchanged.
+The Stable release contains the corrected iOS and Android navigation handoff
+using the proven direct HTTPS-anchor pattern from Mobile Fuel Stations,
+complete vehicle-management labels, the cleaned provider selection,
+multi-vehicle management, GPX route/track/combined export, and the
+non-destructive Options Flow. The user completed live route and iPhone tests;
+automated tests continue to use only mocked APIs and isolated fixtures.
 
 ## Nakordoni status
 
@@ -98,7 +100,7 @@ See the [planning update](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
 
 - no production secrets or tokens in the repository
 - no direct browser calls to Nakordoni
-- no live routing or live CARTO requests in this development phase
+- no automatic route calculation or mock fallback after provider errors
 - no automatic route calculation
 - unknown restrictions are not treated as a clear road
 - truck tolls, truck restrictions, and rest planning are not automatically
@@ -116,33 +118,23 @@ npm run build
 npm run test:e2e
 ```
 
-See the [beta.21 release notes](docs/releases/v0.1.0-beta.21.md) for the
-installation and test evidence. Hassfest and GitHub-side validation run through
-`.github/workflows/validate.yml`; the public repository is already validated by
-GitHub Actions. A Stable release and productive HA installation are outside
-the scope of this beta.
+See the [Stable release notes](docs/releases/v0.1.0.md) for the installation and
+test evidence. Hassfest and GitHub-side validation run through
+`.github/workflows/validate.yml`; the public repository is validated by GitHub
+Actions. Installation into productive HA systems remains an operator action.
 
 ## Roadmap
 
-1. **Phase 2F:** independent repository, branding, documentation, and
-   validation.
-2. **Phase 2G:** offline preparation of the Nakordoni Motorhome beta provider,
-   OAuth/PKCE, quota, and toll contracts.
-3. **Phase 2H:** offline provider, OAuth/PKCE preparation, and CI.
-4. **Phase 2I:** personal API keys, dry-run test tooling, and live test plan;
-   no release without a result report and documented approval.
-5. **Phase 2J:** isolated internal-beta installation, lifecycle, and rollback
-   planning; no installation or live request has been performed.
-6. **Phase 2K:** embedded frontend, installable internal ZIP, and isolated
-   package validation; no installation or live request has been performed.
+1. Stable `v0.1.0` is published and remains an independent fallback basis.
+2. Further features require a separate change request.
+3. A possible Camper Suite migration is outside this release.
 
-## Phase 2G/2H: Nakordoni Motorhome beta (historical foundation)
+## Nakordoni motorhome (provider status)
 
-The internal provider ID remains `nakordoni_motorhome` behind the visible provider label `Nakordoni`. Nakordoni Motorhome is a beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider.
+The internal provider ID remains `nakordoni_motorhome` behind the visible provider label `Nakordoni`. The provider may still label the motorhome profile as beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider.
 
-OAuth/PKCE remains a later optional alternative for v0.1.0 Stable. The Mobile
-Fuel Stations OAuth client is not reused. No live routing requests were made
-in Phase 2I.
+OAuth/PKCE remains a later optional alternative. The Mobile Fuel Stations OAuth
+client is not reused.
 
 Route data is attributed to [Data by nakordoni.eu](https://nakordoni.eu). The routing API is officially documented on `nakordoni.eu`; OAuth and Account Usage use `api.nakordoni.dev`. See [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [quotas](docs/NAKORDONI-QUOTAS.md), and [tolls](docs/NAKORDONI-TOLLS.md).
 
