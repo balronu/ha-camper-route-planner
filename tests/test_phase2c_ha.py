@@ -322,7 +322,7 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": ""},
+        user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "carto_api_key": "", "vehicle_action": "add"},
     )
     assert result["type"] == "form"
     assert result["step_id"] == "profile"
@@ -355,7 +355,7 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"provider": PROVIDER_MOCK, "map_provider": "carto", "carto_api_key": "", "remove_carto_api_key": True},
+        user_input={"provider": PROVIDER_MOCK, "map_provider": "carto", "carto_api_key": "", "remove_carto_api_key": True, "vehicle_action": "add"},
     )
     assert result["type"] == "form"
     assert result["step_id"] == "init"
@@ -367,15 +367,10 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
         result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "remove_carto_api_key": True}
     )
     assert result["type"] == "form"
-    assert result["step_id"] == "vehicle_menu"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"vehicle_action": "add"}
-    )
-    assert result["type"] == "form"
     assert result["step_id"] == "profile"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={
+        user_input={"vehicle_action": "edit",
             "profile_id": "fixture-profile-remove",
             "name": "Fixture Motorhome",
             "vehicle_kind": "motorhome",
@@ -423,6 +418,14 @@ async def test_options_flow_edits_existing_vehicle_without_changing_id_or_routes
     defaults = {getattr(key, "schema", None): getattr(key, "default", None)() for key in result["data_schema"].schema if callable(getattr(key, "default", None))}
     assert defaults["profile_id"] == "zoe"
     assert defaults["tracker_entity_id"] == "device_tracker.wohnmobil_zoe"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "edit"})
+    assert result["step_id"] == "vehicle_menu"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
+        "vehicle_action": "zoe"})
+    assert result["step_id"] == "profile"
+    defaults = {getattr(key, "schema", None): getattr(key, "default", None)() for key in result["data_schema"].schema if callable(getattr(key, "default", None))}
+    assert defaults["profile_id"] == "zoe"
+    assert defaults["tracker_entity_id"] == "device_tracker.wohnmobil_zoe"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
         "profile_id": "must-not-change-id", "name": "Zoe Wohnmobil", "vehicle_kind": "motorhome",
         "height_m": 3.25, "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4900,
@@ -449,17 +452,14 @@ async def test_options_flow_empty_geoapify_field_keeps_key_and_remove_clears_it(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": ""})
-    assert result["step_id"] == "profile"
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "profile_id": "geo-profile", "name": "Geo vehicle", "vehicle_kind": "motorhome", "height_m": 3.2,
-        "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
-    })
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": "", "vehicle_action": "none"})
+    assert result["type"] == "create_entry"
     assert entry.options["geocoding_api_key"] == "stored-geo-key"
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "remove_geocoding_api_key": True})
-    assert result["step_id"] == "vehicle_menu"
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "geo-profile"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "remove_geocoding_api_key": True, "vehicle_action": "none"})
+    assert result["type"] == "create_entry"
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "vehicle_action": "add"})
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
         "profile_id": "geo-profile", "name": "Geo vehicle", "vehicle_kind": "motorhome", "height_m": 3.2,
         "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
@@ -483,7 +483,7 @@ async def test_options_flow_nakordoni_key_lifecycle_and_provider_switch(
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "provider": PROVIDER_NAKORDONI, "api_key": key, "map_provider": "none",
+        "provider": PROVIDER_NAKORDONI_MOTORHOME, "api_key": key, "map_provider": "none", "vehicle_action": "add",
     })
     assert result["step_id"] == "profile"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
@@ -498,9 +498,8 @@ async def test_options_flow_nakordoni_key_lifecycle_and_provider_switch(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["description_placeholders"]["nakordoni_status"] == "stored"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "provider": PROVIDER_MOCK, "api_key": "", "map_provider": "none",
+        "provider": PROVIDER_MOCK, "api_key": "", "map_provider": "none", "vehicle_action": "add",
     })
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "add"})
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
         "profile_id": "key-profile-2", "name": "Second key vehicle", "vehicle_kind": "car",
         "height_m": 1.6, "width_m": 1.8, "length_m": 4.2, "gross_weight_kg": 1800,
@@ -516,9 +515,8 @@ async def test_options_flow_nakordoni_key_lifecycle_and_provider_switch(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["description_placeholders"]["nakordoni_status"] == "stored"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "provider": PROVIDER_NAKORDONI_MOTORHOME, "api_key": "", "map_provider": "none",
+        "provider": PROVIDER_NAKORDONI_MOTORHOME, "api_key": "", "map_provider": "none", "vehicle_action": "add",
     })
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "add"})
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
         "profile_id": "key-profile-3", "name": "Third key vehicle", "vehicle_kind": "truck",
         "height_m": 3.8, "width_m": 2.5, "length_m": 10.0, "gross_weight_kg": 7500,
@@ -530,9 +528,8 @@ async def test_options_flow_nakordoni_key_lifecycle_and_provider_switch(
     # Only the explicit checkbox removes the secret.
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "provider": PROVIDER_MOCK, "api_key": "", "remove_api_key": True, "map_provider": "none",
+        "provider": PROVIDER_MOCK, "api_key": "", "remove_api_key": True, "map_provider": "none", "vehicle_action": "add",
     })
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "add"})
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
         "profile_id": "key-profile-4", "name": "Fourth key vehicle", "vehicle_kind": "car",
         "height_m": 1.6, "width_m": 1.8, "length_m": 4.2, "gross_weight_kg": 1800,
@@ -563,7 +560,7 @@ async def test_options_flow_deletes_selected_duplicate_name_only_with_route_cons
     })
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "vehicle_action": "edit"})
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "remove"})
     assert result["step_id"] == "profile"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
