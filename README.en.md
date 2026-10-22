@@ -23,6 +23,7 @@ profiles, an interactive map, saved routes, and GPX export.
 - deterministic mock routing for offline tests
 - saving and loading synthetic routes
 - GPX route, track, and combined export
+- Navigation handoff to iOS/Android map apps with a desktop fallback; GPX export remains available
 - German and English UI text
 - always-visible Leaflet map with draggable markers and map selection
 - per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
@@ -76,11 +77,11 @@ with the existing access. This project has not made a live request. Truck
 routing has a separate daily quota: Explorer 10 and Starter 300 routes/day,
 with additional quota possible.
 
-`vehicle_type=motorhome` is not available yet. An initial beta was tentatively
-forecast for around 26 October 2026. The planned profile is expected to cover
-motorhome dimensions, weight limits, motorhome-specific prohibitions and toll
-rules, without EU truck driving/rest-time planning. This forecast is not a
-release gate.
+`vehicle_type=motorhome` is available through the controlled beta runtime path.
+The profile carries motorhome dimensions, weight, and axles without EU truck
+driving/rest-time fields. The personal key is sent only through Home
+Assistant's transport; Mock is never an automatic fallback. Traffic signs and
+applicable regulations take precedence.
 
 Nakordoni is expected to register a dedicated OAuth client after receiving the
 repository URL. The Mobile Fuel Stations client will not be reused. Each user
@@ -132,9 +133,9 @@ the scope of this beta.
 6. **Phase 2K:** embedded frontend, installable internal ZIP, and isolated
    package validation; no installation or live request has been performed.
 
-## Phase 2G/2H: Nakordoni Motorhome beta
+## Phase 2G/2H: Nakordoni Motorhome beta (historical foundation)
 
-The `nakordoni_motorhome` provider is prepared locally as an offline/fixture provider, but is not enabled for production. Nakordoni Motorhome is a beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider and no verified motorhome navigation claim.
+The internal provider ID remains `nakordoni_motorhome` behind the visible provider label `Nakordoni`. Nakordoni Motorhome is a beta; traffic signs and applicable regulations take precedence. There is no automatic switch from the mock provider.
 
 OAuth/PKCE remains a later optional alternative for v0.1.0 Stable. The Mobile
 Fuel Stations OAuth client is not reused. No live routing requests were made

@@ -9,8 +9,9 @@ from .const import (
     CONF_API_KEY, CONF_CARTO_API_KEY, CONF_GEOCODING_API_KEY, CONF_LIVE_ENABLED,
     CONF_MAP_PROVIDER, CONF_PROVIDER, CONF_REMOVE_API_KEY,
     CONF_REMOVE_CARTO_API_KEY, CONF_REMOVE_GEOCODING_API_KEY, DEFAULT_ZOE_TRACKER,
-    DOMAIN, MAP_PROVIDER_CARTO, MAP_PROVIDER_NONE, PROVIDER_MOCK,
-    PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME,
+    CONF_VEHICLE_ACTION, DOMAIN, MAP_PROVIDER_CARTO, MAP_PROVIDER_NONE,
+    PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME,
+    VEHICLE_ACTION_ADD, VEHICLE_ACTION_EDIT, VEHICLE_ACTION_NONE,
 )
 from .models import VehicleProfile
 
@@ -39,6 +40,9 @@ try:
         except TypeError:  # pragma: no cover
             return selector.SelectSelector(selector.SelectSelectorConfig(**config))
 
+    _VISIBLE_PROVIDERS = (PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME)
+    _VEHICLE_ACTIONS = (VEHICLE_ACTION_NONE, VEHICLE_ACTION_EDIT, VEHICLE_ACTION_ADD)
+
     class CamperRoutePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         VERSION = 1
 
@@ -57,7 +61,7 @@ try:
                     })
             schema = vol.Schema({
                 vol.Required(CONF_NAME, default="Camper Route Planner"): str,
-                vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): _select_selector((PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME), "provider"),
+                vol.Required(CONF_PROVIDER, default=PROVIDER_MOCK): _select_selector(_VISIBLE_PROVIDERS, "provider"),
                 vol.Optional(CONF_API_KEY): _api_key_selector(),
                 vol.Optional(CONF_MAP_PROVIDER, default=MAP_PROVIDER_NONE): _select_selector((MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO), "map_provider"),
                 vol.Optional(CONF_CARTO_API_KEY, default=""): str,
@@ -135,21 +139,31 @@ try:
                 return await self._show_init(errors)
             if str(submitted.get(CONF_API_KEY, "")).strip():
                 submitted[CONF_API_KEY] = normalize_api_key(submitted[CONF_API_KEY])
-            self._provider_input = {**current, **user_input, **{
+            self._provider_input = {key: value for key, value in {**current, **user_input, **{
                 CONF_API_KEY: submitted.get(CONF_API_KEY, ""),
                 CONF_CARTO_API_KEY: submitted.get(CONF_CARTO_API_KEY, ""),
                 CONF_GEOCODING_API_KEY: submitted.get(CONF_GEOCODING_API_KEY, ""),
                 CONF_LIVE_ENABLED: False,
-            }}
-            if self._profiles():
+            }}.items() if key != CONF_VEHICLE_ACTION}
+            vehicle_action = user_input.get(CONF_VEHICLE_ACTION, VEHICLE_ACTION_NONE)
+            if vehicle_action == VEHICLE_ACTION_NONE:
+                return self.async_create_entry(data=self._provider_input)
+            if vehicle_action == VEHICLE_ACTION_EDIT and not self._profiles():
+                return await self._show_init({"base": "no_profiles_to_edit"})
+            if vehicle_action == VEHICLE_ACTION_EDIT:
                 return await self.async_step_vehicle_menu()
             self._editing_profile_id = None
             return await self.async_step_profile()
 
         def _schema(self):
             current = self._current_values()
+            current_provider = current.get(CONF_PROVIDER, PROVIDER_MOCK)
+            # ``nakordoni`` is the old disabled skeleton. Keep it intact in
+            # stored entries and require an explicit user choice before any
+            # transition; never reinterpret it as the motorhome provider.
+            provider_default = current_provider if current_provider in _VISIBLE_PROVIDERS else PROVIDER_MOCK
             return vol.Schema({
-                vol.Required(CONF_PROVIDER, default=current.get(CONF_PROVIDER, PROVIDER_MOCK)): _select_selector((PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME), "provider"),
+                vol.Required(CONF_PROVIDER, default=provider_default): _select_selector(_VISIBLE_PROVIDERS, "provider"),
                 vol.Optional(CONF_API_KEY): _api_key_selector(),
                 vol.Optional(CONF_REMOVE_API_KEY, default=False): bool,
                 vol.Optional(CONF_MAP_PROVIDER, default=current.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE)): _select_selector((MAP_PROVIDER_NONE, MAP_PROVIDER_CARTO), "map_provider"),
@@ -157,18 +171,22 @@ try:
                 vol.Optional(CONF_REMOVE_CARTO_API_KEY, default=False): bool,
                 vol.Optional(CONF_GEOCODING_API_KEY): _api_key_selector(),
                 vol.Optional(CONF_REMOVE_GEOCODING_API_KEY, default=False): bool,
+                vol.Required(CONF_VEHICLE_ACTION, default=VEHICLE_ACTION_NONE): _select_selector(_VEHICLE_ACTIONS, "vehicle_action"),
             })
 
         async def async_step_vehicle_menu(self, user_input: dict[str, Any] | None = None):
             profiles = self._profiles()
             if user_input is not None:
                 action = str(user_input.get("vehicle_action", ""))
+                if action == VEHICLE_ACTION_NONE:
+                    return self.async_create_entry(data=getattr(self, "_provider_input", {CONF_LIVE_ENABLED: False}))
                 self._editing_profile_id = None if action == "add" else action
                 return await self.async_step_profile()
             german = str(getattr(getattr(self.hass, "config", None), "language", "en")).lower().startswith("de")
             add_label = "Neues Fahrzeug hinzufügen" if german else "Add new vehicle"
-            options = {"add": add_label} | {profile.profile_id: profile.name for profile in profiles}
-            return self.async_show_form(step_id="vehicle_menu", data_schema=vol.Schema({vol.Required("vehicle_action", default="add"): vol.In(options)}))
+            no_change_label = "Keine Änderungen an Fahrzeugen" if german else "No vehicle changes"
+            options = {VEHICLE_ACTION_NONE: no_change_label, "add": add_label} | {profile.profile_id: profile.name for profile in profiles}
+            return self.async_show_form(step_id="vehicle_menu", data_schema=vol.Schema({vol.Required(CONF_VEHICLE_ACTION, default=VEHICLE_ACTION_NONE): vol.In(options)}))
 
         def _profile_schema(self, profile: VehicleProfile | None = None):
             defaults = {

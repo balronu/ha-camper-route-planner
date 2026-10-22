@@ -96,3 +96,32 @@ export function hasTrackGeometry(route) {
   const points = route?.geometry?.points;
   return Array.isArray(points) && points.length >= 2;
 }
+
+export function navigationPlatform(userAgent = globalThis.navigator?.userAgent || "") {
+  const ua = String(userAgent);
+  const navigatorObject = globalThis.navigator;
+  if (/iPad|iPhone|iPod/i.test(ua) || (/Macintosh/i.test(ua) && Number(navigatorObject?.maxTouchPoints) > 1)) return "ios";
+  if (/Android/i.test(ua)) return "android";
+  return "desktop";
+}
+
+export function buildNavigationLink(route = {}, state = {}, platform = navigationPlatform()) {
+  const origin = route.origin || state.origin;
+  const destination = route.destination || state.destination;
+  const waypoints = Array.isArray(route.waypoints) ? route.waypoints : (state.waypoints || []);
+  if (!isValidWaypoint(destination)) return null;
+  const validOrigin = isValidWaypoint(origin) ? origin : null;
+  const validWaypoints = waypoints.filter(isValidWaypoint);
+  const point = (value) => `${Number(value.latitude).toFixed(6)},${Number(value.longitude).toFixed(6)}`;
+  const destinationValue = point(destination);
+  if (platform === "ios") {
+    const params = new URLSearchParams({ daddr: destinationValue });
+    if (validOrigin) params.set("saddr", point(validOrigin));
+    return { url: `maps://?${params.toString()}`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
+  }
+  if (platform === "android") {
+    return { url: `geo:0,0?q=${encodeURIComponent(destinationValue)}`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
+  }
+  const routePoints = [validOrigin, ...validWaypoints, destination].filter(Boolean).map(point).join(";");
+  return { url: `https://www.openstreetmap.org/directions?route=${encodeURIComponent(routePoints)}`, platform: "desktop", supportsWaypoints: true, omittedWaypoints: false };
+}

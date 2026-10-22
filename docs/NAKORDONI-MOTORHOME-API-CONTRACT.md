@@ -33,4 +33,4 @@ Mautbeträge bleiben `null`, wenn die Antwort keinen Betrag liefert. `complete=f
 
 ## Attribution und Beta
 
-Routendaten erhalten `https://nakordoni.eu` als vertrauenswürdige Attribution. Die Oberfläche zeigt `Nakordoni Motorhome – Beta` und den Hinweis, dass Verkehrszeichen und geltende Vorschriften Vorrang haben.
+Routendaten erhalten `https://nakordoni.eu` als vertrauenswürdige Attribution. Die Oberfläche zeigt `Nakordoni – Beta`; intern bleibt die Provider-ID `nakordoni_motorhome` erhalten. Verkehrszeichen und geltende Vorschriften haben Vorrang.

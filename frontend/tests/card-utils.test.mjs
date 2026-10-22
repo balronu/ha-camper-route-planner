@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 
 test("coordinates and waypoint ordering are validated deterministically", () => {
@@ -31,6 +31,8 @@ test("German and English labels are available", () => {
   assert.equal(t("de", "fuelType.electric"), "Elektro");
   assert.equal(t("en", "vehicleKind.truck"), "Truck");
   assert.equal(t("en", "fuelType.petrol"), "Petrol");
+  assert.equal(t("de", "motorhomeBeta"), "Nakordoni – Beta");
+  assert.equal(t("en", "motorhomeBeta"), "Nakordoni – Beta");
 });
 
 test("track export eligibility requires existing geometry", () => {
@@ -45,4 +47,30 @@ test("config entry selection handles explicit, single, multiple and missing inst
   assert.equal(selectConfigEntry({}, entries).status, "multiple");
   assert.equal(selectConfigEntry({}, []).status, "missing");
   assert.deepEqual(selectConfigEntry({ entry_id: "legacy" }, entries), { entryId: "legacy", status: "ready", entries: [{ entry_id: "one", title: "One", state: "" }, { entry_id: "two", title: "Two", state: "" }] });
+});
+
+test("navigation links use existing route points without an API request", () => {
+  const route = {
+    origin: { latitude: 49.1234567, longitude: 7.7654321 },
+    destination: { latitude: 48.1351, longitude: 11.582 },
+    waypoints: [{ latitude: 49.5, longitude: 8.6, label: "München & Süd" }]
+  };
+  const ios = buildNavigationLink(route, {}, "ios");
+  assert.match(ios.url, /^maps:\/\//);
+  assert.match(ios.url, /daddr=48\.135100%2C11\.582000/);
+  assert.equal(ios.omittedWaypoints, true);
+  const android = buildNavigationLink(route, {}, "android");
+  assert.match(android.url, /^geo:0,0\?q=/);
+  assert.equal(android.omittedWaypoints, true);
+  const desktop = buildNavigationLink(route, {}, "desktop");
+  assert.match(desktop.url, /^https:\/\/www\.openstreetmap\.org\/directions\?route=/);
+  assert.equal(desktop.supportsWaypoints, true);
+  assert.match(decodeURIComponent(desktop.url), /49\.500000,8\.600000/);
+});
+
+test("navigation requires a valid destination and detects mobile platforms", () => {
+  assert.equal(buildNavigationLink({ destination: { latitude: "", longitude: 2 } }, {}, "desktop"), null);
+  assert.equal(navigationPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"), "ios");
+  assert.equal(navigationPlatform("Mozilla/5.0 (Linux; Android 15; Pixel)"), "android");
+  assert.equal(navigationPlatform("Mozilla/5.0 (X11; Linux x86_64)"), "desktop");
 });
