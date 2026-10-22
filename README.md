@@ -97,8 +97,9 @@ ausgeführt. Das Truck-Routing besitzt ein separates Tageskontingent (Explorer
 
 `vehicle_type=motorhome` ist als Beta dokumentiert. Das Profil verwendet
 7,65 m × 2,34 m × 3,20 m, 4,8 t und zwei Achsen; Lkw-Lenk- und Ruhezeitfelder
-werden nicht übertragen. Reale Aufrufe bleiben bis zur gesonderten Freigabe
-aus. Das isolierte Werkzeug startet standardmäßig im Dry-Run; der
+werden nicht übertragen. Der kontrollierte Laufzeitpfad verwendet den
+persönlichen Key über den HA-Transport; Mock ist kein automatischer Fallback.
+Das isolierte Werkzeug startet standardmäßig im Dry-Run; der
 [Live-Testplan](docs/PHASE2I-LIVE-TEST-PLAN.md) begrenzt den ersten Tag auf
 acht Abfragen.
 
@@ -155,9 +156,9 @@ sind nicht Bestandteil dieser Beta.
 6. **Phase 2K:** eingebettetes Frontend, installierbares internes ZIP und
    isolierte Paketprüfung; noch keine Installation oder Live-Abfrage.
 
-## Phase 2G/2H: Nakordoni Motorhome-Beta
+## Phase 2G/2H: Nakordoni Motorhome-Beta (historischer Aufbau)
 
-Der Provider `nakordoni_motorhome` ist lokal als Offline-/Fixture-Provider vorbereitet, aber nicht produktiv aktiviert. Nakordoni Motorhome ist eine Beta; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider und keine verifizierte Wohnmobilnavigation.
+Der Provider `nakordoni_motorhome` ist der interne Laufzeitpfad hinter der sichtbaren Bezeichnung `Nakordoni`. Nakordoni Motorhome ist eine Beta; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider.
 
 OAuth/PKCE bleibt als spätere Alternative vorbereitet und ist für v0.1.0
 Stable optional. Der OAuth-Client von Mobile Fuel Stations wird nicht verwendet.

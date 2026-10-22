@@ -31,6 +31,8 @@ test("German and English labels are available", () => {
   assert.equal(t("de", "fuelType.electric"), "Elektro");
   assert.equal(t("en", "vehicleKind.truck"), "Truck");
   assert.equal(t("en", "fuelType.petrol"), "Petrol");
+  assert.equal(t("de", "motorhomeBeta"), "Nakordoni – Beta");
+  assert.equal(t("en", "motorhomeBeta"), "Nakordoni – Beta");
 });
 
 test("track export eligibility requires existing geometry", () => {

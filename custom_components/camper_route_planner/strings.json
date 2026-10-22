@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Camper Route Planner",
-        "description": "Configure an independent routing provider. Nakordoni Motorhome routing runs only after an explicit manual action.",
+        "description": "Configure an independent routing provider. Nakordoni uses the motorhome route mode and runs only after an explicit manual action.",
         "data": {
           "name": "Name",
           "provider": "Routing provider",
@@ -26,6 +26,7 @@
       "carto_key_invalid": "The CARTO key is not valid for browser tile access.",
       "live_routing_requires_separate_phase": "This Nakordoni provider is not enabled for live routing.",
       "invalid_profile": "The selected vehicle profile is no longer available.",
+      "no_profiles_to_edit": "No vehicle profile exists to edit. Choose add or no vehicle changes.",
       "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
       "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
     },
@@ -46,7 +47,8 @@
           "carto_api_key": "Browser-safe CARTO key",
           "remove_carto_api_key": "Remove CARTO key",
           "geocoding_api_key": "Replace Geoapify API key (blank keeps current key)",
-          "remove_geocoding_api_key": "Remove Geoapify API key"
+          "remove_geocoding_api_key": "Remove Geoapify API key",
+          "vehicle_action": "Vehicle management"
         }
       },
       "vehicle_menu": {
@@ -82,12 +84,14 @@
     },
     "error": {
       "invalid_profile": "The vehicle profile is invalid. Check its dimensions and mass.",
+      "no_profiles_to_edit": "No vehicle profile exists to edit. Choose add or no vehicle changes.",
       "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
       "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
     }
   },
   "selector": {
-    "provider": { "options": { "mock": "Mock (offline)", "nakordoni": "Nakordoni", "nakordoni_motorhome": "Nakordoni Motorhome" } },
+    "provider": { "options": { "mock": "Mock (offline)", "nakordoni": "Legacy Nakordoni (disabled)", "nakordoni_motorhome": "Nakordoni" } },
+    "vehicle_action": { "options": { "none": "No vehicle changes", "edit": "Edit existing vehicle", "add": "Add new vehicle" } },
     "map_provider": { "options": { "none": "No map", "carto": "CARTO" } },
     "vehicle_kind": { "options": { "motorhome": "Motorhome", "truck": "Truck", "car": "Car" } },
     "fuel_type": { "options": { "diesel": "Diesel", "petrol": "Petrol", "electric": "Electric", "hybrid": "Hybrid", "other": "Other" } }
