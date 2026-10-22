@@ -13,7 +13,7 @@
     "error": { "invalid_profile": "Das Fahrzeugprofil ist ungültig. Maße und Masse prüfen.", "no_profiles_to_edit": "Es gibt kein Fahrzeugprofil zum Bearbeiten. Hinzufügen oder keine Änderungen wählen.", "delete_confirmation_required": "Die Löschung des ausgewählten Fahrzeugs bestätigen.", "profile_has_routes": "Dieses Fahrzeug wird von gespeicherten Routen verwendet. Das Löschen dieser Routen ausdrücklich aktivieren oder abbrechen." }
   },
   "selector": {
-    "provider": { "options": { "mock": "Mock (offline)", "nakordoni": "Legacy-Nakordoni (deaktiviert)", "nakordoni_motorhome": "Nakordoni" } },
+    "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni" } },
     "vehicle_action": { "options": { "none": "Keine Änderungen an Fahrzeugen", "edit": "Vorhandenes Fahrzeug bearbeiten", "add": "Neues Fahrzeug hinzufügen" } },
     "map_provider": { "options": { "none": "Keine Karte", "carto": "CARTO" } },
     "vehicle_kind": { "options": { "motorhome": "Wohnmobil", "truck": "Lkw", "car": "Pkw" } },

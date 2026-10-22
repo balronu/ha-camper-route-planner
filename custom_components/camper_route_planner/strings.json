@@ -90,7 +90,7 @@
     }
   },
   "selector": {
-    "provider": { "options": { "mock": "Mock (offline)", "nakordoni": "Legacy Nakordoni (disabled)", "nakordoni_motorhome": "Nakordoni" } },
+    "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni" } },
     "vehicle_action": { "options": { "none": "No vehicle changes", "edit": "Edit existing vehicle", "add": "Add new vehicle" } },
     "map_provider": { "options": { "none": "No map", "carto": "CARTO" } },
     "vehicle_kind": { "options": { "motorhome": "Motorhome", "truck": "Truck", "car": "Car" } },

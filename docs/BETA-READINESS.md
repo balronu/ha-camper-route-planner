@@ -2,7 +2,7 @@
 
 ## Status
 
-**Beta-Kandidat:** `v0.1.0-beta.19`. Die Lovelace-Installationskette ist für
+**Beta-Kandidat:** `v0.1.0-beta.20`. Die Lovelace-Installationskette ist für
 HA 2026.10.1 isoliert geprüft. `v0.1.0 Stable` ist weiterhin nicht
 veröffentlicht. Der Plan für Phase 2F–2I steht in
 `docs/PHASE2F-2I-PLAN.md`.
@@ -21,9 +21,9 @@ Installations-/Update-/Deinstallationslauf, WebKit/iOS und produktive HA-
 Prüfungen. Diese Grenzen werden nicht als reale HACS- oder iOS-Nachweise
 ausgegeben.
 
-Live-Nakordoni-Routing ist für diese Beta nicht erforderlich und bleibt bis zu
-einer separaten Freigabe deaktiviert. VM 104 und produktive Dashboards bleiben
-unverändert; die Veröffentlichung erfolgt ausschließlich über GitHub/HACS.
+Live-Nakordoni-Routing wurde für diese Beta nicht durch OpenClaw ausgeführt.
+VM 104 und produktive Dashboards bleiben unverändert; die Veröffentlichung
+erfolgt ausschließlich über GitHub/HACS.
 
 Truck-Routing darf bis zur tatsächlichen Verfügbarkeit und Prüfung von
 Nakordonis `vehicle_type=motorhome` nicht als sichere Wohnmobilnavigation

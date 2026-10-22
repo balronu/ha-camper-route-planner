@@ -5,9 +5,9 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0-beta.19` candidate (not published). The Lovelace card is validated with
-> an isolated HA 2026.10.1 fixture and Chromium. The current implementation
-> uses deterministic mock routing only and is not verified motorhome navigation.
+> **Status:** `v0.1.0-beta.20` test beta (pre-release). The Lovelace card is validated
+> with an isolated HA 2026.10.1 fixture and Chromium. Nakordoni motorhome routing
+> remains an explicitly manual beta feature with no automatic fallback.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -29,10 +29,8 @@ profiles, an interactive map, saved routes, and GPX export.
 - per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
 - Geoapify address search and reverse geocoding through the HA Options Flow (backend-only, mockable)
 
-## Not available yet
+## Beta limitations
 
-- production Nakordoni routing
-- Nakordoni `vehicle_type=motorhome`
 - verified motorhome navigation
 - real Nakordoni/provider live validation
 
@@ -42,10 +40,12 @@ fallback for motorhome mode.
 
 ## Installation and configuration
 
-The beta can be installed as a HACS custom repository or by copying the
+The pre-release beta can be installed as a HACS custom repository or by copying the
 integration to `custom_components/camper_route_planner/`, then setting it up
-through **Settings → Devices & services**. The current local mode uses the
-mock provider.
+through **Settings → Devices & services**. The Options Flow offers `Nakordoni`
+(internally `nakordoni_motorhome`) and `Mock (offline)`. Vehicle changes default
+to no changes; provider/key updates preserve existing profiles, IDs, and tracker
+assignments.
 
 The map supports a browser-safe CARTO configuration and an SVG fallback. No
 credentials belong in the frontend, screenshots, logs, GPX files, or Git.
@@ -65,10 +65,9 @@ available. Reverse geocoding resolves GPS, map, and dragged marker positions to
 readable addresses after a short delay; repeated coordinates use the cache.
 Coordinates remain authoritative when no address is returned.
 
-Beta.11 contains the Phase 3H branding, map, vehicle, translation, and
-Options Flow fixes. Live Geoapify calls and the
-productive HA presentation have not been validated; VM 104 and the productive
-Home Assistant system remain unchanged.
+Beta.20 contains the navigation handoff, the cleaned provider selection, and the
+non-destructive vehicle Options Flow. This project made no live Geoapify or
+Nakordoni calls; VM 104 and the productive Home Assistant system remain unchanged.
 
 ## Nakordoni status
 
@@ -77,7 +76,8 @@ with the existing access. This project has not made a live request. Truck
 routing has a separate daily quota: Explorer 10 and Starter 300 routes/day,
 with additional quota possible.
 
-`vehicle_type=motorhome` is available through the controlled beta runtime path.
+`vehicle_type=motorhome` is available only through the explicitly visible
+`Nakordoni` provider and its controlled beta runtime path.
 The profile carries motorhome dimensions, weight, and axles without EU truck
 driving/rest-time fields. The personal key is sent only through Home
 Assistant's transport; Mock is never an automatic fallback. Traffic signs and
@@ -113,7 +113,7 @@ npm run build
 npm run test:e2e
 ```
 
-See the [beta.19 release notes](docs/releases/v0.1.0-beta.19.md) for the
+See the [beta.20 release notes](docs/releases/v0.1.0-beta.20.md) for the
 installation and test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is already validated by
 GitHub Actions. A Stable release and productive HA installation are outside
