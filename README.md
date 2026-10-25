@@ -155,7 +155,9 @@ erfolgt weiterhin manuell durch den jeweiligen Betreiber.
    Rückfallbasis erhalten.
 2. Weitere Funktionen werden erst nach einem separaten Änderungsauftrag
    entwickelt.
-3. Eine mögliche Camper-Suite-Migration ist nicht Bestandteil dieses Releases.
+3. Eine Migration zur inzwischen eingestellten SmartCamper Suite ist nicht
+   Bestandteil dieses Releases; die Suite bleibt nur als historisches,
+   stillgelegtes Repository erhalten.
 
 ## Nakordoni Motorhome (Anbieterstatus)
 
