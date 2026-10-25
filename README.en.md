@@ -127,7 +127,8 @@ Actions. Installation into productive HA systems remains an operator action.
 
 1. Stable `v0.1.0` is published and remains an independent fallback basis.
 2. Further features require a separate change request.
-3. A possible Camper Suite migration is outside this release.
+3. Migration to the discontinued SmartCamper Suite is outside this release;
+   the Suite remains only as a historical, discontinued repository.
 
 ## Nakordoni motorhome (provider status)
 
