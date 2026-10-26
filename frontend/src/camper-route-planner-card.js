@@ -14,6 +14,7 @@ const formatCoordinate = (value) => {
 function renderBorderCrossings(result, translate) {
   const crossings = result?.metadata?.border_crossings;
   if (!Array.isArray(crossings)) return "";
+  if (!crossings.length && result?.metadata?.border_state === "unordered_international") return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3><p class="subtle">${translate("borderInternationalAmbiguous")}</p></section>`;
   const rows = crossings.length ? crossings.map((crossing) => {
     const direction = [crossing.from_country, crossing.to_country].filter(Boolean).join(" → ") || "—";
     const wait = crossing.wait_min == null ? translate("borderNoWait") : `${Math.round(Number(crossing.wait_min))} min`;
@@ -21,8 +22,9 @@ function renderBorderCrossings(result, translate) {
     const basis = side?.basis === "forecast" ? translate("borderForecast") : side?.basis === "live" ? translate("borderLive") : null;
     const source = crossing.source_url ? `<a href="${escapeHtml(crossing.source_url)}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a>` : translate("dataByNakordoni");
     const quality = side?.data_quality === "low" ? translate("borderEstimate") : (side?.data_quality || basis || "—");
-    return `<article class="border-crossing"><b>${escapeHtml(direction)}</b>${crossing.name ? `<div>${translate("borderName")}: ${escapeHtml(crossing.name)}</div>` : ""}<div><span>${translate("borderWait")}: ${escapeHtml(wait)}</span>${basis ? ` · ${escapeHtml(basis)}` : ""}</div><small>${translate("borderDataAt")}: ${escapeHtml(crossing.wait_at || "—")} · ${translate("borderQuality")}: ${escapeHtml(quality)} · ${translate("borderSource")}: ${source}</small>${crossing.wait_notes?.length ? `<small>${escapeHtml(crossing.wait_notes.join(" "))}</small>` : ""}</article>`;
-  }).join("") : `<p class="subtle">${translate("noBorderCrossings")}</p>`;
+    const inferred = crossing.inferred ? `<small>${translate("borderInferred")}</small>` : "";
+    return `<article class="border-crossing"><b>${escapeHtml(direction)}</b>${crossing.name ? `<div>${translate("borderName")}: ${escapeHtml(crossing.name)}</div>` : ""}<div><span>${translate("borderWait")}: ${escapeHtml(wait)}</span>${basis ? ` · ${escapeHtml(basis)}` : ""}</div><small>${translate("borderDataAt")}: ${escapeHtml(crossing.wait_at || "—")} · ${translate("borderQuality")}: ${escapeHtml(quality)} · ${translate("borderSource")}: ${source}</small>${crossing.wait_notes?.length ? `<small>${escapeHtml(crossing.wait_notes.join(" "))}</small>` : ""}${inferred}</article>`;
+  }).join("") : `<p class="subtle">${translate(result?.metadata?.border_state === "unordered_international" ? "borderInternationalAmbiguous" : "noBorderCrossings")}</p>`;
   return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3>${rows}</section>`;
 }
 
@@ -30,9 +32,10 @@ function renderTollDetails(result, translate) {
   const tolls = result?.metadata?.tolls;
   if (!tolls) return "";
   const total = tolls.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "EUR")}` : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
-  const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => `<li>${escapeHtml(item.country || "—")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} · ${escapeHtml(item.system || "—")}${item.status ? ` · ${escapeHtml(item.status)}` : ""}</li>`).join("") : "";
-  const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "—")}: ${item.cost_eur != null ? `${escapeHtml(item.cost_eur)} EUR` : translate("tollUnavailable")}${item.country ? ` · ${escapeHtml(item.country)}` : ""}</li>`).join("") : "";
-  return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${tolls.coverage_note ? `<small>${escapeHtml(tolls.coverage_note)}</small>` : ""}</section>`;
+  const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => { const system = translate(`tollSystemName.${item.system}`); const status = translate(`tollStatus.${item.status}`); return `<li>${escapeHtml(item.country || "—")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} · ${escapeHtml(system === `tollSystemName.${item.system}` ? item.system || "—" : system)}${item.status ? ` · ${escapeHtml(status === `tollStatus.${item.status}` ? item.status : status)}` : ""}</li>`; }).join("") : "";
+  const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "—")}: ${item.cost_eur != null ? `${escapeHtml(item.cost_eur)} EUR` : translate("tollUnavailable")}${item.country ? ` · ${escapeHtml(item.country)}` : ""}${item.status ? ` · ${escapeHtml(translate(`tollStatus.${item.status}`))}` : ""}</li>`).join("") : "";
+  const tariffNotice = result?.metadata?.tariff_basis_uncertain ? `<p class="subtle">${translate("tariffBasisUncertain")}</p>` : "";
+  return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${tolls.coverage_note ? `<small>${escapeHtml(tolls.coverage_note)}</small>` : ""}${tariffNotice}</section>`;
 }
 
 class CamperRoutePlannerCardEditor extends HTMLElement {

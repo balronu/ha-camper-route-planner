@@ -208,6 +208,7 @@ try:
                 "gross_weight_kg": profile.gross_weight_kg if profile else 4800,
                 "fuel_type": profile.fuel_type if profile else "diesel",
                 "axles": profile.axles if profile else 2,
+                "emission_class": profile.emission_class if profile else "",
                 "tracker_entity_id": profile.tracker_entity_id if profile else "",
             }
             tracker_key = vol.Optional("tracker_entity_id", default=profile.tracker_entity_id) if profile and profile.tracker_entity_id else vol.Optional("tracker_entity_id")
@@ -221,6 +222,7 @@ try:
                 vol.Required("gross_weight_kg", default=defaults["gross_weight_kg"]): vol.Coerce(int),
                 vol.Required("fuel_type", default=defaults["fuel_type"]): _select_selector(("diesel", "petrol", "electric", "hybrid", "other"), "fuel_type"),
                 vol.Required("axles", default=defaults["axles"]): vol.Coerce(int),
+                vol.Optional("emission_class", default=defaults["emission_class"]): vol.In({"": "Not specified", **{f"euro{index}": f"Euro {index}" for index in range(7)}}),
                 tracker_key: _entity_selector(),
                 **({vol.Optional("delete_profile", default=False): bool} if profile else {}),
             })
@@ -238,6 +240,7 @@ try:
                         profile_id=editing_id or user_input["profile_id"], name=user_input["name"], vehicle_kind=user_input["vehicle_kind"],
                         height_m=float(user_input["height_m"]), width_m=float(user_input["width_m"]), length_m=float(user_input["length_m"]),
                         gross_weight_kg=int(user_input["gross_weight_kg"]), fuel_type=user_input["fuel_type"], axles=int(user_input.get("axles", 2)),
+                        emission_class=user_input.get("emission_class") or None,
                         tracker_entity_id=user_input.get("tracker_entity_id") or (DEFAULT_ZOE_TRACKER if str(user_input["name"]).strip().casefold() == "zoe" else None),
                     )
                     runtime = self._runtime()

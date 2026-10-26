@@ -33,6 +33,11 @@ test("German and English labels are available", () => {
   assert.equal(t("en", "fuelType.petrol"), "Petrol");
   assert.equal(t("de", "motorhomeBeta"), "Nakordoni – Beta");
   assert.equal(t("en", "motorhomeBeta"), "Nakordoni – Beta");
+  assert.equal(t("de", "tollSystemName.exempt"), "Befreit");
+  assert.equal(t("de", "tollSystemName.section"), "Streckenmaut");
+  assert.equal(t("de", "tollSystemName.flat_daily"), "Tagespauschale");
+  assert.equal(t("de", "tollStatus.likely"), "Wahrscheinlich");
+  assert.equal(t("en", "tollStatus.confirmed"), "Confirmed");
 });
 
 test("track export eligibility requires existing geometry", () => {
