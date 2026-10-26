@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.4; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.5; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -9614,6 +9614,15 @@
       tollReference: "Offizielle Tarifquelle",
       tollSystemName: { none: "Keine Maut", exempt: "Befreit", vignette: "Vignette", distance: "Entfernungsmaut", flat_daily: "Tagespauschale", section: "Streckenmaut" },
       tollStatus: { confirmed: "Best\xE4tigt", likely: "Wahrscheinlich" },
+      tollSummary: "Maut \u2013 gesch\xE4tzte Gesamtkosten",
+      tollCalculationBasis: "Berechnungsgrundlage",
+      tollNotes: "Tarifhinweise",
+      tollTechnicalInfo: "Technische Anbieterinformationen",
+      providerVatIncluded: "Die Anbieterangabe enth\xE4lt Mehrwertsteuer.",
+      providerConvertedToEur: "Die Anbieterbetr\xE4ge wurden in EUR umgerechnet.",
+      providerPeriodCharge: "Die Anbieterangabe gilt f\xFCr einen bestimmten Zeitraum.",
+      providerCityAccess: "Zus\xE4tzliche Stadtzufahrtsgeb\xFChren sind m\xF6glicherweise nicht enthalten.",
+      providerTruckTariff: "Ein Lkw-Tarif darf nicht automatisch auf ein Wohnmobil \xFCbertragen werden.",
       borderCrossings: "Grenz\xFCberg\xE4nge",
       noBorderCrossings: "Keine Grenz\xFCberg\xE4nge auf dieser Route",
       borderInternationalAmbiguous: "Internationale Route erkannt \u2013 Grenz\xFCberg\xE4nge konnten nicht eindeutig zugeordnet werden",
@@ -9712,6 +9721,15 @@
       tollReference: "Official tariff source",
       tollSystemName: { none: "No toll", exempt: "Exempt", vignette: "Vignette", distance: "Distance toll", flat_daily: "Daily flat rate", section: "Section toll" },
       tollStatus: { confirmed: "Confirmed", likely: "Likely" },
+      tollSummary: "Tolls \u2013 estimated total cost",
+      tollCalculationBasis: "Calculation basis",
+      tollNotes: "Tariff notes",
+      tollTechnicalInfo: "Technical provider information",
+      providerVatIncluded: "The provider note includes VAT.",
+      providerConvertedToEur: "The provider amounts were converted to EUR.",
+      providerPeriodCharge: "The provider note applies to a defined period.",
+      providerCityAccess: "Additional city-access charges may not be included.",
+      providerTruckTariff: "A truck tariff must not automatically be applied to a motorhome.",
       borderCrossings: "Border crossings",
       noBorderCrossings: "No border crossings on this route",
       borderInternationalAmbiguous: "International route detected \u2013 border crossings could not be assigned unambiguously",
@@ -10839,16 +10857,63 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	}
 `;
 
-  // src/provider-notes.js
-  function providerNoteText(raw, language = "en") {
-    const note = String(raw ?? "").trim();
-    if (!note) return "";
-    const knownEmission = /^emission class\s+not\s+given\s*:\s*euro\s*6\s+assumed\b/i;
-    if (knownEmission.test(note)) {
-      const remainder = note.replace(knownEmission, "").trim();
-      return `${t(language, "providerEmissionAssumed")}${remainder ? ` ${t(language, "providerOriginal")}: ${remainder}` : ""}`;
+  // src/toll-display.js
+  var COUNTRY_NAMES = {
+    AT: { de: "\xD6sterreich", en: "Austria" },
+    CH: { de: "Schweiz", en: "Switzerland" },
+    DE: { de: "Deutschland", en: "Germany" },
+    FR: { de: "Frankreich", en: "France" },
+    IT: { de: "Italien", en: "Italy" }
+  };
+  var KNOWN_PROVIDER_HINTS = [
+    { pattern: /emission\s+class\s+not\s+given/i, key: "providerEmissionAssumed" },
+    { pattern: /euro\s*6\s+assumed/i, key: "providerEmissionAssumed" },
+    { pattern: /(?:includes?|incl\.?|including)\s+(?:the\s+)?(?:vat|value\s+added\s+tax)/i, key: "providerVatIncluded" },
+    { pattern: /converted\s+to\s+(?:eur|euro)/i, key: "providerConvertedToEur" },
+    { pattern: /(?:vignette|daily fee|daily charge).*(?:valid|period|day)/i, key: "providerPeriodCharge" },
+    { pattern: /(?:city|urban)\s+(?:access|entry)\s+(?:fee|charge)/i, key: "providerCityAccess" },
+    { pattern: /truck\s+tariff.*(?:motorhome|camper|rv)/i, key: "providerTruckTariff" }
+  ];
+  function formatTollAmount(value, currency = "EUR", language = "en") {
+    if (value == null || value === "") return "";
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return `${value} ${currency}`;
+    try {
+      return new Intl.NumberFormat(language === "de" ? "de-DE" : "en-US", {
+        style: "currency",
+        currency: String(currency || "EUR").toUpperCase(),
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(numeric);
+    } catch (_error) {
+      return `${numeric.toFixed(2)} ${currency || "EUR"}`;
     }
-    return `${t(language, "providerHint")}: ${note}`;
+  }
+  function tollCountryName(value, language = "en") {
+    const code = String(value ?? "").trim().toUpperCase();
+    return COUNTRY_NAMES[code]?.[language] || value || "\u2014";
+  }
+  function knownProviderHint(raw, language) {
+    const note = String(raw ?? "").trim();
+    if (!note) return null;
+    const match = KNOWN_PROVIDER_HINTS.find((item) => item.pattern.test(note));
+    if (!match) return null;
+    const remainder = note.replace(match.pattern, "").replace(/^[\s:;,.()-]+|[\s:;,.()-]+$/g, "").trim();
+    return { text: t(language, match.key), original: remainder };
+  }
+  function classifyProviderText(raw, language = "en") {
+    const note = String(raw ?? "").trim();
+    if (!note) return { known: [], unknown: [] };
+    const known = knownProviderHint(note, language);
+    return known ? { known: [known], unknown: [] } : { known: [], unknown: [note] };
+  }
+  function tollCalculationText(item, language = "en") {
+    const distance = item?.distance_km ?? item?.kilometers ?? item?.km;
+    const rate = item?.rate_eur_per_km ?? item?.rate_per_km ?? item?.price_per_km;
+    if (distance == null || rate == null) return "";
+    const distanceText = new Intl.NumberFormat(language === "de" ? "de-DE" : "en-US", { maximumFractionDigits: 1 }).format(Number(distance));
+    const rateText = formatTollAmount(rate, "EUR", language);
+    return `${t(language, "tollCalculationBasis")}: ${distanceText} km \xD7 ${rateText}/km`;
   }
 
   // src/camper-route-planner-card.js
@@ -10877,19 +10942,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
   function renderTollDetails(result, translate, language) {
     const tolls = result?.metadata?.tolls;
     if (!tolls) return "";
-    const total = tolls.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "EUR")}` : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
+    const total = tolls.total != null ? formatTollAmount(tolls.total, tolls.currency || "EUR", language) : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
+    const knownHints = [];
+    const unknownTexts = [];
+    const collectProviderText = (raw) => {
+      const classified = classifyProviderText(raw, language);
+      knownHints.push(...classified.known);
+      unknownTexts.push(...classified.unknown);
+    };
     const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => {
       const system = translate(`tollSystemName.${item.system}`);
       const status = translate(`tollStatus.${item.status}`);
       const systemLabel = system === `tollSystemName.${item.system}` ? translate("unknown") : system;
       const statusLabel = status === `tollStatus.${item.status}` ? translate("unknown") : status;
-      const tariff = item.tariff ? `<small>${escapeHtml(providerNoteText(item.tariff, language))}</small>` : "";
-      return `<li>${escapeHtml(item.country || "\u2014")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} \xB7 ${escapeHtml(systemLabel)}${item.status ? ` \xB7 ${escapeHtml(statusLabel)}` : ""}${tariff}</li>`;
+      collectProviderText(item.tariff);
+      const amount = item.total ?? item.amount;
+      const amountText = amount != null ? formatTollAmount(amount, item.currency || tolls.currency || "EUR", language) : translate("tollUnavailable");
+      const calculation = tollCalculationText(item, language);
+      return `<article class="toll-country"><div class="toll-country-heading"><b>${escapeHtml(tollCountryName(item.country, language))}</b><strong>${escapeHtml(amountText)}</strong></div><div class="toll-country-meta">${escapeHtml(systemLabel)}${item.status ? ` \xB7 ${escapeHtml(statusLabel)}` : ""}</div>${calculation ? `<small>${escapeHtml(calculation)}</small>` : ""}</article>`;
     }).join("") : "";
-    const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "\u2014")}: ${item.cost_eur != null ? `${escapeHtml(item.cost_eur)} EUR` : translate("tollUnavailable")}${item.country ? ` \xB7 ${escapeHtml(item.country)}` : ""}${item.status ? ` \xB7 ${escapeHtml(translate(`tollStatus.${item.status}`))}` : ""}</li>`).join("") : "";
+    const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "\u2014")}: ${item.cost_eur != null ? escapeHtml(formatTollAmount(item.cost_eur, "EUR", language)) : translate("tollUnavailable")}${item.country ? ` \xB7 ${escapeHtml(tollCountryName(item.country, language))}` : ""}${item.status ? ` \xB7 ${escapeHtml(translate(`tollStatus.${item.status}`))}` : ""}</li>`).join("") : "";
+    collectProviderText(tolls.coverage_note);
     const tariffNotice = result?.metadata?.tariff_basis_uncertain ? `<p class="subtle">${translate("tariffBasisUncertain")}</p>` : "";
-    const providerNote = tolls.coverage_note ? `<small>${escapeHtml(providerNoteText(tolls.coverage_note, language))}</small>` : "";
-    return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${providerNote}${tariffNotice}</section>`;
+    const knownNotes = knownHints.length ? `<div class="toll-known-notes"><b>${translate("tollNotes")}</b><ul>${knownHints.map((hint) => `<li>${escapeHtml(hint.text)}${hint.original ? ` <span class="subtle">(${escapeHtml(hint.original)})</span>` : ""}</li>`).join("")}</ul></div>` : "";
+    const technicalNotes = unknownTexts.length ? `<details class="provider-details"><summary>${translate("tollTechnicalInfo")}</summary><ul>${[...new Set(unknownTexts)].map((note) => `<li lang="en">${escapeHtml(note)}</li>`).join("")}</ul></details>` : "";
+    return `<section class="route-details toll-details"><h3>${translate("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
@@ -11507,7 +11584,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
   };
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
-  var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details ul{margin:6px 0;padding-left:20px}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
+  var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
   if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "camper-route-planner-card")) window.customCards.push({ type: "camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });
