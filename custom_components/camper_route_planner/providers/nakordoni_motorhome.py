@@ -83,6 +83,9 @@ def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
         # The documented Truck Route contract uses one pipe-separated via
         # parameter, not repeated query parameters.
         parameters["via"] = "|".join(f"{p.latitude},{p.longitude}" for p in request.waypoints)
+    emission_class = getattr(request.vehicle, "emission_class", None)
+    if emission_class:
+        parameters["emission_class"] = emission_class
     if FORBIDDEN_TRUCK_TIME_FIELDS.intersection(parameters):
         raise ValidationError("truck driver-time parameters are not valid for motorhomes")
     return parameters
@@ -128,14 +131,23 @@ def _toll_summary(raw: Any) -> dict[str, Any] | None:
     return result
 
 
+def _border_records(raw: Any) -> list[dict[str, Any]]:
+    """Accept the documented list and harmless response wrappers."""
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    if isinstance(raw, dict):
+        for key in ("border_crossings", "crossings", "items", "data"):
+            if key in raw:
+                records = _border_records(raw[key])
+                if records:
+                    return records
+    return []
+
+
 def _border_crossings(raw: Any) -> list[dict[str, Any]]:
     """Keep only documented, display-safe crossing fields from the route."""
-    if not isinstance(raw, list):
-        return []
     crossings: list[dict[str, Any]] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
+    for item in _border_records(raw):
         crossing: dict[str, Any] = {
             "name": str(item["name"]) if item.get("name") is not None else None,
             "ppid": str(item["ppid"]) if item.get("ppid") is not None else None,
@@ -153,11 +165,60 @@ def _border_crossings(raw: Any) -> list[dict[str, Any]]:
             "registration_wait_source": str(item["registration_wait_source"]) if item.get("registration_wait_source") is not None else None,
             "registration_url": safe_provider_link(item.get("registration_url")),
         }
-        for field in ("lat", "lon", "km_from_start"):
-            value = item.get(field)
+        for field, aliases in (("lat", ("lat", "latitude")), ("lon", ("lon", "lng", "longitude")), ("km_from_start", ("km_from_start", "distance_km"))):
+            value = next((item.get(alias) for alias in aliases if item.get(alias) is not None), None)
             crossing[field] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
         crossings.append(crossing)
     return crossings
+
+
+def _ordered_countries(raw: Any) -> list[str] | None:
+    """Return a route order only when the response explicitly provides one."""
+    if isinstance(raw, list):
+        result: list[str] = []
+        for item in raw:
+            value = item.get("country") if isinstance(item, dict) else item
+            if isinstance(value, str) and value.strip():
+                result.append(value.strip().upper())
+        return result or None
+    if isinstance(raw, dict):
+        # Country maps are intentionally not treated as ordered data.
+        return None
+    return None
+
+
+def _country_set(raw: Any) -> list[str]:
+    """Return countries without claiming an order for map-shaped data."""
+    if isinstance(raw, dict):
+        return [str(key).strip().upper() for key in raw if str(key).strip()]
+    if isinstance(raw, list):
+        result = []
+        for item in raw:
+            value = item.get("country") if isinstance(item, dict) else item
+            if isinstance(value, str) and value.strip():
+                result.append(value.strip().upper())
+        return list(dict.fromkeys(result))
+    return []
+
+
+def _fallback_border_data(route: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    """Infer only country-to-country transitions from explicit route order."""
+    countries = _ordered_countries(route.get("countries"))
+    if countries is None:
+        countries = _ordered_countries(route.get("country_split"))
+    if countries is not None and len(countries) > 1:
+        return ([{
+            "name": None, "ppid": None, "from_country": source, "to_country": target,
+            "status": "country_sequence", "wait_min": None, "wait_at": None,
+            "wait_sides": [], "wait_notes": [], "source_url": None, "wait_capped": False,
+            "registration_required": False, "registration_wait_minutes": None,
+            "registration_wait_source": None, "registration_url": None,
+            "lat": None, "lon": None, "km_from_start": None,
+            "inferred": True,
+        } for source, target in zip(countries, countries[1:])], "ordered_country_sequence")
+    if len(_country_set(route.get("countries"))) > 1 or len(_country_set(route.get("country_split"))) > 1:
+        return [], "unordered_international"
+    return [], "national_or_unknown"
 
 
 def _route_points(raw: Any) -> tuple[RouteWaypoint, ...]:
@@ -208,12 +269,12 @@ class NakordoniMotorhomeProvider:
             raise ProviderError("Nakordoni network request failed", code="network_error", retryable=True) from exc
         except ValueError as exc:
             raise ProviderError("Nakordoni returned invalid JSON", code="invalid_response") from exc
-        return self.normalize_fixture(payload, synthetic=False)
+        return self.normalize_fixture(payload, synthetic=False, request=request)
 
     def build_parameters(self, request: RouteRequest) -> dict[str, Any]:
         return build_motorhome_parameters(request)
 
-    def normalize_fixture(self, payload: dict[str, Any], *, synthetic: bool = True) -> RouteResult:
+    def normalize_fixture(self, payload: dict[str, Any], *, synthetic: bool = True, request: RouteRequest | None = None) -> RouteResult:
         if payload.get("ok") is not True:
             raise provider_error_from_payload(payload)
         try:
@@ -228,6 +289,11 @@ class NakordoniMotorhomeProvider:
                 RouteWarning(str(item.get("code", "provider_warning")), str(item.get("message", "Provider warning")))
                 for item in warning_items if isinstance(item, dict)
             )
+            concrete_crossings = _border_crossings(route.get("border_crossings", []))
+            if concrete_crossings:
+                border_crossings, border_state = concrete_crossings, "confirmed"
+            else:
+                border_crossings, border_state = _fallback_border_data(route)
             metadata = {
                 "fixture": synthetic,
                 "beta": True,
@@ -237,8 +303,13 @@ class NakordoniMotorhomeProvider:
                 "countries": route.get("countries", []),
                 "country_split": route.get("country_split", []),
                 "restriction_hits": route.get("restriction_hits", []),
-                "border_crossings": _border_crossings(route.get("border_crossings", [])),
+                "border_crossings": border_crossings,
+                "border_state": border_state,
+                "border_data_source": "route.border_crossings" if border_state == "confirmed" else border_state,
                 "vehicle": vehicle,
+                "emission_class_requested": getattr(getattr(request, "vehicle", None), "emission_class", None),
+                "emission_class_returned": vehicle.get("emission_class"),
+                "tariff_basis_uncertain": not bool(vehicle.get("emission_class")),
                 "attribution": data.get("attribution", ["Data by nakordoni.eu"]),
             }
             return RouteResult(PROVIDER_NAME, float(route["distance_m"]), int(route["duration_s"]), RouteGeometry(points), warnings, metadata, synthetic)

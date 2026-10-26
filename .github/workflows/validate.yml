@@ -92,6 +92,7 @@ jobs:
         working-directory: frontend
 
   chromium:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -100,9 +101,15 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/package-lock.json') }}
       - run: npm ci
         working-directory: frontend
-      - run: npx playwright install --with-deps chromium
+      - name: Install Chromium with a bounded timeout
+        run: timeout --signal=TERM --kill-after=30s 12m npx playwright install --with-deps chromium
         working-directory: frontend
       - run: npm run test:e2e
         working-directory: frontend

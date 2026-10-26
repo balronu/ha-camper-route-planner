@@ -69,6 +69,7 @@
           "gross_weight_kg": "Permitted mass (kg)",
           "fuel_type": "Fuel type",
           "axles": "Number of axles",
+          "emission_class": "Emission class (optional; leave unspecified if unknown)",
           "tracker_entity_id": "Vehicle GPS tracker entity",
           "delete_profile": "Delete this vehicle profile"
         }

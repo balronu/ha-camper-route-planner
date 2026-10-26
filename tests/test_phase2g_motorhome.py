@@ -23,6 +23,11 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertEqual(params["axles"], 2)
         self.assertFalse(FORBIDDEN_TRUCK_TIME_FIELDS.intersection(params))
 
+    def test_optional_emission_class_is_only_sent_when_profile_supplies_it(self):
+        self.assertNotIn("emission_class", build_motorhome_parameters(request()))
+        profile = VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", axles=2, emission_class="euro6")
+        self.assertEqual(build_motorhome_parameters(request(vehicle=profile))["emission_class"], "euro6")
+
     def test_missing_required_dimension_is_rejected(self):
         profile = VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", axles=2)
         object.__setattr__(profile, "height_m", None)
@@ -78,6 +83,60 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertEqual(tolls["total"], 12.5)
         self.assertEqual(tolls["countries"][0]["total"], 12.5)
         self.assertEqual(tolls["objects"][0]["type"], "bridge")
+
+    def test_ordered_countries_produce_explicitly_inferred_transitions(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [46, 7]],
+            "countries": ["DE", "FR", "CH"], "border_crossings": [],
+        }}})
+        crossings = result.metadata["border_crossings"]
+        self.assertEqual([(item["from_country"], item["to_country"]) for item in crossings], [("DE", "FR"), ("FR", "CH")])
+        self.assertTrue(all(item["inferred"] and item["lat"] is None and item["wait_min"] is None for item in crossings))
+        self.assertEqual(result.metadata["border_state"], "ordered_country_sequence")
+
+    def test_country_split_is_ordered_fallback(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [46, 7]],
+            "country_split": [{"country": "DE"}, {"country": "AT"}, {"country": "IT"}],
+        }}})
+        self.assertEqual([(x["from_country"], x["to_country"]) for x in result.metadata["border_crossings"]], [("DE", "AT"), ("AT", "IT")])
+
+    def test_unordered_country_map_never_becomes_a_sequence(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [46, 7]],
+            "countries": {"DE": {"km": 100}, "FR": {"km": 50}, "CH": {"km": 20}},
+        }}})
+        self.assertEqual(result.metadata["border_crossings"], [])
+        self.assertEqual(result.metadata["border_state"], "unordered_international")
+
+    def test_national_route_is_not_reported_as_international(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [47, 10]], "countries": ["DE"],
+        }}})
+        self.assertEqual(result.metadata["border_crossings"], [])
+        self.assertEqual(result.metadata["border_state"], "national_or_unknown")
+
+    def test_nested_border_payload_and_coordinate_aliases_are_normalized(self):
+        payload = {
+            "ok": True,
+            "data": {"route": {
+                "distance_m": 1000,
+                "duration_s": 100,
+                "geometry": [[48, 11], [46, 7]],
+                "border_crossings": {"items": [{"from_country": "DE", "to_country": "AT", "latitude": 47.1, "longitude": 11.2}]},
+            }},
+        }
+        result = NakordoniMotorhomeProvider().normalize_fixture(payload)
+        crossing = result.metadata["border_crossings"][0]
+        self.assertEqual((crossing["lat"], crossing["lon"]), (47.1, 11.2))
+        self.assertEqual(result.metadata["border_state"], "confirmed")
+
+    def test_returned_vehicle_emission_class_is_preserved_and_uncertainty_is_explicit(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"vehicle": {"emission_class": "euro6"}, "route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [46, 7]],
+        }}})
+        self.assertEqual(result.metadata["emission_class_returned"], "euro6")
+        self.assertFalse(result.metadata["tariff_basis_uncertain"])
 
     def test_error_mapping_and_safe_links(self):
         error = provider_error_from_payload({"status": 429, "error": {"code": "quota_exceeded"}})
