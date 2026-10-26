@@ -1,12 +1,13 @@
-# Release-/Tag-Bereinigung für v0.1.1-beta.3
+# Release-/Tag-Bereinigung für v0.1.1-beta.4
 
-Prüfstand: GitHub Releases und Tags am 26.10.2026. Es wurde nichts gelöscht.
+Prüfstand: GitHub Releases und Tags am 26.10.2026 vor Beta.4. Es wurde noch nichts gelöscht.
 
 | Version | Veröffentlichungsdatum | Status | Empfehlung nach Beta.3 | Grund |
 |---|---:|---|---|---|
 | `v0.1.0` | 2026-10-22 | Stable | **Behalten** | Stable-Rückfallbasis und aktuellste Stable |
-| `v0.1.1-beta.3` | noch nicht veröffentlicht | Pre-release | **Behalten** | geplante aktuelle Hotfix-Beta |
-| `v0.1.1-beta.2` | 2026-10-26 | Pre-release | **Behalten** | unmittelbare Rückfallbasis für Beta.3 |
+| `v0.1.1-beta.4` | nach Veröffentlichung | Pre-release | **Behalten** | aktuelle Test-Beta |
+| `v0.1.1-beta.3` | 2026-10-26 | Pre-release | **Behalten** | geprüfte Rückfallbasis bis zur Beta.4-Abnahme |
+| `v0.1.1-beta.2` | 2026-10-26 | Pre-release | Entfernen nach Beta.4-Prüfung | durch Beta.3 ersetzt; keine aktive Referenz gefunden |
 | `v0.1.1-beta.1` | 2026-10-26 | Pre-release | Entfernen vorschlagen | durch Beta.2/Beta.3 ersetzt; keine bekannte Referenz |
 | `v0.1.0-beta.21` | 2026-10-22 | Pre-release | Entfernen vorschlagen | alte Stable-Vorbereitungs-Beta |
 | `v0.1.0-beta.20` | 2026-10-22 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
@@ -27,4 +28,4 @@ Prüfstand: GitHub Releases und Tags am 26.10.2026. Es wurde nichts gelöscht.
 | `v0.1.0-beta.5` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
 | `v0.1.0-beta.4` | kein GitHub-Release gefunden | Tag ohne Release | Entfernen vorschlagen | alter Tag ohne veröffentlichtes Release |
 
-Die Löschvorschläge benötigen eine separate ausdrückliche Freigabe. Danach sind Release und Tag jeweils separat, reversibel zu dokumentieren; anschließend ist die HACS-Versionsauswahl erneut zu prüfen.
+Für Beta.4 sind die oben genannten historischen Releases und Tags ausdrücklich freigegeben. Vor dem Löschen wurden Release, Tag, Branches/PRs, CI-Verweise, Dokumentationsverweise, Assets und Rollback-Bedeutung geprüft; keine Branches, Commits oder Source-Historie werden gelöscht. Nach der Bereinigung sind Release-Liste, Tags und die HACS-Datenquelle erneut zu prüfen.

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { addWaypoint, buildNavigationLink, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
+import { providerNoteText } from "../src/provider-notes.js";
 
 test("coordinates and waypoint ordering are validated deterministically", () => {
   assert.equal(isValidWaypoint({ latitude: 49, longitude: 7 }), true);
@@ -38,6 +39,9 @@ test("German and English labels are available", () => {
   assert.equal(t("de", "tollSystemName.flat_daily"), "Tagespauschale");
   assert.equal(t("de", "tollStatus.likely"), "Wahrscheinlich");
   assert.equal(t("en", "tollStatus.confirmed"), "Confirmed");
+  assert.match(providerNoteText("Emission class not given: Euro 6 assumed (incl. VAT)", "de"), /Emissionsklasse nicht angegeben/);
+  assert.match(providerNoteText("Provider-specific tariff wording", "de"), /Anbieterhinweis \(Original\)/);
+  assert.match(providerNoteText("Emission class not given: Euro 6 assumed (incl. VAT)", "en"), /not given/);
 });
 
 test("track export eligibility requires existing geometry", () => {
