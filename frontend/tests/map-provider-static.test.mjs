@@ -14,6 +14,8 @@ test("map implementation keeps Leaflet, CARTO and SVG fallback in the bundle sou
   assert.match(source, /map\.invalidateSize\(\{ pan: false \}\)/);
   assert.match(source, /mapUnavailable/);
   assert.match(source, /setView\(\[51, 10\], 5\)/);
+  assert.match(source, /updateLeafletBorderMarkers/);
+  assert.match(source, /borderCrossings/);
 });
 
 test("Leaflet positioning CSS is bundled for the card shadow DOM", async () => {

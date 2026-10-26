@@ -108,6 +108,7 @@ def _toll_summary(raw: Any) -> dict[str, Any] | None:
         "estimate": raw.get("estimate") if isinstance(raw.get("estimate"), bool) else None,
         "coverage_note": str(raw["coverage_note"]) if raw.get("coverage_note") is not None else None,
         "currency": str(raw["currency"]) if raw.get("currency") else None,
+        "vat": str(raw["vat"]) if raw.get("vat") else None,
     }
     amount = raw.get("total_eur", raw.get("total"))
     if isinstance(amount, (int, float)) and not isinstance(amount, bool):
@@ -122,7 +123,41 @@ def _toll_summary(raw: Any) -> dict[str, Any] | None:
         for country in result["countries"]:
             if "amount" in country and "total" not in country:
                 country["total"] = country["amount"]
+    objects = raw.get("objects", [])
+    result["objects"] = [item for item in objects if isinstance(item, dict)] if isinstance(objects, list) else []
     return result
+
+
+def _border_crossings(raw: Any) -> list[dict[str, Any]]:
+    """Keep only documented, display-safe crossing fields from the route."""
+    if not isinstance(raw, list):
+        return []
+    crossings: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        crossing: dict[str, Any] = {
+            "name": str(item["name"]) if item.get("name") is not None else None,
+            "ppid": str(item["ppid"]) if item.get("ppid") is not None else None,
+            "from_country": str(item["from_country"]) if item.get("from_country") is not None else None,
+            "to_country": str(item["to_country"]) if item.get("to_country") is not None else None,
+            "status": str(item["status"]) if item.get("status") is not None else None,
+            "wait_min": item.get("wait_min") if isinstance(item.get("wait_min"), (int, float)) and not isinstance(item.get("wait_min"), bool) else None,
+            "wait_at": str(item["wait_at"]) if item.get("wait_at") is not None else None,
+            "wait_sides": [side for side in item.get("wait_sides", []) if isinstance(side, dict)] if isinstance(item.get("wait_sides", []), list) else [],
+            "wait_notes": [str(note) for note in item.get("wait_notes", [])] if isinstance(item.get("wait_notes", []), list) else [],
+            "source_url": safe_provider_link(item.get("source_url")),
+            "wait_capped": bool(item.get("wait_capped", False)),
+            "registration_required": bool(item.get("registration_required", False)),
+            "registration_wait_minutes": item.get("registration_wait_minutes") if isinstance(item.get("registration_wait_minutes"), (int, float)) and not isinstance(item.get("registration_wait_minutes"), bool) else None,
+            "registration_wait_source": str(item["registration_wait_source"]) if item.get("registration_wait_source") is not None else None,
+            "registration_url": safe_provider_link(item.get("registration_url")),
+        }
+        for field in ("lat", "lon", "km_from_start"):
+            value = item.get(field)
+            crossing[field] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        crossings.append(crossing)
+    return crossings
 
 
 def _route_points(raw: Any) -> tuple[RouteWaypoint, ...]:
@@ -202,6 +237,7 @@ class NakordoniMotorhomeProvider:
                 "countries": route.get("countries", []),
                 "country_split": route.get("country_split", []),
                 "restriction_hits": route.get("restriction_hits", []),
+                "border_crossings": _border_crossings(route.get("border_crossings", [])),
                 "vehicle": vehicle,
                 "attribution": data.get("attribution", ["Data by nakordoni.eu"]),
             }

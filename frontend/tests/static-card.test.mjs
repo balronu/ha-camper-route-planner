@@ -80,6 +80,16 @@ test("card uses a native collapsible shell and preserves card state", () => {
   assert.doesNotMatch(source, /Beta \/ Mock-Routing/);
 });
 
+test("card renders route-provided border crossings and toll details without browser API calls", () => {
+  assert.match(source, /border_crossings/);
+  assert.match(source, /renderBorderCrossings/);
+  assert.match(source, /renderTollDetails/);
+  assert.match(source, /borderNoWait/);
+  assert.match(source, /borderCrossings/);
+  assert.match(source, /borderCrossings: result\?\.metadata/);
+  assert.doesNotMatch(source, /fetch\(|XMLHttpRequest\(/);
+});
+
 test("status line has translated provider names and manual calculation wording", async () => {
   const localization = await readFile(new URL("../src/localization.js", import.meta.url), "utf8");
   assert.match(localization, /providerName: \{ mock: "Mock \(offline\)", nakordoni: "Nakordoni"/);
