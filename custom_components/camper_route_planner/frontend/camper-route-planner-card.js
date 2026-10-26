@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.1; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.2; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -9609,6 +9609,20 @@
       tollEstimate: "Sch\xE4tzung",
       tollIncomplete: "Mautdaten unvollst\xE4ndig",
       tollUnavailable: "Keine Mautpreisinformation",
+      tollCountry: "Land",
+      tollSystem: "System",
+      tollReference: "Offizielle Tarifquelle",
+      borderCrossings: "Grenz\xFCberg\xE4nge",
+      noBorderCrossings: "Keine Grenz\xFCberg\xE4nge auf dieser Route",
+      borderName: "Grenz\xFCbergang",
+      borderWait: "Wartezeit",
+      borderNoWait: "Keine aktuellen Wartezeitdaten verf\xFCgbar",
+      borderDataAt: "Datenstand",
+      borderSource: "Quelle",
+      borderQuality: "Datenqualit\xE4t",
+      borderLive: "Live",
+      borderForecast: "Prognose",
+      borderEstimate: "Modellierte Sch\xE4tzung",
       providerUnavailable: "Provider nicht verf\xFCgbar",
       invalidCoordinates: "Ung\xFCltige Koordinaten",
       calculationFailed: "Berechnung fehlgeschlagen",
@@ -9685,6 +9699,20 @@
       tollEstimate: "Estimate",
       tollIncomplete: "Toll data incomplete",
       tollUnavailable: "No toll price information",
+      tollCountry: "Country",
+      tollSystem: "System",
+      tollReference: "Official tariff source",
+      borderCrossings: "Border crossings",
+      noBorderCrossings: "No border crossings on this route",
+      borderName: "Border crossing",
+      borderWait: "Wait time",
+      borderNoWait: "No current wait-time data available",
+      borderDataAt: "Data timestamp",
+      borderSource: "Source",
+      borderQuality: "Data quality",
+      borderLive: "Live",
+      borderForecast: "Forecast",
+      borderEstimate: "Modelled estimate",
       providerUnavailable: "Provider unavailable",
       invalidCoordinates: "Invalid coordinates",
       calculationFailed: "Calculation failed",
@@ -9908,6 +9936,7 @@
   var CRP_LEAFLET_OPTIONS = Symbol("camper-route-planner-leaflet-options");
   var CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
   var CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
+  var CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -9976,6 +10005,7 @@
       container[CRP_LEAFLET_ROUTE] = null;
       container[CRP_LEAFLET_OPTIONS] = null;
       container[CRP_LEAFLET_LABELS] = null;
+      container[CRP_LEAFLET_BORDER_MARKERS] = null;
     }
   }
   function markerIcon(target) {
@@ -9988,6 +10018,9 @@
       iconAnchor: [15, 36],
       tooltipAnchor: [0, -30]
     });
+  }
+  function borderMarkerIcon() {
+    return import_leaflet.default.divIcon({ className: "crp-marker crp-marker-border", html: '<span aria-hidden="true">B</span>', iconSize: [30, 38], iconAnchor: [15, 36] });
   }
   function updateLeafletMarkers(container, points) {
     const map = container?.[CRP_LEAFLET_MAP];
@@ -10003,6 +10036,21 @@
       return marker;
     });
     container[CRP_LEAFLET_MARKERS] = markers;
+    return true;
+  }
+  function updateLeafletBorderMarkers(container, crossings = []) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map) return false;
+    for (const marker of container[CRP_LEAFLET_BORDER_MARKERS] || []) marker.remove();
+    const labels = container[CRP_LEAFLET_LABELS] || {};
+    const markers = crossings.filter((item) => Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon))).map((item) => {
+      const marker = import_leaflet.default.marker([Number(item.lat), Number(item.lon)], { icon: borderMarkerIcon() });
+      const direction = [item.from_country, item.to_country].filter(Boolean).join(" \u2192 ");
+      const wait = item.wait_min == null ? labels.borderNoWait || "No current wait-time data" : `${Math.round(Number(item.wait_min))} min`;
+      marker.addTo(map).bindTooltip(`${item.name || labels.borderCrossing || "Border crossing"}${direction ? ` \xB7 ${direction}` : ""} \xB7 ${wait}`);
+      return marker;
+    });
+    container[CRP_LEAFLET_BORDER_MARKERS] = markers;
     return true;
   }
   function updateLeafletRoute(container, route, points = []) {
@@ -10041,6 +10089,7 @@
     const validPoints = points || [];
     updateLeafletRoute(container, options.route, validPoints);
     updateLeafletMarkers(container, validPoints);
+    updateLeafletBorderMarkers(container, options.borderCrossings || []);
     fitMapToPoints(container, validPoints, Boolean(options.fitBounds));
     return true;
   }
@@ -10094,6 +10143,7 @@
       layer.addTo(map);
       updateLeafletRoute(container, route, points);
       updateLeafletMarkers(container, points);
+      updateLeafletBorderMarkers(container, options.borderCrossings || []);
       if (points.length === 1) {
         map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
       } else if (points.length > 1) {
@@ -10780,6 +10830,28 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (!Number.isFinite(number)) return String(value ?? "");
     return number.toFixed(6).replace(/\.?0+$/, "");
   };
+  function renderBorderCrossings(result, translate) {
+    const crossings = result?.metadata?.border_crossings;
+    if (!Array.isArray(crossings)) return "";
+    const rows = crossings.length ? crossings.map((crossing) => {
+      const direction = [crossing.from_country, crossing.to_country].filter(Boolean).join(" \u2192 ") || "\u2014";
+      const wait = crossing.wait_min == null ? translate("borderNoWait") : `${Math.round(Number(crossing.wait_min))} min`;
+      const side = Array.isArray(crossing.wait_sides) ? crossing.wait_sides[0] : null;
+      const basis = side?.basis === "forecast" ? translate("borderForecast") : side?.basis === "live" ? translate("borderLive") : null;
+      const source = crossing.source_url ? `<a href="${escapeHtml(crossing.source_url)}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a>` : translate("dataByNakordoni");
+      const quality = side?.data_quality === "low" ? translate("borderEstimate") : side?.data_quality || basis || "\u2014";
+      return `<article class="border-crossing"><b>${escapeHtml(direction)}</b>${crossing.name ? `<div>${translate("borderName")}: ${escapeHtml(crossing.name)}</div>` : ""}<div><span>${translate("borderWait")}: ${escapeHtml(wait)}</span>${basis ? ` \xB7 ${escapeHtml(basis)}` : ""}</div><small>${translate("borderDataAt")}: ${escapeHtml(crossing.wait_at || "\u2014")} \xB7 ${translate("borderQuality")}: ${escapeHtml(quality)} \xB7 ${translate("borderSource")}: ${source}</small>${crossing.wait_notes?.length ? `<small>${escapeHtml(crossing.wait_notes.join(" "))}</small>` : ""}</article>`;
+    }).join("") : `<p class="subtle">${translate("noBorderCrossings")}</p>`;
+    return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3>${rows}</section>`;
+  }
+  function renderTollDetails(result, translate) {
+    const tolls = result?.metadata?.tolls;
+    if (!tolls) return "";
+    const total = tolls.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "EUR")}` : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
+    const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => `<li>${escapeHtml(item.country || "\u2014")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} \xB7 ${escapeHtml(item.system || "\u2014")}${item.status ? ` \xB7 ${escapeHtml(item.status)}` : ""}</li>`).join("") : "";
+    const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "\u2014")}: ${item.cost_eur != null ? `${escapeHtml(item.cost_eur)} EUR` : translate("tollUnavailable")}${item.country ? ` \xB7 ${escapeHtml(item.country)}` : ""}</li>`).join("") : "";
+    return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${tolls.coverage_note ? `<small>${escapeHtml(tolls.coverage_note)}</small>` : ""}</section>`;
+  }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
       this.config = { ...config };
@@ -11316,12 +11388,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       if (result?.provider === "nakordoni_motorhome") {
         const resultPanel = this.shadowRoot.querySelector(".result");
         resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
-        const tolls = result.metadata?.tolls;
-        resultPanel?.insertAdjacentHTML("beforeend", `<div class="notice"><b>${translate("tolls")}</b>: ${tolls?.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "")}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}` : tolls?.complete === false ? translate("tollIncomplete") : translate("tollUnavailable")}</div>`);
+        resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate)}`);
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
-      const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine") };
-      const mapOptions = { points: this.mapPoints(), route: result, fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") };
+      const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
       const mapHost = this.shadowRoot.querySelector(".map-host");
       if (preserveMap) {
         mapHost.append(oldMap);
@@ -11397,7 +11468,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
   };
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
-  var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions{min-width:0}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
+  var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details ul{margin:6px 0;padding-left:20px}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
   if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "camper-route-planner-card")) window.customCards.push({ type: "camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });

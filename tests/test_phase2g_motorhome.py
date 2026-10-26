@@ -59,6 +59,26 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         self.assertIsNone(result.metadata["tolls"]["total"])
         self.assertTrue(any(item.code == "motorhome_beta" for item in result.warnings))
 
+    def test_fixture_preserves_directional_crossings_without_fabricating_wait(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"vehicle": {"type": "motorhome", "beta": True}, "route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [45, 10]],
+            "border_crossings": [{"name": "Example crossing", "ppid": "id_1", "from_country": "DE", "to_country": "AT", "lat": 47.2, "lon": 11.1, "wait_min": None, "wait_at": "2026-10-26T12:00:00Z", "wait_sides": [{"basis": "live", "data_quality": "low"}], "source_url": "https://nakordoni.eu/en/p/example"}],
+        }}})
+        crossing = result.metadata["border_crossings"][0]
+        self.assertEqual((crossing["from_country"], crossing["to_country"]), ("DE", "AT"))
+        self.assertIsNone(crossing["wait_min"])
+        self.assertEqual(crossing["source_url"], "https://nakordoni.eu/en/p/example")
+
+    def test_fixture_keeps_toll_objects_and_country_coverage(self):
+        result = NakordoniMotorhomeProvider().normalize_fixture({"ok": True, "data": {"route": {
+            "distance_m": 1000, "duration_s": 100, "geometry": [[48, 11], [45, 10]],
+            "tolls": {"currency": "EUR", "total_eur": 12.5, "complete": False, "by_country": [{"country": "AT", "amount": 12.5, "system": "distance", "status": "confirmed"}], "objects": [{"name": "Bridge", "type": "bridge", "country": "AT", "cost_eur": 2.0}]},
+        }}})
+        tolls = result.metadata["tolls"]
+        self.assertEqual(tolls["total"], 12.5)
+        self.assertEqual(tolls["countries"][0]["total"], 12.5)
+        self.assertEqual(tolls["objects"][0]["type"], "bridge")
+
     def test_error_mapping_and_safe_links(self):
         error = provider_error_from_payload({"status": 429, "error": {"code": "quota_exceeded"}})
         self.assertEqual(error.code, "quota_exceeded")

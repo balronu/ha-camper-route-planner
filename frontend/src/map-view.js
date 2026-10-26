@@ -10,6 +10,7 @@ const CRP_LEAFLET_MARKERS = Symbol("camper-route-planner-leaflet-markers");
 const CRP_LEAFLET_OPTIONS = Symbol("camper-route-planner-leaflet-options");
 const CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
 const CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
+const CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -68,6 +69,7 @@ export function destroyMap(container) {
     container[CRP_LEAFLET_ROUTE] = null;
     container[CRP_LEAFLET_OPTIONS] = null;
     container[CRP_LEAFLET_LABELS] = null;
+    container[CRP_LEAFLET_BORDER_MARKERS] = null;
   }
 }
 
@@ -81,6 +83,10 @@ function markerIcon(target) {
     iconAnchor: [15, 36],
     tooltipAnchor: [0, -30],
   });
+}
+
+function borderMarkerIcon() {
+  return L.divIcon({ className: "crp-marker crp-marker-border", html: "<span aria-hidden=\"true\">B</span>", iconSize: [30, 38], iconAnchor: [15, 36] });
 }
 
 function updateLeafletMarkers(container, points) {
@@ -97,6 +103,22 @@ function updateLeafletMarkers(container, points) {
     return marker;
   });
   container[CRP_LEAFLET_MARKERS] = markers;
+  return true;
+}
+
+function updateLeafletBorderMarkers(container, crossings = []) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return false;
+  for (const marker of container[CRP_LEAFLET_BORDER_MARKERS] || []) marker.remove();
+  const labels = container[CRP_LEAFLET_LABELS] || {};
+  const markers = crossings.filter((item) => Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon))).map((item) => {
+    const marker = L.marker([Number(item.lat), Number(item.lon)], { icon: borderMarkerIcon() });
+    const direction = [item.from_country, item.to_country].filter(Boolean).join(" → ");
+    const wait = item.wait_min == null ? labels.borderNoWait || "No current wait-time data" : `${Math.round(Number(item.wait_min))} min`;
+    marker.addTo(map).bindTooltip(`${item.name || labels.borderCrossing || "Border crossing"}${direction ? ` · ${direction}` : ""} · ${wait}`);
+    return marker;
+  });
+  container[CRP_LEAFLET_BORDER_MARKERS] = markers;
   return true;
 }
 
@@ -139,6 +161,7 @@ export function updateMapPoints(container, points, labels = {}, options = {}) {
   const validPoints = points || [];
   updateLeafletRoute(container, options.route, validPoints);
   updateLeafletMarkers(container, validPoints);
+  updateLeafletBorderMarkers(container, options.borderCrossings || []);
   fitMapToPoints(container, validPoints, Boolean(options.fitBounds));
   return true;
 }
@@ -195,6 +218,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     layer.addTo(map);
     updateLeafletRoute(container, route, points);
     updateLeafletMarkers(container, points);
+    updateLeafletBorderMarkers(container, options.borderCrossings || []);
     if (points.length === 1) {
       map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
     } else if (points.length > 1) {
