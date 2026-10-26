@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.3; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.4; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -9628,6 +9628,9 @@
       borderForecast: "Prognose",
       borderEstimate: "Modellierte Sch\xE4tzung",
       tariffBasisUncertain: "Tarifgrundlage unsicher: keine best\xE4tigte Emissionsklasse im Fahrzeugprofil oder in der Providerantwort.",
+      providerHint: "Anbieterhinweis (Original)",
+      providerEmissionAssumed: "Anbieterangabe: Emissionsklasse nicht angegeben; der Anbieter rechnet mit Euro 6. Dies ist keine best\xE4tigte Fahrzeugeigenschaft.",
+      providerOriginal: "Originaltext des Anbieters",
       providerUnavailable: "Provider nicht verf\xFCgbar",
       invalidCoordinates: "Ung\xFCltige Koordinaten",
       calculationFailed: "Berechnung fehlgeschlagen",
@@ -9723,6 +9726,9 @@
       borderForecast: "Forecast",
       borderEstimate: "Modelled estimate",
       tariffBasisUncertain: "Tariff basis uncertain: no confirmed emission class was supplied by the vehicle profile or provider response.",
+      providerHint: "Provider note (original)",
+      providerEmissionAssumed: "Provider statement: emission class was not given; the provider calculates with Euro 6. This is not a confirmed vehicle property.",
+      providerOriginal: "Original provider text",
       providerUnavailable: "Provider unavailable",
       invalidCoordinates: "Invalid coordinates",
       calculationFailed: "Calculation failed",
@@ -10833,6 +10839,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	}
 `;
 
+  // src/provider-notes.js
+  function providerNoteText(raw, language = "en") {
+    const note = String(raw ?? "").trim();
+    if (!note) return "";
+    const knownEmission = /^emission class\s+not\s+given\s*:\s*euro\s*6\s+assumed\b/i;
+    if (knownEmission.test(note)) {
+      const remainder = note.replace(knownEmission, "").trim();
+      return `${t(language, "providerEmissionAssumed")}${remainder ? ` ${t(language, "providerOriginal")}: ${remainder}` : ""}`;
+    }
+    return `${t(language, "providerHint")}: ${note}`;
+  }
+
   // src/camper-route-planner-card.js
   var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
   var formatCoordinate = (value) => {
@@ -10856,18 +10874,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }).join("") : `<p class="subtle">${translate(result?.metadata?.border_state === "unordered_international" ? "borderInternationalAmbiguous" : "noBorderCrossings")}</p>`;
     return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3>${rows}</section>`;
   }
-  function renderTollDetails(result, translate) {
+  function renderTollDetails(result, translate, language) {
     const tolls = result?.metadata?.tolls;
     if (!tolls) return "";
     const total = tolls.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "EUR")}` : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
     const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => {
       const system = translate(`tollSystemName.${item.system}`);
       const status = translate(`tollStatus.${item.status}`);
-      return `<li>${escapeHtml(item.country || "\u2014")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} \xB7 ${escapeHtml(system === `tollSystemName.${item.system}` ? item.system || "\u2014" : system)}${item.status ? ` \xB7 ${escapeHtml(status === `tollStatus.${item.status}` ? item.status : status)}` : ""}</li>`;
+      const systemLabel = system === `tollSystemName.${item.system}` ? translate("unknown") : system;
+      const statusLabel = status === `tollStatus.${item.status}` ? translate("unknown") : status;
+      const tariff = item.tariff ? `<small>${escapeHtml(providerNoteText(item.tariff, language))}</small>` : "";
+      return `<li>${escapeHtml(item.country || "\u2014")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} \xB7 ${escapeHtml(systemLabel)}${item.status ? ` \xB7 ${escapeHtml(statusLabel)}` : ""}${tariff}</li>`;
     }).join("") : "";
     const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "\u2014")}: ${item.cost_eur != null ? `${escapeHtml(item.cost_eur)} EUR` : translate("tollUnavailable")}${item.country ? ` \xB7 ${escapeHtml(item.country)}` : ""}${item.status ? ` \xB7 ${escapeHtml(translate(`tollStatus.${item.status}`))}` : ""}</li>`).join("") : "";
     const tariffNotice = result?.metadata?.tariff_basis_uncertain ? `<p class="subtle">${translate("tariffBasisUncertain")}</p>` : "";
-    return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${tolls.coverage_note ? `<small>${escapeHtml(tolls.coverage_note)}</small>` : ""}${tariffNotice}</section>`;
+    const providerNote = tolls.coverage_note ? `<small>${escapeHtml(providerNoteText(tolls.coverage_note, language))}</small>` : "";
+    return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${providerNote}${tariffNotice}</section>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
@@ -11405,7 +11427,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       if (result?.provider === "nakordoni_motorhome") {
         const resultPanel = this.shadowRoot.querySelector(".result");
         resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
-        resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate)}`);
+        resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate, language)}`);
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
       const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") };

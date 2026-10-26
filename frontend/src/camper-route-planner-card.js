@@ -3,6 +3,7 @@ import { addWaypoint, buildNavigationLink, formatDistance, formatDuration, hasTr
 import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
+import { providerNoteText } from "./provider-notes.js";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const formatCoordinate = (value) => {
@@ -10,6 +11,7 @@ const formatCoordinate = (value) => {
   if (!Number.isFinite(number)) return String(value ?? "");
   return number.toFixed(6).replace(/\.?0+$/, "");
 };
+
 
 function renderBorderCrossings(result, translate) {
   const crossings = result?.metadata?.border_crossings;
@@ -28,14 +30,15 @@ function renderBorderCrossings(result, translate) {
   return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3>${rows}</section>`;
 }
 
-function renderTollDetails(result, translate) {
+function renderTollDetails(result, translate, language) {
   const tolls = result?.metadata?.tolls;
   if (!tolls) return "";
   const total = tolls.total != null ? `${escapeHtml(tolls.total)} ${escapeHtml(tolls.currency || "EUR")}` : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
-  const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => { const system = translate(`tollSystemName.${item.system}`); const status = translate(`tollStatus.${item.status}`); return `<li>${escapeHtml(item.country || "—")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} · ${escapeHtml(system === `tollSystemName.${item.system}` ? item.system || "—" : system)}${item.status ? ` · ${escapeHtml(status === `tollStatus.${item.status}` ? item.status : status)}` : ""}</li>`; }).join("") : "";
+  const countries = Array.isArray(tolls.countries) ? tolls.countries.map((item) => { const system = translate(`tollSystemName.${item.system}`); const status = translate(`tollStatus.${item.status}`); const systemLabel = system === `tollSystemName.${item.system}` ? translate("unknown") : system; const statusLabel = status === `tollStatus.${item.status}` ? translate("unknown") : status; const tariff = item.tariff ? `<small>${escapeHtml(providerNoteText(item.tariff, language))}</small>` : ""; return `<li>${escapeHtml(item.country || "—")}: ${item.total != null || item.amount != null ? `${escapeHtml(item.total ?? item.amount)} ${escapeHtml(item.currency || tolls.currency || "EUR")}` : translate("tollUnavailable")} · ${escapeHtml(systemLabel)}${item.status ? ` · ${escapeHtml(statusLabel)}` : ""}${tariff}</li>`; }).join("") : "";
   const objects = Array.isArray(tolls.objects) ? tolls.objects.map((item) => `<li>${escapeHtml(item.name || item.type || "—")}: ${item.cost_eur != null ? `${escapeHtml(item.cost_eur)} EUR` : translate("tollUnavailable")}${item.country ? ` · ${escapeHtml(item.country)}` : ""}${item.status ? ` · ${escapeHtml(translate(`tollStatus.${item.status}`))}` : ""}</li>`).join("") : "";
   const tariffNotice = result?.metadata?.tariff_basis_uncertain ? `<p class="subtle">${translate("tariffBasisUncertain")}</p>` : "";
-  return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${tolls.coverage_note ? `<small>${escapeHtml(tolls.coverage_note)}</small>` : ""}${tariffNotice}</section>`;
+  const providerNote = tolls.coverage_note ? `<small>${escapeHtml(providerNoteText(tolls.coverage_note, language))}</small>` : "";
+  return `<section class="route-details toll-details"><h3>${translate("tolls")}: ${total}${tolls.estimate ? ` (${translate("tollEstimate")})` : ""}</h3>${countries ? `<ul>${countries}</ul>` : ""}${objects ? `<p><b>${translate("tollReference")}</b></p><ul>${objects}</ul>` : ""}${providerNote}${tariffNotice}</section>`;
 }
 
 class CamperRoutePlannerCardEditor extends HTMLElement {
@@ -493,7 +496,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (result?.provider === "nakordoni_motorhome") {
       const resultPanel = this.shadowRoot.querySelector(".result");
       resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
-      resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate)}`);
+      resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate, language)}`);
     }
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") };
