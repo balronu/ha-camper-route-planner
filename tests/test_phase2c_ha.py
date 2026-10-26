@@ -156,7 +156,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-        assert f"Camper Route Planner Card v0.1.1-beta.4" in body
+    assert f"Camper Route Planner Card v0.1.1-beta.4" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert 'return { entry_id: "" }' in body
     assert 'card.type === "camper-route-planner-card"' in body
