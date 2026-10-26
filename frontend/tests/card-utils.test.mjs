@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { addWaypoint, buildNavigationLink, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
+import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
 
 test("coordinates and waypoint ordering are validated deterministically", () => {
   assert.equal(isValidWaypoint({ latitude: 49, longitude: 7 }), true);
@@ -42,6 +43,25 @@ test("German and English labels are available", () => {
   assert.match(providerNoteText("Emission class not given: Euro 6 assumed (incl. VAT)", "de"), /Emissionsklasse nicht angegeben/);
   assert.match(providerNoteText("Provider-specific tariff wording", "de"), /Anbieterhinweis \(Original\)/);
   assert.match(providerNoteText("Emission class not given: Euro 6 assumed (incl. VAT)", "en"), /not given/);
+});
+
+test("toll display separates known provider hints from original text", () => {
+  const known = classifyProviderText("This amount includes VAT", "de");
+  assert.equal(known.known.length, 1);
+  assert.match(known.known[0].text, /Mehrwertsteuer/);
+  assert.equal(known.unknown.length, 0);
+  const unknown = classifyProviderText("Provider-specific tariff wording", "de");
+  assert.deepEqual(unknown.known, []);
+  assert.deepEqual(unknown.unknown, ["Provider-specific tariff wording"]);
+});
+
+test("toll amounts and calculation bases are locale-aware and data-driven", () => {
+  assert.equal(formatTollAmount(73.07, "EUR", "de"), "73,07 €");
+  assert.equal(formatTollAmount(27.04, "CHF", "en"), "CHF 27.04");
+  assert.equal(tollCountryName("DE", "de"), "Deutschland");
+  assert.equal(tollCountryName("CH", "en"), "Switzerland");
+  assert.match(tollCalculationText({ distance_km: 166.7, rate_eur_per_km: 0.2761 }, "de"), /166,7 km/);
+  assert.equal(tollCalculationText({ distance_km: 166.7 }, "de"), "");
 });
 
 test("track export eligibility requires existing geometry", () => {

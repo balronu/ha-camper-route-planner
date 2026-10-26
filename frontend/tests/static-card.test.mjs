@@ -90,6 +90,16 @@ test("card renders route-provided border crossings and toll details without brow
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest\(/);
 });
 
+test("toll details use a structured summary and collapsed technical provider section", () => {
+  assert.match(source, /tollSummary/);
+  assert.match(source, /toll-country-heading/);
+  assert.match(source, /provider-details/);
+  assert.match(source, /<details class="provider-details"><summary>/);
+  assert.match(source, /classifyProviderText/);
+  assert.match(source, /formatTollAmount/);
+  assert.doesNotMatch(source, /providerNoteText\(item\.tariff/);
+});
+
 test("status line has translated provider names and manual calculation wording", async () => {
   const localization = await readFile(new URL("../src/localization.js", import.meta.url), "utf8");
   assert.match(localization, /providerName: \{ mock: "Mock \(offline\)", nakordoni: "Nakordoni"/);
