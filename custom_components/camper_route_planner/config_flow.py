@@ -208,7 +208,7 @@ try:
                 "gross_weight_kg": profile.gross_weight_kg if profile else 4800,
                 "fuel_type": profile.fuel_type if profile else "diesel",
                 "axles": profile.axles if profile else 2,
-                "emission_class": profile.emission_class if profile else "",
+                "emission_class": (profile.emission_class or "") if profile else "",
                 "tracker_entity_id": profile.tracker_entity_id if profile else "",
             }
             tracker_key = vol.Optional("tracker_entity_id", default=profile.tracker_entity_id) if profile and profile.tracker_entity_id else vol.Optional("tracker_entity_id")
