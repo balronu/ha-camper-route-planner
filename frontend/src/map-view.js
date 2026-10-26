@@ -143,6 +143,14 @@ export function updateMapPoints(container, points, labels = {}, options = {}) {
   return true;
 }
 
+/** Refresh Leaflet's layout after a previously hidden card becomes visible. */
+export function invalidateMapSize(container) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return false;
+  map.invalidateSize({ pan: false });
+  return true;
+}
+
 export function renderMap(container, route, mapConfig, labels, onTileError = () => {}, options = {}) {
   destroyMap(container);
   const points = options.points || route?.geometry?.points || [];

@@ -25,7 +25,10 @@ try:
     @websocket_api.async_response
     async def ws_list_profiles(hass, connection, msg) -> None:
         runtime = hass.data.get("camper_route_planner", {}).get(msg["entry_id"])
-        connection.send_result(msg["id"], {"profiles": [profile.as_dict() for profile in runtime.store.profiles()] if runtime else []})
+        provider = ""
+        if runtime:
+            provider = str(runtime.config_values.get("provider", ""))
+        connection.send_result(msg["id"], {"profiles": [profile.as_dict() for profile in runtime.store.profiles()] if runtime else [], "provider": provider})
 
     @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/list_routes", vol.Required("entry_id"): str})
     @websocket_api.async_response

@@ -156,7 +156,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert f"Camper Route Planner Card v0.1.0" in body
+    assert f"Camper Route Planner Card v0.1.1-beta.1" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert 'return { entry_id: "" }' in body
     assert 'card.type === "camper-route-planner-card"' in body
@@ -179,7 +179,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.0" in await response.text()
+    assert "Camper Route Planner Card v0.1.1-beta.1" in await response.text()
 
 
 @pytest.mark.asyncio
@@ -249,6 +249,11 @@ async def test_websocket_lists_safe_config_entry_metadata(hass: HomeAssistant, h
     assert response["result"]["entries"] == [{"entry_id": entry.entry_id, "title": "Discovery Planner", "state": "loaded"}]
     assert "api_key" not in response["result"]
     assert "options" not in response["result"]
+    await client.send_json({"id": 2, "type": "camper_route_planner/list_profiles", "entry_id": entry.entry_id})
+    profiles = await client.receive_json()
+    assert profiles["success"] is True
+    assert profiles["result"]["provider"] == PROVIDER_MOCK
+    assert "api_key" not in profiles["result"]
 
 
 @pytest.mark.asyncio
