@@ -16,7 +16,7 @@ const server = createServer((request, response) => {
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const port = server.address().port;
-const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || chromium.executablePath(), headless: true, args: ["--no-sandbox"] });
 
 const resourcePage = await browser.newPage({ viewport: { width: 1024, height: 800 } });
 const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resource-test`);
