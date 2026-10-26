@@ -69,3 +69,20 @@ test("navigation handoff is local, platform-aware and keeps GPX export", () => {
   assert.match(services, /export_gpx/);
   assert.doesNotMatch(source, /calculateRoute\([^)]*navigation/);
 });
+
+test("card uses a native collapsible shell and preserves card state", () => {
+  assert.match(source, /<details|createElement\("details"\)/);
+  assert.match(source, /createElement\("summary"\)/);
+  assert.match(source, /_cardExpanded/);
+  assert.match(source, /handleCardToggle/);
+  assert.match(source, /invalidateMapSize/);
+  assert.match(source, /aria-expanded/);
+  assert.doesNotMatch(source, /Beta \/ Mock-Routing/);
+});
+
+test("status line has translated provider names and manual calculation wording", async () => {
+  const localization = await readFile(new URL("../src/localization.js", import.meta.url), "utf8");
+  assert.match(localization, /providerName: \{ mock: "Mock \(offline\)", nakordoni: "Nakordoni"/);
+  assert.match(localization, /manualOnly: "Berechnung nur nach Klick"/);
+  assert.match(localization, /manualOnly: "Calculation only after click"/);
+});

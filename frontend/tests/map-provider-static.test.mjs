@@ -10,6 +10,8 @@ test("map implementation keeps Leaflet, CARTO and SVG fallback in the bundle sou
   assert.match(source, /map\.setView\(\[51, 10\], 5\)/);
   assert.doesNotMatch(source, /points\.length >= 1/);
   assert.match(source, /ResizeObserver/);
+  assert.match(source, /export function invalidateMapSize/);
+  assert.match(source, /map\.invalidateSize\(\{ pan: false \}\)/);
   assert.match(source, /mapUnavailable/);
   assert.match(source, /setView\(\[51, 10\], 5\)/);
 });

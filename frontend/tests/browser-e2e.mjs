@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.0"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.1"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.0`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.0/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.1`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.1/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -57,7 +57,7 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
       language: "en",
       connection: {},
       callWS: async (message) => {
-        if (message.type.endsWith("/list_profiles")) return { profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
+        if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
         if (message.type.endsWith("/tracker_position")) return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } };
@@ -73,6 +73,10 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
     };
     globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; } };
   }, geocodeError);
+  await page.locator("details.route-planner-shell").waitFor();
+  assert.equal(await page.locator("details.route-planner-shell").getAttribute("open"), null, "card starts collapsed");
+  assert.match(await page.locator(".status-line").textContent(), /Test motorhome · Mock \(offline\) · Calculation only after click/, "collapsed header shows the selected vehicle, provider and manual-only status");
+  await page.locator("summary.route-planner-summary").click();
   await page.locator(".panel").first().waitFor();
   return page;
 }
@@ -230,6 +234,21 @@ await desktop.waitForFunction(() => document.querySelector("camper-route-planner
 assert.equal(await desktop.locator('input[data-point="origin"][data-field="longitude"]').inputValue(), "8.5417", "tracker point fills origin coordinates");
 await desktop.evaluate(() => document.querySelector("camper-route-planner-card").calculate());
 await desktop.locator(".metrics").waitFor();
+const collapseState = await desktop.evaluate(() => {
+  const card = document.querySelector("camper-route-planner-card");
+  const host = card.shadowRoot.querySelector(".crp-map");
+  return { calls: globalThis.__crp.calculateCalls, host, leafletId: host?._leaflet_id, destination: { ...card._state.destination }, geometry: card._state.result?.geometry };
+});
+await desktop.locator("summary.route-planner-summary").click();
+assert.equal(await desktop.locator("details.route-planner-shell").getAttribute("open"), null, "header click collapses the card");
+assert.equal(await desktop.locator(".metrics").isVisible(), false, "route details are hidden while collapsed");
+assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), collapseState.calls, "collapsing does not calculate again");
+await desktop.locator("summary.route-planner-summary").click();
+await desktop.locator(".metrics").waitFor();
+assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), collapseState.calls, "reopening does not calculate again");
+assert.deepEqual(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination), collapseState.destination, "destination survives collapse and reopen");
+assert.deepEqual(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.result.geometry), collapseState.geometry, "route geometry survives collapse and reopen");
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map")?._leaflet_id), collapseState.leafletId, "reopening keeps the existing Leaflet instance");
 const desktopNavigation = desktop.locator('.navigation-actions .navigation-link');
 assert.equal(await desktopNavigation.count(), 1, "a valid route renders a direct navigation link");
 assert.match(await desktopNavigation.getAttribute("href"), /^https:\/\/www\.openstreetmap\.org\/directions\?route=/, "desktop uses the browser fallback");
@@ -297,6 +316,7 @@ await auto.evaluate(() => {
   } };
   globalThis.__autoCard = card;
 });
+await auto.locator("summary.route-planner-summary").click();
 await auto.locator(".panel").first().waitFor();
 assert.equal(await auto.evaluate(() => globalThis.__autoCard._config.entry_id), "auto-entry", "single entry is auto-selected");
 assert.equal(await auto.evaluate(() => window.customCards.filter((item) => item.type === "camper-route-planner-card").length), 1, "catalog registration is idempotent");
