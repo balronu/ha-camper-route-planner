@@ -28,6 +28,12 @@ try:
         vol.Optional("via", default=[]): list,
         vol.Optional("route_name", default="manual route"): cv.string,
         vol.Optional("force_refresh", default=False): cv.boolean,
+        vol.Optional("traffic", default="off"): vol.In({"off", "live", "forecast"}),
+        vol.Optional("alternatives", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
+        vol.Optional("avoid", default=[]): [vol.In({"tolls", "motorways", "ferries", "tunnels"})],
+        vol.Optional("route_type", default="fastest"): vol.In({"fastest", "eco"}),
+        vol.Optional("depart_at"): cv.string,
+        vol.Optional("arrive_at"): cv.string,
     })
 
     async def _async_register_frontend(hass: HomeAssistant) -> None:

@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.11; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.12; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13825,6 +13825,36 @@
       duration: "Fahrzeit",
       warnings: "Warnungen",
       noRoute: "Keine Route vorhanden",
+      routeOptions: "Routenoptionen",
+      trafficModeLabel: "Verkehr",
+      routeType: "Routentyp",
+      fastest: "Schnellste Route",
+      eco: "ECO-Routing",
+      alternatives: "Alternativen",
+      departAt: "Abfahrt",
+      arriveAt: "Ankunft",
+      plannedRequest: "Eine bewusste Berechnung startet eine API-Anfrage; Alternativen werden in derselben Anfrage angefordert.",
+      avoidTolls: "Maut vermeiden",
+      avoidMotorways: "Autobahnen vermeiden",
+      avoidFerries: "F\xE4hren vermeiden",
+      avoidTunnels: "Tunnel vermeiden",
+      alternativesNoWaypoints: "Alternativen sind mit Zwischenzielen nicht verf\xFCgbar.",
+      trafficRestrictions: "Verkehr & Einschr\xE4nkungen",
+      restriction: "Einschr\xE4nkung",
+      restrictionActive: "Aktiv",
+      restrictionConsidered: "Beim Routing ber\xFCcksichtigt",
+      restrictionInfo: "Anbieterinformation",
+      validity: "G\xFCltigkeit/Datenstand",
+      noRestrictions: "Keine belastbaren Einschr\xE4nkungen vorhanden",
+      providerWarnings: "Anbieterwarnungen",
+      fuelRange: "Kraftstoff & Reichweite",
+      estimatedFuel: "Gesch\xE4tzter Gesamtverbrauch",
+      availableRange: "Reichweite ab aktuellem Stand",
+      fuelShortfall: "Reichweite reicht nicht aus",
+      fuelSufficient: "Rechnerische Reichweite reicht aus",
+      fuelDataMissing: "Tankinhalt, F\xFCllstand oder Verbrauch fehlen; nur vorhandene Werte werden angezeigt.",
+      estimatedCost: "Voraussichtliche Kosten",
+      trafficMode: { off: "Ohne Verkehr", live: "Live-Verkehr", forecast: "Verkehrsprognose" },
       mockRoute: "Mock-Route",
       motorhomeBeta: "Nakordoni \u2013 Beta",
       motorhomeWarning: "Wohnmobil-Routing befindet sich in der Beta-Phase. Verkehrszeichen und geltende Vorschriften haben Vorrang.",
@@ -13937,6 +13967,36 @@
       duration: "Travel time",
       warnings: "Warnings",
       noRoute: "No route available",
+      routeOptions: "Route options",
+      trafficModeLabel: "Traffic",
+      routeType: "Route type",
+      fastest: "Fastest route",
+      eco: "ECO routing",
+      alternatives: "Alternatives",
+      departAt: "Departure",
+      arriveAt: "Arrival",
+      plannedRequest: "An explicit calculation starts one API request; alternatives are requested in that same request.",
+      avoidTolls: "Avoid tolls",
+      avoidMotorways: "Avoid motorways",
+      avoidFerries: "Avoid ferries",
+      avoidTunnels: "Avoid tunnels",
+      alternativesNoWaypoints: "Alternatives are unavailable with waypoints.",
+      trafficRestrictions: "Traffic & restrictions",
+      restriction: "Restriction",
+      restrictionActive: "Active",
+      restrictionConsidered: "Considered by routing",
+      restrictionInfo: "Provider information",
+      validity: "Validity/data timestamp",
+      noRestrictions: "No reliable restrictions available",
+      providerWarnings: "Provider warnings",
+      fuelRange: "Fuel & range",
+      estimatedFuel: "Estimated total consumption",
+      availableRange: "Range from current level",
+      fuelShortfall: "Available range is insufficient",
+      fuelSufficient: "Calculated range is sufficient",
+      fuelDataMissing: "Tank capacity, fuel level or consumption is missing; only available values are shown.",
+      estimatedCost: "Estimated cost",
+      trafficMode: { off: "Without traffic", live: "Live traffic", forecast: "Traffic forecast" },
       mockRoute: "Mock route",
       motorhomeBeta: "Nakordoni \u2013 Beta",
       motorhomeWarning: "Motorhome routing is in beta. Traffic signs and applicable regulations take precedence.",
@@ -14099,8 +14159,22 @@
       attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
       origin: payload.origin || null,
       destination: payload.destination || null,
-      waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
+      waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : [],
+      route_options: payload.route_options || payload.metadata?.request_options || {}
     };
+  }
+  function calculateFuelPlan(distanceM, profile = {}) {
+    const consumption = Number(profile.consumption_l_per_100km);
+    const distanceKm = Number(distanceM) / 1e3;
+    const totalLiters = Number.isFinite(consumption) && consumption > 0 && Number.isFinite(distanceKm) ? distanceKm * consumption / 100 : null;
+    const tank = Number(profile.tank_capacity_l);
+    const level = Number.isFinite(Number(profile.fuel_level_l)) ? Number(profile.fuel_level_l) : Number.isFinite(Number(profile.fuel_level_pct)) && Number.isFinite(tank) ? tank * Number(profile.fuel_level_pct) / 100 : null;
+    const reserve = Number.isFinite(Number(profile.reserve_l)) ? Number(profile.reserve_l) : 0;
+    const usable = level == null ? null : Math.max(0, level - reserve);
+    const rangeKm = usable == null || !consumption ? null : usable * 100 / consumption;
+    const deficit = totalLiters == null || usable == null ? null : Math.max(0, totalLiters - usable);
+    const price = Number(profile.diesel_price_per_l);
+    return { distanceKm, consumption, totalLiters, tank, level, reserve, usable, rangeKm, deficit, cost: totalLiters != null && Number.isFinite(price) ? totalLiters * price : null, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm };
   }
   function routeRecordFromResult(result, state) {
     const routeId = globalThis.crypto?.randomUUID?.() || `route-${Date.now()}`;
@@ -14118,7 +14192,8 @@
       waypoints: state.waypoints,
       warnings: result.warnings,
       metadata: result.metadata,
-      created_at: result.created_at
+      created_at: result.created_at,
+      route_options: result.route_options || result.metadata?.request_options || {}
     };
   }
   function hasTrackGeometry(route) {
@@ -14204,6 +14279,7 @@
   var CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
   var CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
   var CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
+  var CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-restriction-markers");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -14273,6 +14349,7 @@
       container[CRP_LEAFLET_OPTIONS] = null;
       container[CRP_LEAFLET_LABELS] = null;
       container[CRP_LEAFLET_BORDER_MARKERS] = null;
+      container[CRP_LEAFLET_RESTRICTION_MARKERS] = null;
     }
   }
   function markerIcon(target) {
@@ -14320,6 +14397,18 @@
     container[CRP_LEAFLET_BORDER_MARKERS] = markers;
     return true;
   }
+  function updateLeafletRestrictionMarkers(container, items = []) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map) return false;
+    for (const marker of container[CRP_LEAFLET_RESTRICTION_MARKERS] || []) marker.remove();
+    const markers = items.filter((item) => Number.isFinite(Number(item?.lat ?? item?.latitude)) && Number.isFinite(Number(item?.lon ?? item?.longitude))).map((item) => {
+      const marker = import_leaflet.default.circleMarker([Number(item.lat ?? item.latitude), Number(item.lon ?? item.longitude)], { radius: 7, color: "#d32f2f", fillColor: "#ef5350", fillOpacity: 0.85 });
+      marker.addTo(map).bindTooltip(String(item.message || item.type || item.code || "Restriction"));
+      return marker;
+    });
+    container[CRP_LEAFLET_RESTRICTION_MARKERS] = markers;
+    return true;
+  }
   function updateLeafletRoute(container, route, points = []) {
     const map = container?.[CRP_LEAFLET_MAP];
     if (!map) return false;
@@ -14357,6 +14446,7 @@
     updateLeafletRoute(container, options.route, validPoints);
     updateLeafletMarkers(container, validPoints);
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
+    updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
     fitMapToPoints(container, validPoints, Boolean(options.fitBounds));
     return true;
   }
@@ -14411,6 +14501,7 @@
       updateLeafletRoute(container, route, points);
       updateLeafletMarkers(container, points);
       updateLeafletBorderMarkers(container, options.borderCrossings || []);
+      updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
       if (points.length === 1) {
         map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
       } else if (points.length > 1) {
@@ -30965,6 +31056,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const technicalNotes = unknownTexts.length ? `<details class="provider-details"><summary>${translate2("tollTechnicalInfo")}</summary><ul>${[...new Set(unknownTexts)].map((note) => `<li lang="en">${escapeHtml(note)}</li>`).join("")}</ul></details>` : "";
     return `<section class="route-details toll-details"><h3>${translate2("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate2("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate2("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>`;
   }
+  function renderRestrictions(result, translate2) {
+    const metadata = result?.metadata || {};
+    const items = [...Array.isArray(metadata.restriction_hits) ? metadata.restriction_hits : [], ...Array.isArray(metadata.low_emission_zones_on_route) ? metadata.low_emission_zones_on_route : []];
+    const warnings = Array.isArray(metadata.provider_warnings) ? metadata.provider_warnings : [];
+    const row = (item) => {
+      const applies = item?.applies === true || item?.active === true;
+      const status = applies ? translate2("restrictionActive") : item?.applies === false ? translate2("restrictionConsidered") : translate2("restrictionInfo");
+      const validity = [item.valid_from, item.valid_until, item.data_at || item.timestamp].filter(Boolean).join(" \u2013 ");
+      return `<li><b>${escapeHtml(item.code || item.type || translate2("restriction"))}</b> \xB7 ${escapeHtml(status)}${item.message ? `: ${escapeHtml(item.message)}` : ""}${validity ? `<small>${escapeHtml(translate2("validity"))}: ${escapeHtml(validity)}</small>` : ""}</li>`;
+    };
+    const groups = items.length ? `<ul>${items.map(row).join("")}</ul>` : `<p class="subtle">${translate2("noRestrictions")}</p>`;
+    const notes = warnings.length ? `<details><summary>${translate2("providerWarnings")}</summary><ul>${warnings.map((item) => row(typeof item === "string" ? { message: item } : item)).join("")}</ul></details>` : "";
+    return `<details class="route-details restrictions" open><summary><h3>${translate2("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(translate2(`trafficMode.${result?.metadata?.traffic || "off"}`))}</p>${groups}${notes}</details>`;
+  }
+  function renderFuelPlan(result, profile, translate2, language) {
+    const plan = calculateFuelPlan(result?.distance_m, profile || {});
+    const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? "\u2014" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
+    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="metrics"><div><b>${number(plan.totalLiters)} l</b><span>${translate2("estimatedFuel")}</span></div><div><b>${number(plan.rangeKm)} km</b><span>${translate2("availableRange")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate2("fuelShortfall") : translate2("fuelSufficient")} \xB7 ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate2("fuelDataMissing")}</p>`}${plan.cost != null ? `<p>${translate2("estimatedCost")}: ${number(plan.cost, 2)} \u20AC</p>` : ""}</details>`;
+  }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
       this.config = { ...config };
@@ -31012,7 +31122,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -31121,7 +31231,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._state.error = "";
       this.render();
       try {
-        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh });
+        if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
+        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...this._state.routeOptions });
         this._state.result = normalizeServiceResponse(payload);
         this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
       } catch (error2) {
@@ -31319,6 +31430,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.destination = route.destination || this._state.destination;
         this._state.waypoints = route.waypoints || [];
         this._state.profileId = route.profile_id || this._state.profileId;
+        this._state.routeOptions = { ...this._state.routeOptions, ...route.route_options || route.metadata?.request_options || {} };
         this._state.result = normalizeServiceResponse(route);
         this.render();
       } catch (error2) {
@@ -31504,6 +31616,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const fuelType = profile ? translate2(`fuelType.${profile.fuel_type}`) : "";
       const navigationTarget = result ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
       this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(result.provider)}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
+      const optionAnchor = this.shadowRoot.querySelector(".map-section");
+      optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><label><input type="checkbox" data-route-option="avoid" value="tolls"> ${translate2("avoidTolls")}</label> <label><input type="checkbox" data-route-option="avoid" value="motorways"> ${translate2("avoidMotorways")}</label> <label><input type="checkbox" data-route-option="avoid" value="ferries"> ${translate2("avoidFerries")}</label> <label><input type="checkbox" data-route-option="avoid" value="tunnels"> ${translate2("avoidTunnels")}</label></details>`);
+      this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => {
+        const key = input.dataset.routeOption;
+        if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value);
+        else input.value = this._state.routeOptions[key] ?? "";
+      });
+      if (result) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("beforeend", `${renderRestrictions(result, translate2)}${renderFuelPlan(result, profile, translate2, language)}`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
         const routeId = exportButton?.dataset.routeId;
@@ -31537,7 +31657,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate2("geocodingAttribution")}</a>`);
       const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") };
-      const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], restrictionItems: [...result?.metadata?.restriction_hits || [], ...result?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
       const mapHost = this.shadowRoot.querySelector(".map-host");
       if (preserveMap) {
         mapHost.append(oldMap);
@@ -31556,6 +31676,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       if (this._cardExpanded) requestAnimationFrame(() => invalidateMapSize(this.shadowRoot?.querySelector(".crp-map")));
     }
     bindEvents() {
+      this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => input.addEventListener("change", () => {
+        const key = input.dataset.routeOption;
+        if (key === "avoid") this._state.routeOptions.avoid = [...this.shadowRoot.querySelectorAll('input[data-route-option="avoid"]:checked')].map((item) => item.value);
+        else this._state.routeOptions[key] = key === "alternatives" ? Number(input.value) : input.value;
+      }));
       this.shadowRoot.querySelectorAll("input[data-point]").forEach((input) => input.addEventListener("input", (event) => this.updatePoint(event.target.dataset.point, Number(event.target.dataset.index), event.target.dataset.field, event.target.value)));
       this.shadowRoot.querySelector("select[data-action=profile]")?.addEventListener("change", (event) => {
         this._state.profileId = event.target.value;

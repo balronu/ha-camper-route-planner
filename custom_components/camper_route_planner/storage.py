@@ -150,6 +150,7 @@ class ProfileRouteStore:
             "waypoints": [point.as_dict() for point in request.waypoints],
             "warnings": [asdict(warning) for warning in result.warnings],
             "metadata": copy.deepcopy(result.metadata),
+            "route_options": copy.deepcopy(result.metadata.get("request_options", {})),
         }
         await self._store.async_save(self.data)
 
@@ -160,7 +161,7 @@ class ProfileRouteStore:
             raise ValueError("route_id and geometry are required")
         if _contains_secret_field(record):
             raise ValueError("route record contains a forbidden credential field")
-        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "metadata", "created_at"}
+        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "metadata", "created_at", "route_options"}
         self.data["routes"][route_id] = {key: value for key, value in record.items() if key in allowed}
         await self._store.async_save(self.data)
         return route_id

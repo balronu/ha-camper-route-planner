@@ -79,6 +79,14 @@ def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
         "alternatives": request.alternatives,
         "geometry": request.geometry_format,
     }
+    if request.avoid:
+        parameters["avoid"] = ",".join(request.avoid)
+    if request.route_type != "fastest":
+        parameters["route_type"] = request.route_type
+    if request.depart_at is not None:
+        parameters["depart_at"] = request.depart_at.isoformat()
+    if request.arrive_at is not None:
+        parameters["arrive_at"] = request.arrive_at.isoformat()
     if request.waypoints:
         # The documented Truck Route contract uses one pipe-separated via
         # parameter, not repeated query parameters.
@@ -311,6 +319,19 @@ class NakordoniMotorhomeProvider:
                 "countries": route.get("countries", []),
                 "country_split": route.get("country_split", []),
                 "restriction_hits": route.get("restriction_hits", []),
+                "provider_warnings": route.get("warnings", data.get("warnings", [])),
+                "truck_bans": route.get("truck_bans", []),
+                "low_emission_zones_on_route": route.get("low_emission_zones_on_route", []),
+                "low_emission_zones_avoided": route.get("low_emission_zones_avoided", []),
+                "traffic": route.get("traffic", data.get("traffic")),
+                "request_options": {
+                    "traffic": request.traffic if request else None,
+                    "avoid": list(request.avoid) if request else [],
+                    "route_type": request.route_type if request else "fastest",
+                    "alternatives": request.alternatives if request else 0,
+                    "depart_at": request.depart_at.isoformat() if request and request.depart_at else None,
+                    "arrive_at": request.arrive_at.isoformat() if request and request.arrive_at else None,
+                },
                 "border_crossings": border_crossings,
                 "border_state": border_state,
                 "border_data_source": "route.border_crossings" if border_state == "confirmed" else border_state,

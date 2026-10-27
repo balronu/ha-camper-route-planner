@@ -69,7 +69,23 @@ export function normalizeServiceResponse(response) {
     origin: payload.origin || null,
     destination: payload.destination || null,
     waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
+    ,route_options: payload.route_options || payload.metadata?.request_options || {}
   };
+}
+
+export function calculateFuelPlan(distanceM, profile = {}) {
+  const consumption = Number(profile.consumption_l_per_100km);
+  const distanceKm = Number(distanceM) / 1000;
+  const totalLiters = Number.isFinite(consumption) && consumption > 0 && Number.isFinite(distanceKm) ? distanceKm * consumption / 100 : null;
+  const tank = Number(profile.tank_capacity_l);
+  const level = Number.isFinite(Number(profile.fuel_level_l)) ? Number(profile.fuel_level_l)
+    : Number.isFinite(Number(profile.fuel_level_pct)) && Number.isFinite(tank) ? tank * Number(profile.fuel_level_pct) / 100 : null;
+  const reserve = Number.isFinite(Number(profile.reserve_l)) ? Number(profile.reserve_l) : 0;
+  const usable = level == null ? null : Math.max(0, level - reserve);
+  const rangeKm = usable == null || !consumption ? null : usable * 100 / consumption;
+  const deficit = totalLiters == null || usable == null ? null : Math.max(0, totalLiters - usable);
+  const price = Number(profile.diesel_price_per_l);
+  return { distanceKm, consumption, totalLiters, tank, level, reserve, usable, rangeKm, deficit, cost: totalLiters != null && Number.isFinite(price) ? totalLiters * price : null, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm };
 }
 
 export function routeRecordFromResult(result, state) {
@@ -89,6 +105,7 @@ export function routeRecordFromResult(result, state) {
     warnings: result.warnings,
     metadata: result.metadata,
     created_at: result.created_at
+    ,route_options: result.route_options || result.metadata?.request_options || {}
   };
 }
 
