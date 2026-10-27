@@ -7,6 +7,7 @@ import sys
 try:
     import pytest
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import selector
     from homeassistant.components.lovelace import LOVELACE_DATA
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     try:
@@ -156,7 +157,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert f"Camper Route Planner Card v0.1.1-beta.7" in body
+    assert f"Camper Route Planner Card v0.1.1-beta.8" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert 'return { entry_id: "" }' in body
     assert 'card.type === "camper-route-planner-card"' in body
@@ -179,7 +180,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.1-beta.7" in await response.text()
+    assert "Camper Route Planner Card v0.1.1-beta.8" in await response.text()
 
 
 @pytest.mark.asyncio
@@ -351,6 +352,8 @@ async def test_options_flow_manager_form_save_reopen_and_invalid_input(
     assert entry.options["provider"] == PROVIDER_MOCK
     assert entry.options["preserved_option"] == "keep-me"
     assert entry.options["carto_api_key"] == "fixture-carto-key"
+    profile = next(profile for profile in hass.data[DOMAIN][entry.entry_id].store.profiles() if profile.profile_id == "fixture-profile")
+    assert profile.consumption_l_per_100km is None
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] == "form"
@@ -407,11 +410,7 @@ async def test_options_flow_vehicle_action_uses_user_facing_labels(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     vehicle_key = next(key for key in result["data_schema"].schema if getattr(key, "schema", None) == "vehicle_action")
     vehicle_validator = result["data_schema"].schema[vehicle_key]
-    assert vehicle_validator.container == {
-        "none": "No vehicle changes",
-        "edit": "Edit existing vehicle",
-        "add": "Add new vehicle",
-    }
+    assert vehicle_validator.container == {"none": "No vehicle changes", "add": "Add new vehicle", "delete": "Delete a vehicle"}
     assert vehicle_key.default() == "none"
 
     hass.config_entries.options.async_abort(result["flow_id"])
@@ -419,11 +418,7 @@ async def test_options_flow_vehicle_action_uses_user_facing_labels(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     vehicle_key = next(key for key in result["data_schema"].schema if getattr(key, "schema", None) == "vehicle_action")
     vehicle_validator = result["data_schema"].schema[vehicle_key]
-    assert vehicle_validator.container == {
-        "none": "Keine Änderungen an Fahrzeugen",
-        "edit": "Vorhandenes Fahrzeug bearbeiten",
-        "add": "Neues Fahrzeug hinzufügen",
-    }
+    assert vehicle_validator.container == {"none": "Keine Änderungen an Fahrzeugen", "add": "Neues Fahrzeug hinzufügen", "delete": "Fahrzeug löschen"}
 
 
 @pytest.mark.asyncio
@@ -450,11 +445,11 @@ async def test_options_flow_edits_existing_vehicle_without_changing_id_or_routes
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["step_id"] == "init"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": "new-geo-key", "vehicle_action": "edit",
+        "provider": PROVIDER_MOCK, "map_provider": "none", "geocoding_api_key": "new-geo-key", "vehicle_action": "zoe",
     })
-    assert result["step_id"] == "vehicle_menu"
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "zoe"})
     assert result["step_id"] == "profile"
+    consumption_key = next(key for key in result["data_schema"].schema if getattr(key, "schema", None) == "consumption_l_per_100km")
+    assert isinstance(result["data_schema"].schema[consumption_key], selector.NumberSelector)
     defaults = {getattr(key, "schema", None): getattr(key, "default", None)() for key in result["data_schema"].schema if callable(getattr(key, "default", None))}
     assert defaults["profile_id"] == "zoe"
     assert defaults["tracker_entity_id"] == "device_tracker.wohnmobil_zoe"
@@ -598,13 +593,10 @@ async def test_options_flow_deletes_selected_duplicate_name_only_with_route_cons
     })
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "vehicle_action": "edit"})
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"vehicle_action": "remove"})
-    assert result["step_id"] == "profile"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"provider": PROVIDER_MOCK, "map_provider": "none", "vehicle_action": "delete"})
+    assert result["step_id"] == "vehicle_delete_select"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
-        "profile_id": "remove", "name": "Zoe", "vehicle_kind": "motorhome", "height_m": 3.2,
-        "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4800, "fuel_type": "diesel", "axles": 2,
-        "delete_profile": True,
+        "profile_id": "remove",
     })
     assert result["step_id"] == "vehicle_delete"
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"confirm_delete": True})

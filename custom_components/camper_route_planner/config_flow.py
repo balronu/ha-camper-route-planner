@@ -11,7 +11,7 @@ from .const import (
     CONF_REMOVE_CARTO_API_KEY, CONF_REMOVE_GEOCODING_API_KEY, DEFAULT_ZOE_TRACKER,
     CONF_VEHICLE_ACTION, DOMAIN, MAP_PROVIDER_CARTO, MAP_PROVIDER_NONE,
     PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME,
-    VEHICLE_ACTION_ADD, VEHICLE_ACTION_EDIT, VEHICLE_ACTION_NONE,
+    VEHICLE_ACTION_ADD, VEHICLE_ACTION_DELETE, VEHICLE_ACTION_NONE,
 )
 from .models import VehicleProfile
 
@@ -62,8 +62,6 @@ try:
         return float(value)
 
     _VISIBLE_PROVIDERS = (PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME)
-    _VEHICLE_ACTIONS = (VEHICLE_ACTION_NONE, VEHICLE_ACTION_EDIT, VEHICLE_ACTION_ADD)
-
     class CamperRoutePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         VERSION = 1
 
@@ -169,11 +167,14 @@ try:
             vehicle_action = user_input.get(CONF_VEHICLE_ACTION, VEHICLE_ACTION_NONE)
             if vehicle_action == VEHICLE_ACTION_NONE:
                 return self.async_create_entry(data=self._provider_input)
-            if vehicle_action == VEHICLE_ACTION_EDIT and not self._profiles():
-                return await self._show_init({"base": "no_profiles_to_edit"})
-            if vehicle_action == VEHICLE_ACTION_EDIT:
-                return await self.async_step_vehicle_menu()
-            self._editing_profile_id = None
+            profile_ids = {profile.profile_id for profile in self._profiles()}
+            if vehicle_action == VEHICLE_ACTION_DELETE:
+                if not profile_ids:
+                    return await self._show_init({"base": "no_profiles_to_delete"})
+                return await self.async_step_vehicle_delete_select()
+            if vehicle_action not in profile_ids and vehicle_action != VEHICLE_ACTION_ADD:
+                return await self._show_init({"base": "invalid_profile"})
+            self._editing_profile_id = None if vehicle_action == VEHICLE_ACTION_ADD else vehicle_action
             return await self.async_step_profile()
 
         def _schema(self):
@@ -186,9 +187,10 @@ try:
             provider_default = current_provider if current_provider in _VISIBLE_PROVIDERS else PROVIDER_MOCK
             vehicle_action_labels = {
                 VEHICLE_ACTION_NONE: "Keine Änderungen an Fahrzeugen" if german else "No vehicle changes",
-                VEHICLE_ACTION_EDIT: "Vorhandenes Fahrzeug bearbeiten" if german else "Edit existing vehicle",
                 VEHICLE_ACTION_ADD: "Neues Fahrzeug hinzufügen" if german else "Add new vehicle",
+                VEHICLE_ACTION_DELETE: "Fahrzeug löschen" if german else "Delete a vehicle",
             }
+            vehicle_action_labels.update({profile.profile_id: profile.name for profile in self._profiles()})
             return vol.Schema({
                 vol.Required(CONF_PROVIDER, default=provider_default): _select_selector(_VISIBLE_PROVIDERS, "provider"),
                 vol.Optional(CONF_API_KEY): _api_key_selector(),
@@ -204,28 +206,28 @@ try:
                 vol.Required(CONF_VEHICLE_ACTION, default=VEHICLE_ACTION_NONE): vol.In(vehicle_action_labels),
             })
 
-        async def async_step_vehicle_menu(self, user_input: dict[str, Any] | None = None):
+        async def async_step_vehicle_delete_select(self, user_input: dict[str, Any] | None = None):
             profiles = self._profiles()
             if user_input is not None:
-                action = str(user_input.get("vehicle_action", ""))
-                if action == VEHICLE_ACTION_NONE:
-                    return self.async_create_entry(data=getattr(self, "_provider_input", {CONF_LIVE_ENABLED: False}))
-                self._editing_profile_id = None if action == "add" else action
-                return await self.async_step_profile()
-            german = str(getattr(getattr(self.hass, "config", None), "language", "en")).lower().startswith("de")
-            add_label = "Neues Fahrzeug hinzufügen" if german else "Add new vehicle"
-            no_change_label = "Keine Änderungen an Fahrzeugen" if german else "No vehicle changes"
-            options = {VEHICLE_ACTION_NONE: no_change_label, "add": add_label} | {profile.profile_id: profile.name for profile in profiles}
-            return self.async_show_form(step_id="vehicle_menu", data_schema=vol.Schema({vol.Required(CONF_VEHICLE_ACTION, default=VEHICLE_ACTION_NONE): vol.In(options)}))
+                profile_id = str(user_input.get("profile_id", ""))
+                if profile_id not in {profile.profile_id for profile in profiles}:
+                    return await self._show_init({"base": "invalid_profile"})
+                self._deleting_profile = next(profile for profile in profiles if profile.profile_id == profile_id)
+                return await self.async_step_vehicle_delete()
+            options = {profile.profile_id: profile.name for profile in profiles}
+            return self.async_show_form(
+                step_id="vehicle_delete_select",
+                data_schema=vol.Schema({vol.Required("profile_id"): vol.In(options)}),
+            )
 
         def _profile_schema(self, profile: VehicleProfile | None = None):
             defaults = {
                 "profile_id": profile.profile_id if profile else "",
                 "name": profile.name if profile else "",
                 "vehicle_kind": profile.vehicle_kind if profile else "motorhome",
-                "height_m": profile.height_m if profile else 3.2,
-                "width_m": profile.width_m if profile else 2.34,
                 "length_m": profile.length_m if profile else 7.65,
+                "width_m": profile.width_m if profile else 2.34,
+                "height_m": profile.height_m if profile else 3.2,
                 "gross_weight_kg": profile.gross_weight_kg if profile else 4800,
                 "fuel_type": profile.fuel_type if profile else "diesel",
                 "axles": profile.axles if profile else 2,
@@ -236,22 +238,26 @@ try:
                 "tracker_entity_id": profile.tracker_entity_id if profile else "",
             }
             tracker_key = vol.Optional("tracker_entity_id", default=profile.tracker_entity_id) if profile and profile.tracker_entity_id else vol.Optional("tracker_entity_id")
+            consumption_key = (
+                vol.Optional("consumption_l_per_100km", default=profile.consumption_l_per_100km)
+                if profile and profile.consumption_l_per_100km is not None
+                else vol.Optional("consumption_l_per_100km")
+            )
             return vol.Schema({
                 vol.Required("profile_id", default=defaults["profile_id"]): str,
                 vol.Required("name", default=defaults["name"]): str,
                 vol.Required("vehicle_kind", default=defaults["vehicle_kind"]): _select_selector(("motorhome", "truck", "car"), "vehicle_kind"),
-                vol.Required("height_m", default=defaults["height_m"]): _number_selector(1.0, 5.0, 0.01),
-                vol.Required("width_m", default=defaults["width_m"]): _number_selector(1.0, 3.5, 0.01),
                 vol.Required("length_m", default=defaults["length_m"]): _number_selector(2.0, 30.0, 0.01),
+                vol.Required("width_m", default=defaults["width_m"]): _number_selector(1.0, 3.5, 0.01),
+                vol.Required("height_m", default=defaults["height_m"]): _number_selector(1.0, 5.0, 0.01),
                 vol.Required("gross_weight_kg", default=defaults["gross_weight_kg"]): _number_selector(500, 60000, 1),
-                vol.Required("fuel_type", default=defaults["fuel_type"]): _select_selector(("diesel", "petrol", "electric", "hybrid", "other"), "fuel_type"),
                 vol.Required("axles", default=defaults["axles"]): _number_selector(1, 16, 1),
+                vol.Required("fuel_type", default=defaults["fuel_type"]): _select_selector(("diesel", "petrol", "electric", "hybrid", "other"), "fuel_type"),
                 vol.Optional("emission_class", default=defaults["emission_class"]): vol.In({"": "Not specified", **{f"euro{index}": f"Euro {index}" for index in range(7)}}),
                 vol.Optional("co2_class", default=defaults["co2_class"]): vol.In({"": "Not specified", **{letter: f"CO₂ {letter.upper()}" for letter in "abcdefg"}}),
                 vol.Optional("first_registration", default=defaults["first_registration"]): str,
-                vol.Optional("consumption_l_per_100km", default=defaults["consumption_l_per_100km"]): vol.Any("", None, _number_selector(0.1, 100, 0.1)),
+                consumption_key: _number_selector(0.1, 100, 0.1),
                 tracker_key: _entity_selector(),
-                **({vol.Optional("delete_profile", default=False): bool} if profile else {}),
             })
 
         async def async_step_profile(self, user_input: dict[str, Any] | None = None):
@@ -259,9 +265,6 @@ try:
             editing_id = getattr(self, "_editing_profile_id", None)
             existing = next((profile for profile in self._profiles() if profile.profile_id == editing_id), None) if editing_id else None
             if user_input is not None:
-                if existing and user_input.get("delete_profile"):
-                    self._deleting_profile = existing
-                    return await self.async_step_vehicle_delete()
                 try:
                     profile = VehicleProfile(
                         profile_id=editing_id or user_input["profile_id"], name=user_input["name"], vehicle_kind=user_input["vehicle_kind"],

@@ -27,6 +27,7 @@
       "live_routing_requires_separate_phase": "This Nakordoni provider is not enabled for live routing.",
       "invalid_profile": "The selected vehicle profile is no longer available.",
       "no_profiles_to_edit": "No vehicle profile exists to edit. Choose add or no vehicle changes.",
+      "no_profiles_to_delete": "No vehicle profile exists to delete.",
       "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
       "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
     },
@@ -51,10 +52,10 @@
           "vehicle_action": "Vehicle management"
         }
       },
-      "vehicle_menu": {
-        "title": "Manage vehicles",
-        "description": "Select an existing vehicle to edit or add a new one. Existing profile IDs and route references are preserved.",
-        "data": { "vehicle_action": "Vehicle" }
+      "vehicle_delete_select": {
+        "title": "Select vehicle to delete",
+        "description": "Choose the vehicle to delete. The next step requires explicit confirmation; saved routes are never deleted implicitly.",
+        "data": { "profile_id": "Vehicle" }
       },
       "profile": {
         "title": "{mode}",
@@ -73,8 +74,7 @@
           "co2_class": "CO2 class (optional; not sent to Nakordoni)",
           "first_registration": "First registration (YYYY-MM-DD, optional)",
           "consumption_l_per_100km": "Average consumption (l/100 km, optional)",
-          "tracker_entity_id": "Vehicle GPS tracker entity",
-          "delete_profile": "Delete this vehicle profile"
+          "tracker_entity_id": "Vehicle GPS tracker entity"
         }
       },
       "vehicle_delete": {
@@ -89,13 +89,14 @@
     "error": {
       "invalid_profile": "The vehicle profile is invalid. Check its dimensions and mass.",
       "no_profiles_to_edit": "No vehicle profile exists to edit. Choose add or no vehicle changes.",
+      "no_profiles_to_delete": "No vehicle profile exists to delete.",
       "delete_confirmation_required": "Confirm deletion of the selected vehicle.",
       "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel."
     }
   },
   "selector": {
     "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni" } },
-    "vehicle_action": { "options": { "none": "No vehicle changes", "edit": "Edit existing vehicle", "add": "Add new vehicle" } },
+    "vehicle_action": { "options": { "none": "No vehicle changes", "add": "Add new vehicle", "delete": "Delete a vehicle" } },
     "map_provider": { "options": { "none": "No map", "carto": "CARTO" } },
     "vehicle_kind": { "options": { "motorhome": "Motorhome", "truck": "Truck", "car": "Car" } },
     "fuel_type": { "options": { "diesel": "Diesel", "petrol": "Petrol", "electric": "Electric", "hybrid": "Hybrid", "other": "Other" } }

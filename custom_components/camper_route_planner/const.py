@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "camper_route_planner"
 NAME: Final = "Camper Route Planner"
-VERSION: Final = "0.1.1-beta.7"
+VERSION: Final = "0.1.1-beta.8"
 
 CONF_PROVIDER: Final = "provider"
 CONF_API_KEY: Final = "api_key"
@@ -27,6 +27,7 @@ PROVIDER_NAKORDONI_MOTORHOME: Final = "nakordoni_motorhome"
 VEHICLE_ACTION_NONE: Final = "none"
 VEHICLE_ACTION_EDIT: Final = "edit"
 VEHICLE_ACTION_ADD: Final = "add"
+VEHICLE_ACTION_DELETE: Final = "delete"
 MAP_PROVIDER_NONE: Final = "none"
 MAP_PROVIDER_CARTO: Final = "carto"
 CARTO_TILE_URL: Final = "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key={key}"
