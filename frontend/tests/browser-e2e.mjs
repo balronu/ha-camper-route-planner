@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.5"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.6"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.5`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.5/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.6`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.6/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -299,6 +299,9 @@ const callsBeforeExport = await desktop.evaluate(() => globalThis.__crp.calculat
 const download = await (async () => { const wait = desktop.waitForEvent("download"); await desktop.evaluate(() => document.querySelector("camper-route-planner-card").exportRoute("route")); return wait; })();
 assert.equal(download.suggestedFilename(), "camper-route-2026-10-16.gpx", "export uses backend filename");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), callsBeforeExport, "export does not recalculate");
+const pdfDownload = await (async () => { const wait = desktop.waitForEvent("download"); await desktop.locator('button[data-action="pdf"]').click(); return wait; })();
+assert.match(pdfDownload.suggestedFilename(), /\.pdf$/, "PDF export uses a safe PDF filename");
+assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), callsBeforeExport, "PDF export does not recalculate");
 await desktop.screenshot({ path: "../docs/phase2c-desktop.png", fullPage: true });
 
 const auto = await browser.newPage({ viewport: { width: 900, height: 700 } });

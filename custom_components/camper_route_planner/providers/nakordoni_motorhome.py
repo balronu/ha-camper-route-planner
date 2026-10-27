@@ -86,6 +86,9 @@ def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
     emission_class = getattr(request.vehicle, "emission_class", None)
     if emission_class:
         parameters["emission_class"] = emission_class
+    # Nakordoni documents emission_class and axles for motorhome routing, but
+    # not CO2 class, first registration, or consumption. Keep those profile
+    # fields available for local display/PDF without inventing API parameters.
     if FORBIDDEN_TRUCK_TIME_FIELDS.intersection(parameters):
         raise ValidationError("truck driver-time parameters are not valid for motorhomes")
     return parameters

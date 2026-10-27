@@ -1,10 +1,12 @@
 import { build } from "esbuild";
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 const root = resolve(new URL("..", import.meta.url).pathname);
 const output = resolve(root, "dist/camper-route-planner-card.js");
 const packagedFrontend = resolve(root, "../custom_components/camper_route_planner/frontend");
 const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 await build({ entryPoints: [resolve(root, "src/camper-route-planner-card.js")], bundle: true, format: "iife", platform: "browser", target: ["es2020"], outfile: output, banner: { js: `/* Camper Route Planner Card v${packageJson.version}; reproducible local bundle */` }, logLevel: "info" });
+const bundled = await readFile(output, "utf8");
+await writeFile(output, bundled.replace(/[ \t]+$/gm, ""), "utf8");
 await mkdir(packagedFrontend, { recursive: true });
 await copyFile(output, resolve(packagedFrontend, "camper-route-planner-card.js"));

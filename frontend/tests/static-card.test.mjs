@@ -70,6 +70,13 @@ test("navigation handoff is local, platform-aware and keeps GPX export", () => {
   assert.doesNotMatch(source, /calculateRoute\([^)]*navigation/);
 });
 
+test("PDF export is a local action available only with the calculated route", () => {
+  assert.match(source, /data-action="pdf"/);
+  assert.match(source, /createTravelPlanPdf/);
+  assert.match(source, /application\/pdf/);
+  assert.doesNotMatch(source, /fetch\([^)]*pdf/i);
+});
+
 test("card uses a native collapsible shell and preserves card state", () => {
   assert.match(source, /<details|createElement\("details"\)/);
   assert.match(source, /createElement\("summary"\)/);
