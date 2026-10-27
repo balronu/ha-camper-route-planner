@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.10; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.11; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -15105,7 +15105,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     { pattern: /converted\s+to\s+(?:eur|euro)/i, key: "providerConvertedToEur" },
     { pattern: /(?:vignette|daily fee|daily charge).*(?:valid|period|day)/i, key: "providerPeriodCharge" },
     { pattern: /(?:city|urban)\s+(?:access|entry)\s+(?:fee|charge)/i, key: "providerCityAccess" },
-    { pattern: /truck\s+tariff.*(?:motorhome|camper|rv)/i, key: "providerTruckTariff" }
+    { pattern: /truck\s+tariff.*(?:motorhome|camper|rv)/i, key: "providerTruckTariff" },
+    { pattern: /truck\s*\(hgv\)\s+toll\s+rates.*motorhome/i, key: "providerTruckTariff" }
   ];
   function formatTollAmount(value, currency = "EUR", language = "en") {
     if (value == null || value === "") return "";
@@ -30558,6 +30559,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const date = value ? new Date(value) : /* @__PURE__ */ new Date();
     return Number.isNaN(date.getTime()) ? pdfText(value) : new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(date);
   };
+  var formatVehicleDimensions = (profile, language = "en") => {
+    const values2 = [profile?.length_m, profile?.width_m, profile?.height_m];
+    if (values2.some((value) => value == null || !Number.isFinite(Number(value)))) return null;
+    const formatter = new Intl.NumberFormat(language, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${values2.map((value) => formatter.format(Number(value))).join(" \xD7 ")} m`;
+  };
+  var formatVehicleMass = (value, language = "en") => value == null || !Number.isFinite(Number(value)) ? null : `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(Number(value))} kg`;
+  var formatVehicleDate = (value, language = "en") => {
+    if (!value) return null;
+    const date = /* @__PURE__ */ new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? pdfText(value) : new Intl.DateTimeFormat(language, { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  };
+  var formatEmissionClass = (value) => {
+    const match = String(value ?? "").trim().match(/^euro\s*([0-9]+(?:[.,][0-9]+)?)$/i);
+    return match ? `Euro ${match[1].replace(",", ".")}` : value == null || value === "" ? null : pdfText(value);
+  };
+  var providerRawNotes = (result) => [result?.metadata?.tolls?.coverage_note, ...Array.isArray(result?.metadata?.tolls?.notes) ? result.metadata.tolls.notes : [], ...Array.isArray(result?.metadata?.tolls?.provider_notes) ? result.metadata.tolls.provider_notes : []].map((value) => String(value ?? "").trim()).filter(Boolean);
+  function providerNoteSections(result, language = "en") {
+    const raw = providerRawNotes(result);
+    const known = [];
+    raw.forEach((note) => classifyProviderText(note, language).known.forEach(({ text }) => {
+      if (!known.includes(text)) known.push(text);
+    }));
+    return { summary: known, originals: [...new Set(raw)] };
+  }
   var localizedVehicle = (value, language) => {
     const labels = language === "de" ? { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw", diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" } : { motorhome: "Motorhome", truck: "Truck", car: "Car", diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" };
     return labels[value] || pdfText(value);
@@ -30788,7 +30814,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (rows.length) writer.table([de ? "Land" : "Country", de ? "Betrag" : "Amount", de ? "Tarifart" : "Tariff", "Status"], rows, [160, 105, 130, 116]);
     writer.row(de ? "Gesamtsumme" : "Total", formatMoney(tolls.total, language, currency), { bold: true });
     writer.text(de ? "Mautbetr\xE4ge sind Sch\xE4tzungen. M\xF6glicherweise fehlen Zufahrts- oder Umweltzonengeb\xFChren; die Berechnung basiert auf Wohnmobil-Tarifen." : "Toll amounts are estimates. Access or environmental-zone charges may be missing; the calculation is based on motorhome tariffs.", { size: 8, color: COLORS.muted });
-    if (tolls.complete === false || tolls.coverage_note) writer.text(`${de ? "Datenhinweis" : "Data note"}: ${valueOr(tolls.coverage_note, de ? "Mautdaten sind m\xF6glicherweise unvollst\xE4ndig." : "Toll data may be incomplete.")}`, { size: 8, color: COLORS.muted });
+    if (tolls.complete === false || tolls.coverage_note) writer.text(de ? "Datenhinweis: Mautdaten sind m\xF6glicherweise unvollst\xE4ndig." : "Data note: Toll data may be incomplete.", { size: 8, color: COLORS.muted });
+    providerNoteSections(result, language).summary.forEach((note) => writer.bullet(note, { size: 8, color: COLORS.muted }));
     if (result?.metadata?.tariff_basis_uncertain) writer.text(de ? "Anbieterannahme: Tarifgrundlage unsicher, weil keine best\xE4tigte Emissionsklasse vorliegt." : "Provider assumption: tariff basis is uncertain because no confirmed emission class is available.", { size: 8, color: COLORS.muted });
   }
   function renderVehicle(writer, profile, language) {
@@ -30796,7 +30823,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const de = language === "de";
     writer.heading(de ? "Fahrzeug\xFCbersicht" : "Vehicle overview", 2);
     const missing = de ? "nicht angegeben" : "not specified";
-    const rows = [[de ? "Fahrzeugname" : "Vehicle name", profile.name], [de ? "Fahrzeugart" : "Vehicle type", localizedVehicle(profile.vehicle_kind, language)], [de ? "Ma\xDFe" : "Dimensions", profile.length_m == null ? missing : `${profile.length_m} x ${profile.width_m} x ${profile.height_m} m`], [de ? "Zul\xE4ssige Gesamtmasse" : "Gross vehicle mass", profile.gross_weight_kg == null ? missing : `${profile.gross_weight_kg} kg`], [de ? "Achsen" : "Axles", valueOr(profile.axles, missing)], [de ? "Kraftstoffart" : "Fuel type", localizedVehicle(profile.fuel_type, language)], [de ? "Euro-Schadstoffklasse" : "Euro emission class", profile.emission_class ? profile.emission_class.toUpperCase() : missing], [de ? "CO2-Klasse" : "CO2 class", profile.co2_class ? profile.co2_class.toUpperCase() : missing], [de ? "Erstzulassung" : "First registration", valueOr(profile.first_registration, missing)], [de ? "Durchschnittsverbrauch" : "Average consumption", profile.consumption_l_per_100km == null ? missing : `${formatNumber(profile.consumption_l_per_100km, language, 1)} l/100 km`]];
+    const rows = [[de ? "Fahrzeugname" : "Vehicle name", profile.name], [de ? "Fahrzeugart" : "Vehicle type", localizedVehicle(profile.vehicle_kind, language)], [de ? "Ma\xDFe" : "Dimensions", formatVehicleDimensions(profile, language) || missing], [de ? "Zul\xE4ssige Gesamtmasse" : "Gross vehicle mass", formatVehicleMass(profile.gross_weight_kg, language) || missing], [de ? "Achsen" : "Axles", valueOr(profile.axles, missing)], [de ? "Kraftstoffart" : "Fuel type", localizedVehicle(profile.fuel_type, language)], [de ? "Euro-Schadstoffklasse" : "Euro emission class", formatEmissionClass(profile.emission_class) || missing], [de ? "CO2-Klasse" : "CO2 class", profile.co2_class ? profile.co2_class.toUpperCase() : missing], [de ? "Erstzulassung" : "First registration", formatVehicleDate(profile.first_registration, language) || missing], [de ? "Durchschnittsverbrauch" : "Average consumption", profile.consumption_l_per_100km == null ? missing : `${formatNumber(profile.consumption_l_per_100km, language, 1)} l/100 km`]];
     writer.table([de ? "Angabe" : "Field", de ? "Wert" : "Value"], rows, [220, 291]);
   }
   function renderOverview(writer, result, state, language) {
@@ -30837,7 +30864,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     writer.heading(de ? "Reisehinweise und Datenqualit\xE4t" : "Travel notes and data quality", 2);
     const notes = de ? ["Wohnmobil-Routing ist eine Planungshilfe; Verkehrszeichen und geltende Vorschriften haben Vorrang.", "Mautbetr\xE4ge und Grenzwartedaten k\xF6nnen unvollst\xE4ndig oder veraltet sein.", "Die Navigation kann die Strecke neu berechnen; Befahrbarkeit wird nicht rechtsverbindlich zugesichert."] : ["Motorhome routing is a planning aid; traffic signs and applicable rules take precedence.", "Toll amounts and border-wait data may be incomplete or out of date.", "Navigation may recalculate the route; passability is not legally guaranteed."];
     notes.forEach((note) => writer.bullet(note, { keepTogether: true }));
-    const originals = Array.isArray(result.warnings) ? result.warnings.filter((warning) => String(warning).trim()) : [];
+    const originals = [...new Set([...Array.isArray(result.warnings) ? result.warnings : [], ...providerNoteSections(result, language).originals].map((warning) => String(warning).trim()).filter(Boolean))];
     if (originals.length) {
       writer.text(de ? "Anbieterinformationen (Original)" : "Provider information (original)", { bold: true, size: 9, keepTogether: true });
       writer.text(de ? "Unver\xE4nderte Anbietertexte; sie sind keine best\xE4tigten Fahrzeug- oder Tarifdaten." : "Unchanged provider text; it is not confirmed vehicle or tariff data.", { size: 8, color: COLORS.muted, keepTogether: true });
