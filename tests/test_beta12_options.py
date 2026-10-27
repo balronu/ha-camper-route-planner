@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
-
-import pytest
+import unittest
 
 from custom_components.camper_route_planner.models import RouteRequest, RouteWaypoint, ValidationError, VehicleProfile
 from custom_components.camper_route_planner.providers.nakordoni_motorhome import build_motorhome_parameters
@@ -12,26 +11,24 @@ def profile(**changes):
     return VehicleProfile(**values)
 
 
-def test_route_options_are_sent_and_cache_isolated():
+class Beta12OptionsTests(unittest.TestCase):
+  def test_route_options_are_sent_and_cache_isolated(self):
     request = RouteRequest(RouteWaypoint(49, 7), RouteWaypoint(41, -8), profile(), traffic="forecast", avoid=("tolls", "tunnels"), route_type="eco", depart_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
     params = build_motorhome_parameters(request)
-    assert params["avoid"] == "tolls,tunnels"
-    assert params["route_type"] == "eco"
-    assert params["traffic"] == "forecast"
-    assert "depart_at" in params
+    self.assertEqual(params["avoid"], "tolls,tunnels")
+    self.assertEqual(params["route_type"], "eco")
+    self.assertEqual(params["traffic"], "forecast")
+    self.assertIn("depart_at", params)
     other = RouteRequest(request.origin, request.destination, request.vehicle, traffic="off")
-    assert request.cache_key() != other.cache_key()
+    self.assertNotEqual(request.cache_key(), other.cache_key())
 
-
-def test_alternatives_with_waypoints_are_rejected():
-    with pytest.raises(ValidationError):
+  def test_alternatives_with_waypoints_are_rejected(self):
+    with self.assertRaises(ValidationError):
         RouteRequest(RouteWaypoint(1, 2), RouteWaypoint(3, 4), profile(), (RouteWaypoint(2, 3),), alternatives=1)
 
-
-def test_legacy_profiles_and_optional_fuel_fields_are_compatible():
+  def test_legacy_profiles_and_optional_fuel_fields_are_compatible(self):
     old = profile().as_dict()
     restored = VehicleProfile.from_dict(old)
-    assert restored.tank_capacity_l is None
+    self.assertIsNone(restored.tank_capacity_l)
     fuel = profile(tank_capacity_l=300, fuel_level_pct=80, reserve_l=20)
-    assert fuel.as_dict()["fuel_level_pct"] == 80
-
+    self.assertEqual(fuel.as_dict()["fuel_level_pct"], 80)

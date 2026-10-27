@@ -43,7 +43,7 @@ calculate_route:
       required: false
       selector:
         select:
-          options: [off, live, forecast]
+          options: ["off", "live", "forecast"]
     alternatives:
       name: Alternative routes
       description: Up to two alternatives, only without waypoints.
@@ -59,13 +59,13 @@ calculate_route:
       selector:
         select:
           multiple: true
-          options: [tolls, motorways, ferries, tunnels]
+          options: ["tolls", "motorways", "ferries", "tunnels"]
     route_type:
       name: Route type
       required: false
       selector:
         select:
-          options: [fastest, eco]
+          options: ["fastest", "eco"]
     depart_at:
       name: Planned departure
       required: false
