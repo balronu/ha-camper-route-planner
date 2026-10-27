@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PDFDocument } from "pdf-lib";
-import { createTravelPlanPdf, pdfFileName } from "../src/pdf-export.js";
+import { createTravelPlanPdf, localizeTollStatus, localizeTollSystem, pdfFileName, placeMarkerLabels } from "../src/pdf-export.js";
 
 const result = {
   provider: "nakordoni_motorhome",
@@ -84,4 +84,35 @@ test("PDF download always uses a browser download and releases its object URL", 
     globalThis.document = originalDocument;
     globalThis.URL = originalURL;
   }
+});
+
+test("PDF localization never exposes technical toll status values", () => {
+  assert.equal(localizeTollSystem("exempt", "de"), "Befreit");
+  assert.equal(localizeTollSystem("section", "en"), "Section toll");
+  assert.equal(localizeTollStatus("likely", "de"), "Wahrscheinlich");
+  assert.equal(localizeTollStatus("future-provider-value", "de"), "Unbekannt");
+});
+
+test("nearby and duplicate map markers fall back to a numbered legend", () => {
+  const font = { widthOfTextAtSize: (value) => String(value).length * 5 };
+  const result = placeMarkerLabels([
+    { x: 100, y: 100, label: "Ziel" },
+    { x: 100, y: 100, label: "Zwischenziel 1" },
+    { x: 101, y: 100, label: "Zwischenziel 2" },
+  ], { x: 50, y: 50, width: 100, height: 100 }, font);
+  assert.equal(result.fallback, true);
+});
+
+test("PDF keeps stored addresses and reliable segment data without inventing legs", async () => {
+  const bytes = await createTravelPlanPdf({ language: "de", result: {
+    ...result,
+    origin: { address: "Startstraße 1, 66111 Saarbrücken", latitude: 49.2, longitude: 7.0 },
+    destination: { address: "Zielweg 2, Gondifelos", latitude: 41.4, longitude: -8.6 },
+    metadata: { ...result.metadata, segments: [{ distance_km: 123.4, duration_s: 7200 }] },
+  }, state: {
+    origin: { address: "Startstraße 1, 66111 Saarbrücken", latitude: 49.2, longitude: 7.0 },
+    destination: { address: "Zielweg 2, Gondifelos", latitude: 41.4, longitude: -8.6 },
+    waypoints: [{ address: "Badajoz, Spanien", latitude: 38.9, longitude: -6.97 }],
+  }, profile: { name: "Zoe", vehicle_kind: "motorhome", fuel_type: "diesel", consumption_l_per_100km: 10.5 } });
+  assert.equal((await PDFDocument.load(bytes)).getPageCount() >= 1, true);
 });

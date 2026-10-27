@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.9; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.10; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -30541,27 +30541,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   var PAGE_WIDTH = 595.28;
   var PAGE_HEIGHT = 841.89;
   var MARGIN = 42;
-  var BODY_SIZE = 9.2;
-  var LINE_HEIGHT = 13;
-  var COLORS = {
-    ink: rgb(0.12, 0.14, 0.16),
-    muted: rgb(0.35, 0.39, 0.42),
-    blue: rgb(0.04, 0.28, 0.48),
-    lightBlue: rgb(0.88, 0.94, 0.97),
-    line: rgb(0.76, 0.8, 0.82),
-    route: rgb(0.04, 0.42, 0.72),
-    start: rgb(0.08, 0.52, 0.29),
-    destination: rgb(0.72, 0.12, 0.13),
-    waypoint: rgb(0.82, 0.48, 0.08)
-  };
+  var COLORS = { ink: rgb(0.12, 0.14, 0.16), muted: rgb(0.35, 0.39, 0.42), blue: rgb(0.04, 0.28, 0.48), lightBlue: rgb(0.88, 0.94, 0.97), line: rgb(0.76, 0.8, 0.82), route: rgb(0.04, 0.42, 0.72), start: rgb(0.08, 0.52, 0.29), destination: rgb(0.72, 0.12, 0.13), waypoint: rgb(0.82, 0.48, 0.08) };
   var pdfText = (value) => String(value ?? "\u2014").replaceAll("\u2192", "->").replaceAll("\u2022", "-").replaceAll("\u2026", "...").replaceAll("\u2013", "-").replaceAll("\u2014", "-");
-  var formatDate = (value, language, includeTime = false) => {
-    const date = value ? new Date(value) : /* @__PURE__ */ new Date();
-    if (Number.isNaN(date.getTime())) return pdfText(value);
-    return new Intl.DateTimeFormat(language, includeTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" }).format(date);
-  };
+  var valueOr = (value, fallback) => value == null || value === "" ? fallback : value;
   var formatNumber = (value, language, digits = 1) => Number.isFinite(Number(value)) ? new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(Number(value)) : "-";
-  var formatMoney = (value, language, currency = "EUR") => value == null || !Number.isFinite(Number(value)) ? language === "de" ? "nicht verf\xFCgbar" : "not available" : new Intl.NumberFormat(language, { style: "currency", currency }).format(Number(value));
+  var formatMoney = (value, language, currency = "EUR") => value == null || !Number.isFinite(Number(value)) ? t(language, "unknown") : new Intl.NumberFormat(language, { style: "currency", currency }).format(Number(value));
   var countryName = (value, language) => {
     if (!value) return "-";
     try {
@@ -30570,24 +30554,34 @@ svg.leaflet-image-layer.leaflet-interactive path {
       return String(value);
     }
   };
-  var valueOr = (value, fallback) => value == null || value === "" ? fallback : value;
+  var formatDate = (value, language) => {
+    const date = value ? new Date(value) : /* @__PURE__ */ new Date();
+    return Number.isNaN(date.getTime()) ? pdfText(value) : new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  };
   var localizedVehicle = (value, language) => {
     const labels = language === "de" ? { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw", diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" } : { motorhome: "Motorhome", truck: "Truck", car: "Car", diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" };
     return labels[value] || pdfText(value);
   };
+  function localizeTollSystem(value, language = "en") {
+    const key = { none: "none", exempt: "exempt", vignette: "vignette", distance: "distance", flat_daily: "flat_daily", section: "section" }[String(value ?? "").toLowerCase()];
+    return key ? t(language, `tollSystemName.${key}`) : language === "de" ? "Unbekannte Tarifart" : "Unknown tariff type";
+  }
+  function localizeTollStatus(value, language = "en") {
+    const key = String(value ?? "").toLowerCase();
+    return key === "confirmed" || key === "likely" ? t(language, `tollStatus.${key}`) : language === "de" ? "Unbekannt" : "Unknown";
+  }
   var coordinateLabel = (point, language) => {
     if (!point) return language === "de" ? "Nicht verf\xFCgbar" : "Unavailable";
-    const label = point.label || point.address;
+    const label = point.address || point.label;
     if (label && !/^([a-z_]+\.)+[a-z0-9_]+$/i.test(String(label))) return label;
     if (Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) return `${formatNumber(point.latitude, language, 5)}, ${formatNumber(point.longitude, language, 5)}`;
     return language === "de" ? "Aktueller Fahrzeugstandort" : "Current vehicle location";
   };
+  var routePoints = (result) => Array.isArray(result?.geometry?.points) ? result.geometry.points.filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) : [];
   var routeCountries = (result, language) => {
     const values2 = result?.metadata?.country_sequence || result?.metadata?.countries || result?.metadata?.country_split;
-    if (!Array.isArray(values2)) return [];
-    return values2.map((item) => typeof item === "string" ? item : item?.country).filter(Boolean).map((item) => countryName(item, language));
+    return Array.isArray(values2) ? values2.map((item) => typeof item === "string" ? item : item?.country).filter(Boolean).map((item) => countryName(item, language)) : [];
   };
-  var routePoints = (result) => Array.isArray(result?.geometry?.points) ? result.geometry.points.filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) : [];
   var PdfWriter = class {
     constructor(document2, fonts, language, title) {
       this.document = document2;
@@ -30603,10 +30597,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.pages.push(this.page);
       this.y = PAGE_HEIGHT - MARGIN - 16;
     }
-    ensure(height = LINE_HEIGHT) {
+    ensure(height = 13) {
       if (this.y - height < MARGIN + 28) this.newPage();
     }
-    text(value, { size = BODY_SIZE, bold = false, color = COLORS.ink, indent = 0, keepTogether = false } = {}) {
+    text(value, { size = 9.2, bold = false, color = COLORS.ink, indent = 0, keepTogether = false } = {}) {
       const words = pdfText(value).split(/\s+/);
       const lines = [];
       let line = "";
@@ -30628,10 +30622,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
     }
     heading(value, level = 2) {
-      this.ensure(level === 1 ? 34 : 95);
+      this.ensure(level === 1 ? 34 : 112);
       this.y -= level === 1 ? 8 : 5;
       this.text(value, { size: level === 1 ? 18 : 12, bold: true, color: COLORS.blue, keepTogether: true });
-      this.y -= 3;
+      this.y -= 4;
     }
     row(label, value, options = {}) {
       this.text(`${label}: ${value}`, { indent: 4, ...options });
@@ -30677,6 +30671,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       };
       drawRow(headers, true, COLORS.lightBlue);
       rows.forEach((row) => drawRow(row));
+      this.y -= 8;
     }
     finish() {
       this.pages.forEach((page, index) => {
@@ -30689,9 +30684,38 @@ svg.leaflet-image-layer.leaflet-interactive path {
       });
     }
   };
-  function drawMarker(page, x, y, color, label, font) {
-    page.drawCircle({ x, y, size: 4, color, borderColor: rgb(1, 1, 1), borderWidth: 1 });
-    page.drawText(label, { x: x + 7, y: y - 3, size: 7.5, font, color: COLORS.ink });
+  function markerBounds(x, y, text, font, side) {
+    const width = Math.max(34, font.widthOfTextAtSize(text, 7.5) + 8);
+    const height = 14;
+    const left = side === "left" ? x - width - 7 : x + 7;
+    const bottom = side === "above" ? y + 5 : side === "below" ? y - height - 5 : y - height / 2;
+    return { left, right: left + width, bottom, top: bottom + height };
+  }
+  function overlaps(a, b) {
+    return a.left < b.right + 4 && a.right + 4 > b.left && a.bottom < b.top + 4 && a.top + 4 > b.bottom;
+  }
+  function placeMarkerLabels(markers, box, font) {
+    const placed = [];
+    for (const marker of markers) {
+      let choice;
+      for (const side of ["right", "left", "above", "below"]) {
+        const bounds = markerBounds(marker.x, marker.y, marker.label, font, side);
+        if (bounds.left >= box.x + 2 && bounds.right <= box.x + box.width - 2 && bounds.bottom >= box.y + 2 && bounds.top <= box.y + box.height - 2 && !placed.some((item) => overlaps(bounds, item.bounds))) {
+          choice = { ...marker, side, bounds };
+          break;
+        }
+      }
+      if (!choice) return { labels: [], fallback: true };
+      placed.push(choice);
+    }
+    return { labels: placed, fallback: false };
+  }
+  function drawMarker(page, marker, font, label, side) {
+    page.drawCircle({ x: marker.x, y: marker.y, size: 4, color: marker.color, borderColor: rgb(1, 1, 1), borderWidth: 1 });
+    if (label) {
+      const bounds = markerBounds(marker.x, marker.y, label, font, side);
+      page.drawText(label, { x: bounds.left + 4, y: bounds.bottom + 3, size: 7.5, font, color: COLORS.ink });
+    }
   }
   function drawRouteMap(writer, result, state, language) {
     const points = routePoints(result);
@@ -30704,47 +30728,36 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const lats = points.map((point) => Number(point.latitude));
     const lons = points.map((point) => Number(point.longitude));
     const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
-    const latSpan = Math.max(maxLat - minLat, 1e-4);
-    const lonSpan = Math.max(maxLon - minLon, 1e-4);
-    const routeAspect = lonSpan / latSpan;
-    let drawWidth = box.width - 24;
-    let drawHeight = drawWidth / routeAspect;
-    if (drawHeight > box.height - 24) {
-      drawHeight = box.height - 24;
-      drawWidth = drawHeight * routeAspect;
+    const latSpan = Math.max(maxLat - minLat, 1e-4), lonSpan = Math.max(maxLon - minLon, 1e-4), aspect = lonSpan / latSpan;
+    let width = box.width - 24, height = width / aspect;
+    if (height > box.height - 24) {
+      height = box.height - 24;
+      width = height * aspect;
     }
-    const offsetX = box.x + (box.width - drawWidth) / 2;
-    const offsetY = box.y + (box.height - drawHeight) / 2;
-    const x = (lon) => offsetX + (lon - minLon) / lonSpan * drawWidth;
-    const y = (lat) => offsetY + (lat - minLat) / latSpan * drawHeight;
+    const ox = box.x + (box.width - width) / 2, oy = box.y + (box.height - height) / 2;
+    const x = (lon) => ox + (lon - minLon) / lonSpan * width, y = (lat) => oy + (lat - minLat) / latSpan * height;
     writer.page.drawRectangle({ x: box.x, y: box.y, width: box.width, height: box.height, color: rgb(0.97, 0.98, 0.98), borderWidth: 0.5, borderColor: COLORS.line });
     for (let index = 1; index < 4; index += 1) {
-      const gx = box.x + box.width * index / 4;
-      const gy = box.y + box.height * index / 4;
+      const gx = box.x + box.width * index / 4, gy = box.y + box.height * index / 4;
       writer.page.drawLine({ start: { x: gx, y: box.y }, end: { x: gx, y: box.y + box.height }, thickness: 0.25, color: COLORS.line });
       writer.page.drawLine({ start: { x: box.x, y: gy }, end: { x: box.x + box.width, y: gy }, thickness: 0.25, color: COLORS.line });
     }
     for (let index = 1; index < points.length; index += 1) {
-      const previous = points[index - 1];
-      const current = points[index];
+      const previous = points[index - 1], current = points[index];
       writer.page.drawLine({ start: { x: x(Number(previous.longitude)), y: y(Number(previous.latitude)) }, end: { x: x(Number(current.longitude)), y: y(Number(current.latitude)) }, thickness: 2, color: COLORS.route });
     }
-    const start = points[0];
-    const end = points[points.length - 1];
-    drawMarker(writer.page, x(Number(start.longitude)), y(Number(start.latitude)), COLORS.start, "Start", writer.font);
-    drawMarker(writer.page, x(Number(end.longitude)), y(Number(end.latitude)), COLORS.destination, de ? "Ziel" : "Destination", writer.font);
-    (Array.isArray(state?.waypoints) ? state.waypoints : []).forEach((point, index) => {
-      if (Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) drawMarker(writer.page, x(Number(point.longitude)), y(Number(point.latitude)), COLORS.waypoint, `${de ? "Zwischenziel" : "Waypoint"} ${index + 1}`, writer.font);
-    });
+    const markers = [{ x: x(Number(points[0].longitude)), y: y(Number(points[0].latitude)), color: COLORS.start, label: "Start" }, ...(Array.isArray(state?.waypoints) ? state.waypoints : []).filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))).map((point, index) => ({ x: x(Number(point.longitude)), y: y(Number(point.latitude)), color: COLORS.waypoint, label: `${de ? "Zwischenziel" : "Waypoint"} ${index + 1}` })), { x: x(Number(points.at(-1).longitude)), y: y(Number(points.at(-1).latitude)), color: COLORS.destination, label: de ? "Ziel" : "Destination" }];
+    const placement = placeMarkerLabels(markers, box, writer.font);
+    markers.forEach((marker, index) => drawMarker(writer.page, marker, writer.font, placement.fallback ? String(index + 1) : marker.label, placement.fallback ? "right" : placement.labels[index].side));
     writer.y = box.y - 12;
     const countries = routeCountries(result, language);
-    writer.text(`${de ? "Legende" : "Legend"}: Start \xB7 ${de ? "Ziel" : "Destination"} \xB7 ${de ? "Zwischenziele" : "Waypoints"}${countries.length ? ` | ${de ? "L\xE4nderfolge" : "Country sequence"}: ${countries.join(" -> ")}` : ""}`, { size: 8, color: COLORS.muted });
+    const legend = placement.fallback ? markers.map((marker, index) => `${index + 1}=${marker.label}`).join("; ") : `${de ? "Start" : "Start"} \xB7 ${de ? "Ziel" : "Destination"} \xB7 ${de ? "Zwischenziele" : "Waypoints"}`;
+    writer.text(`${de ? "Legende" : "Legend"}: ${legend}${countries.length ? ` | ${de ? "L\xE4nderfolge" : "Country sequence"}: ${countries.join(" -> ")}` : ""}`, { size: 8, color: COLORS.muted });
   }
   function renderFuel(writer, result, profile, language) {
     const de = language === "de";
     writer.heading(de ? "Kraftstoffplanung" : "Fuel planning", 2);
-    const consumption = Number(profile?.consumption_l_per_100km);
-    const distanceKm = Number(result?.distance_m) / 1e3;
+    const consumption = Number(profile?.consumption_l_per_100km), distanceKm = Number(result?.distance_m) / 1e3;
     if (!Number.isFinite(consumption) || consumption <= 0 || !Number.isFinite(distanceKm)) {
       writer.text(de ? "Kein Verbrauchswert im Fahrzeugprofil vorhanden; der Kraftstoffbedarf wird nicht erfunden." : "No vehicle consumption value is available; fuel demand is not invented.", { color: COLORS.muted });
       return;
@@ -30754,14 +30767,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     writer.row(de ? "Gesamtstrecke" : "Total distance", `${formatNumber(distanceKm, language, 1)} km`);
     writer.row(de ? "Gesch\xE4tzter Gesamtbedarf" : "Estimated total demand", `${formatNumber(liters, language, 1)} l`, { bold: true });
     writer.text(de ? "Rechnerische Sch\xE4tzung ohne Tankinhalt, Startf\xFCllstand oder Sicherheitsreserve. Tankstopps werden deshalb nicht erfunden." : "Calculated estimate without tank capacity, starting level or safety reserve. Refuelling stops are therefore not invented.", { size: 8, color: COLORS.muted });
-    const price = Number(result?.metadata?.fuel_price_eur_per_l);
-    if (Number.isFinite(price) && price > 0) writer.row(de ? "Planungskosten (Nutzerwert)" : "Planning cost (user value)", formatMoney(liters * price, language));
   }
   function renderBorders(writer, result, language) {
     const de = language === "de";
     writer.heading(de ? "Grenz\xFCberg\xE4nge" : "Border crossings", 2);
     const crossings = result?.metadata?.border_crossings;
-    if (Array.isArray(crossings) && crossings.length) writer.table([de ? "\xDCbergang" : "Crossing", de ? "Wartezeit" : "Wait", de ? "Datenqualit\xE4t" : "Data quality"], crossings.map((crossing) => [`${countryName(crossing.from_country, language)} -> ${countryName(crossing.to_country, language)}${crossing.name ? `: ${crossing.name}` : ` (${de ? "konkreter \xDCbergang nicht verf\xFCgbar" : "specific crossing unavailable"})`}`, crossing.wait_min == null ? de ? "keine Daten" : "no data" : `${formatNumber(crossing.wait_min, language, 0)} min`, crossing.inferred ? de ? "abgeleitete L\xE4nderfolge" : "inferred country sequence" : valueOr(crossing.status, de ? "unbekannt" : "unknown")]), [235, 120, 156]);
+    if (Array.isArray(crossings) && crossings.length) writer.table([de ? "\xDCbergang" : "Crossing", de ? "Wartezeit" : "Wait", de ? "Datenqualit\xE4t" : "Data quality"], crossings.map((crossing) => [`${countryName(crossing.from_country, language)} -> ${countryName(crossing.to_country, language)}${crossing.name ? `: ${crossing.name}` : ` (${de ? "konkreter \xDCbergang nicht verf\xFCgbar" : "specific crossing unavailable"})`}`, crossing.wait_min == null ? de ? "keine Daten" : "no data" : `${formatNumber(crossing.wait_min, language, 0)} min`, crossing.inferred ? de ? "abgeleitete L\xE4nderfolge" : "inferred country sequence" : crossing.status === "confirmed" ? de ? "Best\xE4tigt" : "Confirmed" : de ? "Unbekannt" : "Unknown"]), [235, 120, 156]);
     else writer.text(result?.metadata?.border_state === "unordered_international" ? de ? "Internationale Route erkannt; konkrete Grenz\xFCberg\xE4nge konnten nicht zuverl\xE4ssig zugeordnet werden." : "International route detected; specific border crossings could not be assigned reliably." : de ? "Keine Grenz\xFCberg\xE4nge in der Routing-Antwort." : "No border crossings were returned by the routing response.", { color: COLORS.muted });
   }
   function renderTolls(writer, result, language) {
@@ -30773,45 +30784,68 @@ svg.leaflet-image-layer.leaflet-interactive path {
       return;
     }
     const currency = tolls.currency || "EUR";
-    const rows = (Array.isArray(tolls.countries) ? tolls.countries : []).map((item) => [countryName(item.country, language), formatMoney(item.total ?? item.amount, language, item.currency || currency), valueOr(item.system, de ? "nicht angegeben" : "not specified"), valueOr(item.status, de ? "unbekannt" : "unknown")]);
+    const rows = (Array.isArray(tolls.countries) ? tolls.countries : []).map((item) => [countryName(item.country, language), formatMoney(item.total ?? item.amount, language, item.currency || currency), localizeTollSystem(item.system, language), localizeTollStatus(item.status, language)]);
     if (rows.length) writer.table([de ? "Land" : "Country", de ? "Betrag" : "Amount", de ? "Tarifart" : "Tariff", "Status"], rows, [160, 105, 130, 116]);
     writer.row(de ? "Gesamtsumme" : "Total", formatMoney(tolls.total, language, currency), { bold: true });
+    writer.text(de ? "Mautbetr\xE4ge sind Sch\xE4tzungen. M\xF6glicherweise fehlen Zufahrts- oder Umweltzonengeb\xFChren; die Berechnung basiert auf Wohnmobil-Tarifen." : "Toll amounts are estimates. Access or environmental-zone charges may be missing; the calculation is based on motorhome tariffs.", { size: 8, color: COLORS.muted });
     if (tolls.complete === false || tolls.coverage_note) writer.text(`${de ? "Datenhinweis" : "Data note"}: ${valueOr(tolls.coverage_note, de ? "Mautdaten sind m\xF6glicherweise unvollst\xE4ndig." : "Toll data may be incomplete.")}`, { size: 8, color: COLORS.muted });
-    if (result?.metadata?.tariff_basis_uncertain) writer.text(de ? "Tarifgrundlage unsicher: Die Betr\xE4ge sind Sch\xE4tzungen und nicht rechtsverbindlich." : "Tariff basis uncertain: amounts are estimates and not legally binding.", { size: 8, color: COLORS.muted });
+    if (result?.metadata?.tariff_basis_uncertain) writer.text(de ? "Anbieterannahme: Tarifgrundlage unsicher, weil keine best\xE4tigte Emissionsklasse vorliegt." : "Provider assumption: tariff basis is uncertain because no confirmed emission class is available.", { size: 8, color: COLORS.muted });
   }
   function renderVehicle(writer, profile, language) {
     if (!profile) return;
     const de = language === "de";
     writer.heading(de ? "Fahrzeug\xFCbersicht" : "Vehicle overview", 2);
-    const rows = [[de ? "Fahrzeugname" : "Vehicle name", profile.name], [de ? "Fahrzeugart" : "Vehicle type", localizedVehicle(profile.vehicle_kind, language)], [de ? "Ma\xDFe" : "Dimensions", `${profile.length_m} x ${profile.width_m} x ${profile.height_m} m`], [de ? "Zul\xE4ssige Gesamtmasse" : "Gross vehicle mass", `${profile.gross_weight_kg} kg`], [de ? "Achsen" : "Axles", profile.axles], [de ? "Kraftstoffart" : "Fuel type", localizedVehicle(profile.fuel_type, language)], [de ? "Euro-Schadstoffklasse" : "Euro emission class", profile.emission_class ? profile.emission_class.toUpperCase() : de ? "nicht angegeben" : "not specified"], [de ? "CO2-Klasse" : "CO2 class", profile.co2_class ? profile.co2_class.toUpperCase() : de ? "nicht angegeben" : "not specified"], [de ? "Erstzulassung" : "First registration", valueOr(profile.first_registration, de ? "nicht angegeben" : "not specified")], [de ? "Durchschnittsverbrauch" : "Average consumption", profile.consumption_l_per_100km == null ? de ? "nicht angegeben" : "not specified" : `${formatNumber(profile.consumption_l_per_100km, language, 1)} l/100 km`]];
+    const missing = de ? "nicht angegeben" : "not specified";
+    const rows = [[de ? "Fahrzeugname" : "Vehicle name", profile.name], [de ? "Fahrzeugart" : "Vehicle type", localizedVehicle(profile.vehicle_kind, language)], [de ? "Ma\xDFe" : "Dimensions", profile.length_m == null ? missing : `${profile.length_m} x ${profile.width_m} x ${profile.height_m} m`], [de ? "Zul\xE4ssige Gesamtmasse" : "Gross vehicle mass", profile.gross_weight_kg == null ? missing : `${profile.gross_weight_kg} kg`], [de ? "Achsen" : "Axles", valueOr(profile.axles, missing)], [de ? "Kraftstoffart" : "Fuel type", localizedVehicle(profile.fuel_type, language)], [de ? "Euro-Schadstoffklasse" : "Euro emission class", profile.emission_class ? profile.emission_class.toUpperCase() : missing], [de ? "CO2-Klasse" : "CO2 class", profile.co2_class ? profile.co2_class.toUpperCase() : missing], [de ? "Erstzulassung" : "First registration", valueOr(profile.first_registration, missing)], [de ? "Durchschnittsverbrauch" : "Average consumption", profile.consumption_l_per_100km == null ? missing : `${formatNumber(profile.consumption_l_per_100km, language, 1)} l/100 km`]];
     writer.table([de ? "Angabe" : "Field", de ? "Wert" : "Value"], rows, [220, 291]);
   }
-  function renderRouteOverview(writer, result, state, language) {
+  function renderOverview(writer, result, state, language) {
     const de = language === "de";
     writer.heading(de ? "Reise\xFCbersicht" : "Trip overview", 2);
     writer.row(de ? "Start" : "Start", coordinateLabel(state.origin || result.origin, language));
     writer.row(de ? "Ziel" : "Destination", coordinateLabel(state.destination || result.destination, language));
-    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : Array.isArray(result.waypoints) ? result.waypoints : [];
+    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : result.waypoints || [];
     writer.row(de ? "Zwischenziele" : "Waypoints", waypoints.length ? waypoints.map((point) => coordinateLabel(point, language)).join("; ") : de ? "Keine" : "None");
     const countries = routeCountries(result, language);
     if (countries.length) writer.row(de ? "L\xE4nderfolge" : "Country sequence", countries.join(" -> "));
     writer.row(de ? "Gesamtdistanz" : "Total distance", `${formatNumber(Number(result.distance_m) / 1e3, language, 1)} km`);
     writer.row(de ? "Reine Fahrzeit" : "Driving time", `${Math.floor(Number(result.duration_s) / 3600)} h ${Math.round(Number(result.duration_s) % 3600 / 60)} min`);
-    writer.row(de ? "Gesch\xE4tzte Maut" : "Estimated tolls", result.metadata?.tolls ? formatMoney(result.metadata.tolls.total, language, result.metadata.tolls.currency || "EUR") : de ? "nicht verf\xFCgbar" : "not available");
-    writer.row(de ? "Erstellt" : "Created", formatDate(result.created_at, language, true));
+    writer.row(de ? "Gesch\xE4tzte Maut" : "Estimated tolls", result.metadata?.tolls ? formatMoney(result.metadata.tolls.total, language, result.metadata.tolls.currency || "EUR") : t(language, "unknown"));
+    writer.row(de ? "Erstellt" : "Created", formatDate(result.created_at, language));
+  }
+  function renderItinerary(writer, result, state, language) {
+    const de = language === "de";
+    writer.heading(de ? "Reiseverlauf" : "Itinerary", 2);
+    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : result.waypoints || [];
+    const segments = result?.metadata?.segments || result?.segments;
+    const points = [state.origin || result.origin, ...waypoints, state.destination || result.destination];
+    const rows = Array.isArray(segments) ? segments.map((segment, index) => {
+      const distance = Number(segment.distance_m ?? Number(segment.distance_km) * 1e3), duration = Number(segment.duration_s);
+      if (!points[index] || !points[index + 1] || !Number.isFinite(distance) || !Number.isFinite(duration)) return null;
+      return [index + 1, coordinateLabel(segment.from || points[index], language), coordinateLabel(segment.to || points[index + 1], language), `${formatNumber(distance / 1e3, language, 1)} km`, `${Math.floor(duration / 3600)} h ${Math.round(duration % 3600 / 60)} min`, de ? "Routingdaten" : "Routing data"];
+    }).filter(Boolean) : [];
+    if (rows.length) writer.table([de ? "Etappe" : "Leg", de ? "Von" : "From", de ? "Nach" : "To", de ? "Entfernung" : "Distance", de ? "Fahrzeit" : "Driving time", de ? "Quelle" : "Source"], rows, [42, 130, 130, 72, 72, 77]);
+    else {
+      writer.row(de ? "Start" : "Start", coordinateLabel(points[0], language));
+      waypoints.forEach((point, index) => writer.row(`${de ? "Zwischenziel" : "Waypoint"} ${index + 1}`, coordinateLabel(point, language)));
+      writer.row(de ? "Ziel" : "Destination", coordinateLabel(points.at(-1), language));
+      writer.text(de ? "Etappenwerte werden nur ausgewiesen, wenn die Routing-Antwort belastbare Segmentdaten liefert; eine freie Aufteilung der Gesamtdistanz findet nicht statt." : "Leg values are shown only when the routing response provides reliable segment data; the total route is not divided arbitrarily.", { size: 8, color: COLORS.muted });
+    }
   }
   function renderWarnings(writer, result, language) {
     const de = language === "de";
     writer.heading(de ? "Reisehinweise und Datenqualit\xE4t" : "Travel notes and data quality", 2);
     const notes = de ? ["Wohnmobil-Routing ist eine Planungshilfe; Verkehrszeichen und geltende Vorschriften haben Vorrang.", "Mautbetr\xE4ge und Grenzwartedaten k\xF6nnen unvollst\xE4ndig oder veraltet sein.", "Die Navigation kann die Strecke neu berechnen; Befahrbarkeit wird nicht rechtsverbindlich zugesichert."] : ["Motorhome routing is a planning aid; traffic signs and applicable rules take precedence.", "Toll amounts and border-wait data may be incomplete or out of date.", "Navigation may recalculate the route; passability is not legally guaranteed."];
     notes.forEach((note) => writer.bullet(note, { keepTogether: true }));
-    if (Array.isArray(result.warnings) && result.warnings.length) {
-      writer.text(de ? "Anbieterhinweise (Original)" : "Provider notes (original)", { bold: true, size: 9, keepTogether: true });
-      result.warnings.forEach((warning) => writer.bullet(warning, { size: 8.5, color: COLORS.muted, keepTogether: true }));
+    const originals = Array.isArray(result.warnings) ? result.warnings.filter((warning) => String(warning).trim()) : [];
+    if (originals.length) {
+      writer.text(de ? "Anbieterinformationen (Original)" : "Provider information (original)", { bold: true, size: 9, keepTogether: true });
+      writer.text(de ? "Unver\xE4nderte Anbietertexte; sie sind keine best\xE4tigten Fahrzeug- oder Tarifdaten." : "Unchanged provider text; it is not confirmed vehicle or tariff data.", { size: 8, color: COLORS.muted, keepTogether: true });
+      originals.forEach((warning) => writer.bullet(warning, { size: 8.5, color: COLORS.muted, keepTogether: true }));
     }
   }
-  async function createTravelPlanPdf({ language = "en", profile = null, state = {}, result = null, title = "Camper Route Planner", routeName = "" }) {
-    if (!result || !result.geometry || !Array.isArray(result.geometry.points) || result.geometry.points.length < 2) throw new Error("A valid calculated route is required");
+  async function createTravelPlanPdf({ language = "en", title = "Camper Route Planner", routeName = "", result, state = {}, profile = null } = {}) {
+    if (!result || !Number.isFinite(Number(result.distance_m)) || !Number.isFinite(Number(result.duration_s))) throw new Error("A valid calculated route is required for PDF export");
     const document2 = await PDFDocument_default.create();
     const fonts = { regular: await document2.embedFont(StandardFonts.Helvetica), bold: await document2.embedFont(StandardFonts.HelveticaBold) };
     const de = language === "de";
@@ -30821,15 +30855,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     writer.text(de ? "Reiseplan" : "Travel plan", { size: 14, bold: true });
     writer.text(planTitle, { size: 12, bold: true, color: COLORS.muted });
     writer.rule();
-    renderRouteOverview(writer, result, state, language);
+    renderOverview(writer, result, state, language);
     renderVehicle(writer, profile, language);
     drawRouteMap(writer, result, state, language);
-    writer.heading(de ? "Reiseverlauf" : "Itinerary", 2);
-    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : Array.isArray(result.waypoints) ? result.waypoints : [];
-    writer.row(de ? "Start" : "Start", coordinateLabel(state.origin || result.origin, language));
-    waypoints.forEach((point, index) => writer.row(`${de ? "Zwischenziel" : "Waypoint"} ${index + 1}`, coordinateLabel(point, language)));
-    writer.row(de ? "Ziel" : "Destination", coordinateLabel(state.destination || result.destination, language));
-    writer.text(de ? "Etappenwerte werden nur ausgewiesen, wenn die Routing-Antwort belastbare Segmentdaten liefert; eine freie Aufteilung der Gesamtdistanz findet nicht statt." : "Leg values are shown only when the routing response provides reliable segment data; the total route is not divided arbitrarily.", { size: 8, color: COLORS.muted });
+    renderItinerary(writer, result, state, language);
     renderFuel(writer, result, profile, language);
     renderTolls(writer, result, language);
     renderBorders(writer, result, language);
@@ -30848,7 +30877,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     try {
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = filename;
+      anchor.download = filename || "camper-route.pdf";
       anchor.rel = "noopener";
       anchor.click();
     } finally {
