@@ -27,6 +27,7 @@ try:
         vol.Required("destination"): dict,
         vol.Optional("via", default=[]): list,
         vol.Optional("route_name", default="manual route"): cv.string,
+        vol.Optional("force_refresh", default=False): cv.boolean,
     })
 
     async def _async_register_frontend(hass: HomeAssistant) -> None:

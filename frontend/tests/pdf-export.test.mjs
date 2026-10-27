@@ -32,5 +32,24 @@ test("PDF export creates a multi-section German A4 document without network inpu
 test("PDF export supports English output and safe filenames", async () => {
   const bytes = await createTravelPlanPdf({ language: "en", result, state: { origin: {}, destination: {}, waypoints: [] }, profile: null });
   assert.equal(String.fromCharCode(...bytes.slice(0, 5)), "%PDF-");
-  assert.equal(pdfFileName("Zürich / Route 01"), "zurich-route-01.pdf");
+  assert.match(pdfFileName("Zürich / Route 01"), /^Camper-Route-Zurich-Route-01-2026-10-27\.pdf$/);
+});
+
+test("PDF download always uses a browser download and releases its object URL", async () => {
+  const { downloadPdf } = await import("../src/pdf-export.js");
+  const originalDocument = globalThis.document;
+  const originalURL = globalThis.URL;
+  let clicked = false;
+  let revoked = false;
+  globalThis.document = { createElement: () => ({ click: () => { clicked = true; } }) };
+  globalThis.URL = { createObjectURL: () => "blob:test", revokeObjectURL: () => { revoked = true; } };
+  try {
+    assert.equal(downloadPdf(new Uint8Array([1, 2]), "Camper-Route-Zoe-2026-10-27.pdf"), "downloaded");
+    assert.equal(clicked, true);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(revoked, true);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.URL = originalURL;
+  }
 });

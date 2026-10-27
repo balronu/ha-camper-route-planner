@@ -34,7 +34,7 @@ test("installable integration contains the same built bundle", () => {
 });
 
 test("route calculation appears only behind an explicit action handler", () => {
-  assert.match(source, /async calculate\(\)/);
+  assert.match(source, /async calculate\(forceRefresh = false\)/);
   assert.match(source, /data-action="calculate"/);
   assert.doesNotMatch(source, /connectedCallback\(\)[\s\S]{0,500}calculate\(/);
 });
@@ -73,7 +73,9 @@ test("navigation handoff is local, platform-aware and keeps GPX export", () => {
 test("PDF export is a local action available only with the calculated route", () => {
   assert.match(source, /data-action="pdf"/);
   assert.match(source, /createTravelPlanPdf/);
-  assert.match(source, /application\/pdf/);
+  assert.match(source, /downloadPdf/);
+  assert.match(source, /pdfFileName\(profile\?\.name/);
+  assert.doesNotMatch(source, /navigator\.share/);
   assert.doesNotMatch(source, /fetch\([^)]*pdf/i);
 });
 

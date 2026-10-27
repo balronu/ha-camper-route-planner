@@ -66,7 +66,10 @@ class RuntimeData:
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
             from .providers.http_transport import NakordoniHttpTransport
 
-            transport = NakordoniHttpTransport(async_get_clientsession(hass), str(values[CONF_API_KEY]))
+            transport = NakordoniHttpTransport(
+                async_get_clientsession(hass), str(values[CONF_API_KEY]),
+                timeout_s=60.0, connect_timeout_s=10.0,
+            )
         provider = build_routing_provider(values, transport=transport)
         geocoder = None
         if values.get("geocoding_api_key"):
@@ -86,10 +89,13 @@ class RuntimeData:
         if profile is None:
             raise ValueError("unknown vehicle profile")
         request = RouteRequest(RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile, tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])))
-        result = await self.coordinator.async_calculate_manual(request)
+        result = await self.coordinator.async_calculate_manual(
+            request, force_refresh=bool(data.get("force_refresh", False))
+        )
         return {
             "provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m,
             "duration_s": result.duration_s, "warnings": [warning.message for warning in result.warnings],
             "geometry": result.geometry.as_dict(), "metadata": result.metadata,
             "beta": result.metadata.get("beta", False), "attribution_url": result.metadata.get("attribution_url"),
+            "created_at": result.created_at.isoformat() if result.created_at else None,
         }

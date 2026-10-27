@@ -1,6 +1,8 @@
 import asyncio
 import unittest
 
+from custom_components.camper_route_planner.providers.http_transport import ClientTimeout
+
 from custom_components.camper_route_planner.providers.http_transport import NakordoniHttpTransport
 from custom_components.camper_route_planner.providers.nakordoni_motorhome import NakordoniMotorhomeProvider
 
@@ -36,12 +38,14 @@ class FakeSession:
 class Phase4BHttpTransportTests(unittest.TestCase):
     def test_bearer_auth_query_and_quota_headers_are_bounded(self):
         session = FakeSession()
-        transport = NakordoniHttpTransport(session, "SECRET-KEY", timeout_s=7)
+        transport = NakordoniHttpTransport(session, "SECRET-KEY", timeout_s=60, connect_timeout_s=10)
         payload = asyncio.run(transport({"from": "48,11", "to": "45,10", "via": "47,11"}))
         args, kwargs = session.calls[0]
         self.assertEqual(args[0], transport.endpoint)
         self.assertEqual(kwargs["headers"], {"Authorization": "Bearer SECRET-KEY"})
-        self.assertEqual(kwargs["timeout"], 7)
+        self.assertIsInstance(kwargs["timeout"], ClientTimeout)
+        self.assertEqual(kwargs["timeout"].total, 60)
+        self.assertEqual(kwargs["timeout"].connect, 10)
         self.assertEqual(kwargs["params"]["via"], "47,11")
         self.assertEqual(payload["headers"], {"X-Devapi-Limit": "10", "X-Devapi-Remaining": "9"})
 

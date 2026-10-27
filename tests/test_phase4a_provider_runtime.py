@@ -98,6 +98,16 @@ class Phase4AProviderRuntimeTests(unittest.TestCase):
                 asyncio.run(provider.calculate(route_request()))
             self.assertEqual(ctx.exception.code, code)
 
+    def test_timeout_is_not_marked_for_automatic_retry(self):
+        async def timeout(_parameters):
+            raise TimeoutError
+
+        provider = NakordoniMotorhomeProvider(api_key="K" * 24, live_enabled=True, transport=timeout)
+        with self.assertRaises(ProviderError) as ctx:
+            asyncio.run(provider.calculate(route_request()))
+        self.assertFalse(ctx.exception.retryable)
+        self.assertIn("no automatic retry", str(ctx.exception))
+
     def test_missing_provider_is_not_silently_mocked(self):
         with self.assertRaises(ProviderError) as ctx:
             build_routing_provider({})

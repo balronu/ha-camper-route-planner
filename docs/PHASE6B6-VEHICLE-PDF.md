@@ -26,6 +26,6 @@ Beim Bearbeiten bleibt die Profil-ID erhalten. Nicht ausgefüllte Felder bleiben
 
 Der Button **Reiseplan als PDF** steht nur nach einer gültigen Berechnung zur Verfügung. `pdf-lib` 1.17.1 (MIT) erzeugt clientseitig ein mehrseitiges A4-Dokument. Enthalten sind Fahrzeug, Start/Ziel, Zwischenziele, Provider, Entfernung, Fahrzeit, eine einfache Routengeometrie, Grenzübergänge, Mautdaten, Warnungen und Datenqualitäts-/Annahmehinweise.
 
-Die Karte ist eine lokale Geometrieübersicht; es werden keine Kartendienste, Nakordoni-Endpunkte oder PDF-Dienste für den Export aufgerufen. Auf iOS wird die Datei über `navigator.share` geteilt, sofern Dateifreigabe verfügbar ist, sonst als Download bereitgestellt. Reisedaten werden nicht serverseitig gespeichert.
+Die Karte ist eine lokale Geometrieübersicht; es werden keine Kartendienste, Nakordoni-Endpunkte oder PDF-Dienste für den Export aufgerufen. Der PDF-Export verwendet einen normalen Browser-Download; auf iOS hängt Öffnen/Speichern von der verfügbaren Browser- oder WebView-Unterstützung ab. Reisedaten werden nicht serverseitig gespeichert.
 
 Nicht vorhandene Verkehrs-, Baustellen-, Umweltzonen-, Rastplatz- oder Kraftstoffdaten werden nicht erfunden, sondern als nicht vom Routing geliefert behandelt.

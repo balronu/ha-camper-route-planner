@@ -65,13 +65,44 @@ class Phase2ATests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(provider.calls, 1)
 
+    def test_success_cache_reuses_route_and_manual_refresh_bypasses_it(self):
+        provider = CountingProvider()
+        coordinator = RouteCoordinator(provider, cache_ttl_s=300, cache_size=2)
+        request = RouteRequest(RouteWaypoint(49, 7), RouteWaypoint(50, 8), carthago_fixture())
+        first = asyncio.run(coordinator.async_calculate_manual(request))
+        cached = asyncio.run(coordinator.async_calculate_manual(request))
+        refreshed = asyncio.run(coordinator.async_calculate_manual(request, force_refresh=True))
+        self.assertEqual(provider.calls, 2)
+        self.assertFalse(first.metadata["cache_hit"])
+        self.assertTrue(cached.metadata["cache_hit"])
+        self.assertTrue(cached.metadata["data_stale"])
+        self.assertEqual(cached.created_at, first.created_at)
+        self.assertFalse(refreshed.metadata["cache_hit"])
+
+    def test_cache_key_changes_when_vehicle_data_changes(self):
+        provider = CountingProvider()
+        coordinator = RouteCoordinator(provider, cache_ttl_s=300, cache_size=2)
+        request = RouteRequest(RouteWaypoint(49, 7), RouteWaypoint(50, 8), carthago_fixture())
+        changed = VehicleProfile("fixture-carthago", "Carthago chic e-line I 50 Yachting", "motorhome", 3.20, 2.34, 7.65, 4800, "diesel", consumption_l_per_100km=11.2)
+        asyncio.run(coordinator.async_calculate_manual(request))
+        asyncio.run(coordinator.async_calculate_manual(RouteRequest(request.origin, request.destination, changed)))
+        self.assertEqual(provider.calls, 2)
+
+    def test_success_cache_expiry_does_not_reuse_route(self):
+        provider = CountingProvider()
+        coordinator = RouteCoordinator(provider, cache_ttl_s=0, cache_size=2)
+        request = RouteRequest(RouteWaypoint(49, 7), RouteWaypoint(50, 8), carthago_fixture())
+        asyncio.run(coordinator.async_calculate_manual(request))
+        asyncio.run(coordinator.async_calculate_manual(request))
+        self.assertEqual(provider.calls, 2)
+
     def test_quota_guard_blocks_second_call(self):
         provider = CountingProvider()
         coordinator = RouteCoordinator(provider, quota=QuotaGuard(daily_limit=1))
         request = RouteRequest(RouteWaypoint(49, 7), RouteWaypoint(50, 8), carthago_fixture())
         asyncio.run(coordinator.async_calculate_manual(request))
         with self.assertRaises(ProviderError) as context:
-            asyncio.run(coordinator.async_calculate_manual(request))
+            asyncio.run(coordinator.async_calculate_manual(request, force_refresh=True))
         self.assertEqual(context.exception.code, "quota_exhausted")
 
     def test_nakordoni_is_disabled_and_fixture_only(self):
