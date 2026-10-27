@@ -11,8 +11,9 @@ und GPX-Export.
 > geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
 > automatische Fallbacks.
 >
-> **Aktueller Pre-release:** `v0.1.1-beta.14` verbessert Dezimaleingaben,
-> Tankberechnung und iPhone-Bedienung. Stable bleibt `v0.1.0`.
+> **Aktueller Pre-release:** `v0.1.1-beta.15` entfernt die Sicherheitsreserve aus
+> der lokalen Reichweitenplanung und verbessert die iPhone-Bedienung. Stable bleibt
+> `v0.1.0`.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 

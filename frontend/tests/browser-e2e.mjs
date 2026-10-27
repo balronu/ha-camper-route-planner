@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.14"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.15"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.14`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.14/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.15`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.15/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -94,14 +94,12 @@ const desktop = await preparePage({ width: 1280, height: 900 });
 assert.equal(await desktop.locator(".result .metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
 await desktop.locator('input[data-fuel-field="fuel_level_l"]').fill("40");
-const reserveInput = desktop.locator('input[data-fuel-field="reserve_l"]');
-await reserveInput.scrollIntoViewIfNeeded();
-await reserveInput.fill("5");
+assert.equal(await desktop.locator('input[data-fuel-field="reserve_l"]').count(), 0, "legacy reserve is not editable in the fuel section");
 const priceInput = desktop.locator('input[data-fuel-field="diesel_price_per_l"]');
 await priceInput.scrollIntoViewIfNeeded();
 await priceInput.fill("2,16");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "fuel edits do not call the route service");
-assert.deepEqual(await desktop.evaluate(() => JSON.parse(localStorage.getItem("camper-route-planner:fuel:test-entry:test"))), { fuel_level_l: "40", fuel_level_pct: "", reserve_l: "5", diesel_price_per_l: "2,16", fuel_level_mode: "liters" }, "fuel edits persist in the vehicle-scoped local store");
+assert.deepEqual(await desktop.evaluate(() => JSON.parse(localStorage.getItem("camper-route-planner:fuel:test-entry:test"))), { fuel_level_l: "40", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" }, "fuel edits persist in the vehicle-scoped local store");
 await desktop.locator("select[data-fuel-mode]").selectOption("percent");
 assert.equal(await desktop.locator('input[data-fuel-field="fuel_level_pct"]').inputValue(), "40", "switching to percent converts the active value");
 await desktop.locator("select[data-fuel-mode]").selectOption("liters");

@@ -117,6 +117,12 @@ test("fuel values remain editable when no route has been calculated", () => {
   assert.match(source, /fuelLevelPercent/);
 });
 
+test("fuel section no longer renders the legacy safety reserve input", () => {
+  assert.doesNotMatch(source, /input\("reserve_l"/);
+  assert.doesNotMatch(source, /data-fuel-field="reserve_l"/);
+  assert.match(source, /fuelDataMissing/);
+});
+
 test("fuel controls use locale-tolerant mobile decimal text input and validation", () => {
   assert.match(source, /inputmode="decimal"/);
   assert.match(source, /type="text"/);
