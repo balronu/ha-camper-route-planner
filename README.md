@@ -11,7 +11,8 @@ und GPX-Export.
 > geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
 > automatische Fallbacks.
 >
-> **Aktueller Pre-release:** `v0.1.1-beta.15` entfernt die Sicherheitsreserve aus
+> **Aktueller Pre-release:** `v0.1.1-beta.16` korrigiert die Reichweitenmeldung
+> für Langstrecken mit zusätzlichem Tankbedarf. Die Sicherheitsreserve bleibt aus
 > der lokalen Reichweitenplanung und verbessert die iPhone-Bedienung. Stable bleibt
 > `v0.1.0`.
 
