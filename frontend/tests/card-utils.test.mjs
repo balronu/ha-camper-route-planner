@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -55,6 +55,36 @@ test("fuel planning rejects invalid tank relationships and preserves liter prior
   assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 0, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 0 }).totalLiters, null);
   assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 0, diesel_price_per_l: 0 }).cost, 0);
   assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 0, diesel_price_per_l: -1 }).cost, null);
+});
+
+test("decimal input accepts comma and dot without coercing intermediate text", () => {
+  assert.equal(normalizeDecimalInput("2,16", { maximum: 10 }).value, 2.16);
+  assert.equal(normalizeDecimalInput("2.16", { maximum: 10 }).value, 2.16);
+  assert.equal(normalizeDecimalInput("1,659", { maximum: 10 }).value, 1.659);
+  assert.equal(normalizeDecimalInput("0,99", { maximum: 10 }).value, 0.99);
+  assert.equal(normalizeDecimalInput("2,", { maximum: 10 }).intermediate, true);
+  assert.equal(normalizeDecimalInput(" 2.16 ", { maximum: 10 }).valid, true);
+  assert.equal(normalizeDecimalInput("216", { maximum: 10 }).valid, false);
+  assert.equal(normalizeDecimalInput("diesel", { maximum: 10 }).valid, false);
+  assert.equal(normalizeDecimalInput("", { maximum: 10 }).present, false);
+});
+
+test("range and cost calculations are independent and price validation is bounded", () => {
+  const range = calculateFuelPlan(2474700, { consumption_l_per_100km: "10,5", tank_capacity_l: "90", fuel_level_l: "90", reserve_l: "10" });
+  assert.equal(Math.round(range.rangeKm), 762);
+  assert.equal(range.cost, null);
+  const cost = calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5, diesel_price_per_l: "2,16" });
+  // Cost uses the internally precise route demand (259.8435 l), while the
+  // UI displays the demand rounded to one decimal place.
+  assert.equal(Math.round(cost.cost * 100) / 100, 561.26);
+  assert.equal(calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5, diesel_price_per_l: "216" }).cost, null);
+  assert.equal(calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5, fuel_level_l: 0, reserve_l: 0, tank_capacity_l: 90 }).rangeKm, 0);
+});
+
+test("explicit fuel level mode controls percent conversion and legacy percent data remains compatible", () => {
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 90, fuel_level_mode: "percent", fuel_level_pct: "100", reserve_l: 10 }).rangeKm, 800);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 90, fuel_level_pct: 50, reserve_l: 0 }).rangeKm, 450);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 90, fuel_level_mode: "percent", fuel_level_l: 90, fuel_level_pct: "50", reserve_l: 0 }).rangeKm, 450);
 });
 
 test("German and English labels are available", () => {

@@ -73,35 +73,46 @@ export function normalizeServiceResponse(response) {
   };
 }
 
+export function normalizeDecimalInput(value, { minimum = 0, maximum = Infinity } = {}) {
+  if (value == null || (typeof value === "string" && value.trim() === "")) return { present: false, valid: true, intermediate: false, value: null };
+  if (typeof value === "number") return { present: true, valid: Number.isFinite(value) && value >= minimum && value <= maximum, intermediate: false, value };
+  const raw = String(value).trim();
+  if (/^[+]?\d+[.,]$/.test(raw)) return { present: true, valid: false, intermediate: true, value: null };
+  if (!/^[+]?((\d+(?:[.,]\d+)?)|(\.\d+))$/.test(raw)) return { present: true, valid: false, intermediate: false, value: null };
+  const number = Number(raw.replace(",", "."));
+  return { present: true, valid: Number.isFinite(number) && number >= minimum && number <= maximum, intermediate: false, value: number };
+}
+
 export function calculateFuelPlan(distanceM, profile = {}) {
-  const optionalNumber = (value, minimum = 0, maximum = Infinity) => {
-    if (value == null || (typeof value === "string" && value.trim() === "")) return { present: false, valid: true, value: null };
-    const number = Number(value);
-    return { present: true, valid: Number.isFinite(number) && number >= minimum && number <= maximum, value: number };
-  };
+  const optionalNumber = (value, minimum = 0, maximum = Infinity) => normalizeDecimalInput(value, { minimum, maximum });
   const distance = optionalNumber(distanceM, 0);
   const consumptionInput = optionalNumber(profile.consumption_l_per_100km, 0);
   const tankInput = optionalNumber(profile.tank_capacity_l, 0);
   const levelLitersInput = optionalNumber(profile.fuel_level_l, 0);
   const levelPercentInput = optionalNumber(profile.fuel_level_pct, 0, 100);
   const reserveInput = optionalNumber(profile.reserve_l, 0);
-  const priceInput = optionalNumber(profile.diesel_price_per_l, 0);
+  // A manual price is an explicitly rough €/l estimate. Values such as 216
+  // are rejected instead of silently being interpreted as cents.
+  const priceInput = optionalNumber(profile.diesel_price_per_l, 0, 10);
   const distanceKm = distance.valid ? distance.value / 1000 : null;
   const consumption = consumptionInput.valid && consumptionInput.present && consumptionInput.value > 0 ? consumptionInput.value : null;
   const totalLiters = consumption != null && distanceKm != null ? distanceKm * consumption / 100 : null;
   const tank = tankInput.valid && tankInput.present && tankInput.value > 0 ? tankInput.value : null;
   // Liter filling level has priority when both representations are present.
   // The options flow prevents saving both, while old data remains readable.
-  const level = levelLitersInput.valid && levelLitersInput.present ? levelLitersInput.value
-    : levelPercentInput.valid && levelPercentInput.present && tank != null ? tank * levelPercentInput.value / 100 : null;
+  const levelMode = profile.fuel_level_mode === "percent" || (profile.fuel_level_mode == null && !levelLitersInput.present && levelPercentInput.present) ? "percent" : "liters";
+  const selectedLevelInput = levelMode === "percent" ? levelPercentInput : levelLitersInput;
+  const level = levelMode === "percent"
+    ? selectedLevelInput.valid && selectedLevelInput.present && tank != null ? tank * selectedLevelInput.value / 100 : null
+    : selectedLevelInput.valid && selectedLevelInput.present ? selectedLevelInput.value : null;
   const reserve = reserveInput.valid && reserveInput.present ? reserveInput.value : null;
-  const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !levelLitersInput.valid || !levelPercentInput.valid || !reserveInput.valid || (tank != null && level != null && level > tank) || (tank != null && reserve != null && reserve > tank);
+  const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !selectedLevelInput.valid || !reserveInput.valid || (tank != null && level != null && level > tank) || (tank != null && reserve != null && reserve > tank);
   const completeTankData = !invalidTankData && tank != null && level != null && reserve != null && consumption != null;
   const usable = completeTankData ? Math.max(0, level - reserve) : null;
   const rangeKm = usable == null ? null : usable * 100 / consumption;
   const deficit = totalLiters == null || usable == null ? null : Math.max(0, totalLiters - usable);
   const cost = totalLiters != null && priceInput.valid && priceInput.present ? totalLiters * priceInput.value : null;
-  return { distanceKm, consumption, totalLiters, tank, level, reserve, usable, rangeKm, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, completeTankData };
+  return { distanceKm, consumption, tank, level, reserve, usable, rangeKm, totalLiters, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, invalidPrice: priceInput.present && !priceInput.valid, completeTankData, fuelLevelMode: levelMode };
 }
 
 export function routeRecordFromResult(result, state) {

@@ -117,6 +117,15 @@ test("fuel values remain editable when no route has been calculated", () => {
   assert.match(source, /fuelLevelPercent/);
 });
 
+test("fuel controls use locale-tolerant mobile decimal text input and validation", () => {
+  assert.match(source, /inputmode="decimal"/);
+  assert.match(source, /type="text"/);
+  assert.match(source, /fuelPriceInvalid/);
+  assert.match(source, /data-fuel-mode/);
+  assert.match(source, /updateFuelMode/);
+  assert.doesNotMatch(source, /data-fuel-field="fuel_level_pct"[^>]*type="number"/);
+});
+
 test("toll details use a structured summary and collapsed technical provider section", () => {
   assert.match(source, /tollSummary/);
   assert.match(source, /toll-country-heading/);

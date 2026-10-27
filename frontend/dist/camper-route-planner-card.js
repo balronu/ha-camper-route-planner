@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.13; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.14; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13926,6 +13926,9 @@
       previewLine: "Luftlinien-Vorschau \u2013 noch keine Stra\xDFenroute",
       vehicleKind: { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw" },
       fuelType: { diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" },
+      fuelLevelUnit: "F\xFCllstandseinheit",
+      fuelInputInvalid: "Bitte g\xFCltige Tankwerte eingeben.",
+      fuelPriceInvalid: "Bitte Dieselpreis in \u20AC/Liter eingeben, z. B. 2,16 (0 bis 10 \u20AC/Liter).",
       latitude: "Breitengrad",
       longitude: "L\xE4ngengrad",
       mockDataNotice: "Synthetische Testdaten \u2013 keine gepr\xFCfte Stra\xDFenroute",
@@ -14075,6 +14078,9 @@
       previewLine: "Straight-line preview \u2013 not a road route yet",
       vehicleKind: { motorhome: "Motorhome", truck: "Truck", car: "Car" },
       fuelType: { diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" },
+      fuelLevelUnit: "Fuel level unit",
+      fuelInputInvalid: "Enter valid tank values.",
+      fuelPriceInvalid: "Enter a diesel price in \u20AC/litre, e.g. 2.16 (0 to 10 \u20AC/litre).",
       latitude: "Latitude",
       longitude: "Longitude",
       mockDataNotice: "Synthetic test data \u2013 not a checked road route",
@@ -14177,32 +14183,39 @@
       route_options: payload.route_options || payload.metadata?.request_options || {}
     };
   }
+  function normalizeDecimalInput(value, { minimum = 0, maximum = Infinity } = {}) {
+    if (value == null || typeof value === "string" && value.trim() === "") return { present: false, valid: true, intermediate: false, value: null };
+    if (typeof value === "number") return { present: true, valid: Number.isFinite(value) && value >= minimum && value <= maximum, intermediate: false, value };
+    const raw = String(value).trim();
+    if (/^[+]?\d+[.,]$/.test(raw)) return { present: true, valid: false, intermediate: true, value: null };
+    if (!/^[+]?((\d+(?:[.,]\d+)?)|(\.\d+))$/.test(raw)) return { present: true, valid: false, intermediate: false, value: null };
+    const number = Number(raw.replace(",", "."));
+    return { present: true, valid: Number.isFinite(number) && number >= minimum && number <= maximum, intermediate: false, value: number };
+  }
   function calculateFuelPlan(distanceM, profile = {}) {
-    const optionalNumber = (value, minimum = 0, maximum = Infinity) => {
-      if (value == null || typeof value === "string" && value.trim() === "") return { present: false, valid: true, value: null };
-      const number = Number(value);
-      return { present: true, valid: Number.isFinite(number) && number >= minimum && number <= maximum, value: number };
-    };
+    const optionalNumber = (value, minimum = 0, maximum = Infinity) => normalizeDecimalInput(value, { minimum, maximum });
     const distance = optionalNumber(distanceM, 0);
     const consumptionInput = optionalNumber(profile.consumption_l_per_100km, 0);
     const tankInput = optionalNumber(profile.tank_capacity_l, 0);
     const levelLitersInput = optionalNumber(profile.fuel_level_l, 0);
     const levelPercentInput = optionalNumber(profile.fuel_level_pct, 0, 100);
     const reserveInput = optionalNumber(profile.reserve_l, 0);
-    const priceInput = optionalNumber(profile.diesel_price_per_l, 0);
+    const priceInput = optionalNumber(profile.diesel_price_per_l, 0, 10);
     const distanceKm = distance.valid ? distance.value / 1e3 : null;
     const consumption = consumptionInput.valid && consumptionInput.present && consumptionInput.value > 0 ? consumptionInput.value : null;
     const totalLiters = consumption != null && distanceKm != null ? distanceKm * consumption / 100 : null;
     const tank = tankInput.valid && tankInput.present && tankInput.value > 0 ? tankInput.value : null;
-    const level = levelLitersInput.valid && levelLitersInput.present ? levelLitersInput.value : levelPercentInput.valid && levelPercentInput.present && tank != null ? tank * levelPercentInput.value / 100 : null;
+    const levelMode = profile.fuel_level_mode === "percent" || profile.fuel_level_mode == null && !levelLitersInput.present && levelPercentInput.present ? "percent" : "liters";
+    const selectedLevelInput = levelMode === "percent" ? levelPercentInput : levelLitersInput;
+    const level = levelMode === "percent" ? selectedLevelInput.valid && selectedLevelInput.present && tank != null ? tank * selectedLevelInput.value / 100 : null : selectedLevelInput.valid && selectedLevelInput.present ? selectedLevelInput.value : null;
     const reserve = reserveInput.valid && reserveInput.present ? reserveInput.value : null;
-    const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !levelLitersInput.valid || !levelPercentInput.valid || !reserveInput.valid || tank != null && level != null && level > tank || tank != null && reserve != null && reserve > tank;
+    const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !selectedLevelInput.valid || !reserveInput.valid || tank != null && level != null && level > tank || tank != null && reserve != null && reserve > tank;
     const completeTankData = !invalidTankData && tank != null && level != null && reserve != null && consumption != null;
     const usable = completeTankData ? Math.max(0, level - reserve) : null;
     const rangeKm = usable == null ? null : usable * 100 / consumption;
     const deficit = totalLiters == null || usable == null ? null : Math.max(0, totalLiters - usable);
     const cost = totalLiters != null && priceInput.valid && priceInput.present ? totalLiters * priceInput.value : null;
-    return { distanceKm, consumption, totalLiters, tank, level, reserve, usable, rangeKm, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, completeTankData };
+    return { distanceKm, consumption, tank, level, reserve, usable, rangeKm, totalLiters, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, invalidPrice: priceInput.present && !priceInput.valid, completeTankData, fuelLevelMode: levelMode };
   }
   function routeRecordFromResult(result, state) {
     const routeId = globalThis.crypto?.randomUUID?.() || `route-${Date.now()}`;
@@ -31039,18 +31052,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (!Number.isFinite(number)) return String(value ?? "");
     return number.toFixed(6).replace(/\.?0+$/, "");
   };
-  var FUEL_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l"];
-  var emptyFuelValues = () => Object.fromEntries(FUEL_FIELDS.map((field) => [field, ""]));
+  var FUEL_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l", "fuel_level_mode"];
+  var emptyFuelValues = () => ({ fuel_level_l: "", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "", fuel_level_mode: "liters" });
   var fuelStorageKey = (entryId, profileId) => `camper-route-planner:fuel:${String(entryId)}:${String(profileId)}`;
   function readFuelValues(entryId, profile) {
     const empty = emptyFuelValues();
     if (!profile?.profile_id) return empty;
     try {
       const stored = JSON.parse(globalThis.localStorage?.getItem(fuelStorageKey(entryId, profile.profile_id)) || "null");
-      if (stored && typeof stored === "object") return { ...empty, ...Object.fromEntries(FUEL_FIELDS.map((field) => [field, stored[field] ?? ""])) };
+      if (stored && typeof stored === "object") return { ...empty, ...Object.fromEntries(FUEL_FIELDS.map((field) => [field, stored[field] ?? ""])), fuel_level_mode: stored.fuel_level_mode === "percent" ? "percent" : "liters" };
     } catch (_error) {
     }
-    return Object.fromEntries(FUEL_FIELDS.map((field) => [field, profile[field] ?? ""]));
+    return { ...empty, fuel_level_l: profile.fuel_level_l ?? "", fuel_level_pct: profile.fuel_level_pct ?? "", reserve_l: profile.reserve_l ?? "", diesel_price_per_l: profile.diesel_price_per_l ?? "", fuel_level_mode: profile.fuel_level_pct != null && profile.fuel_level_l == null ? "percent" : "liters" };
   }
   function writeFuelValues(entryId, profileId, values2) {
     try {
@@ -31121,10 +31134,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const plan = calculateFuelPlan(result?.distance_m, { ...profile || {}, ...fuelValues || {} });
     const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? "\u2014" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
     const range2 = plan.rangeKm == null ? translate2("fuelNotCalculable") : `${number(plan.rangeKm)} km`;
-    const input = (field, label, type = "number", step = "0.1") => `<label class="fuel-input">${label}<input data-fuel-field="${field}" type="${type}" step="${step}" min="0" value="${escapeHtml(fuelValues?.[field] ?? "")}"></label>`;
+    const mode = fuelValues?.fuel_level_mode === "percent" ? "percent" : "liters";
+    const activeField = mode === "percent" ? "fuel_level_pct" : "fuel_level_l";
+    const input = (field, label, placeholder) => `<label class="fuel-input">${label}<input data-fuel-field="${field}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${placeholder}" aria-invalid="${plan.invalidTankData && field === activeField ? "true" : "false"}" value="${escapeHtml(fuelValues?.[field] ?? "")}"></label>`;
     const tankText = profile?.tank_capacity_l == null ? translate2("fuelNotCalculable") : `${number(Number(profile.tank_capacity_l))} l`;
     const consumptionText = profile?.consumption_l_per_100km == null ? translate2("fuelNotCalculable") : `${number(Number(profile.consumption_l_per_100km))} l/100 km`;
-    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid">${input("fuel_level_l", translate2("fuelLevelLiters"))}${input("fuel_level_pct", translate2("fuelLevelPercent"), "number", "1")}${input("reserve_l", translate2("reserve"))}${input("diesel_price_per_l", translate2("dieselPrice"), "number", "0.01")}</div><div class="metrics"><div><b>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b>${range2}</b><span>${translate2("availableRange")}</span></div><div><b>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate2("fuelShortfall") : translate2("fuelSufficient")} \xB7 ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate2("fuelDataMissing")}</p>`}</details>`;
+    const validation = plan.invalidPrice ? `<p class="error" role="alert">${translate2("fuelPriceInvalid")}</p>` : plan.invalidTankData ? `<p class="error" role="alert">${translate2("fuelInputInvalid")}</p>` : "";
+    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${input("reserve_l", translate2("reserve"), "0,0")}${input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div>${validation}<div class="metrics"><div><b>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b>${range2}</b><span>${translate2("availableRange")}</span></div><div><b>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate2("fuelShortfall") : translate2("fuelSufficient")} \xB7 ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate2("fuelDataMissing")}</p>`}</details>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
@@ -31270,6 +31286,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
       if (!FUEL_FIELDS.includes(field)) return;
       this._state.fuelValues = { ...this._state.fuelValues, [field]: value };
       writeFuelValues(this._config.entry_id, this._state.profileId, this._state.fuelValues);
+      this.render();
+    }
+    updateFuelMode(mode) {
+      const nextMode = mode === "percent" ? "percent" : "liters";
+      const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId) || {};
+      const tank = normalizeDecimalInput(profile.tank_capacity_l, { minimum: 0 }).value;
+      const oldMode = this._state.fuelValues.fuel_level_mode === "percent" ? "percent" : "liters";
+      const sourceField = oldMode === "percent" ? "fuel_level_pct" : "fuel_level_l";
+      const targetField = nextMode === "percent" ? "fuel_level_pct" : "fuel_level_l";
+      const current = normalizeDecimalInput(this._state.fuelValues[sourceField], { minimum: 0, maximum: oldMode === "percent" ? 100 : Infinity });
+      const values2 = { ...this._state.fuelValues, fuel_level_mode: nextMode };
+      if (current.valid && current.present && Number.isFinite(tank) && tank > 0) {
+        const converted = nextMode === "percent" ? current.value / tank * 100 : current.value * tank / 100;
+        values2[targetField] = String(Math.round(converted * 100) / 100);
+      } else if (!current.present) values2[targetField] = "";
+      this._state.fuelValues = values2;
+      writeFuelValues(this._config.entry_id, this._state.profileId, values2);
       this.render();
     }
     async calculate(forceRefresh = false) {
@@ -31656,6 +31689,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const translate2 = (key) => t(language, key);
       const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId);
       const result = this._state.result;
+      const currentShell = this.shadowRoot?.querySelector("details.route-planner-shell");
+      if (currentShell) this._cardExpanded = Boolean(currentShell.open);
       const inputState = this.captureInputState();
       const oldMap = this.shadowRoot?.querySelector(".crp-map");
       const preserveMap = Boolean(oldMap?.classList.contains("leaflet-container") && this._state.mapConfig?.provider === "carto" && this._state.mapConfig?.status === "configured");
@@ -31751,6 +31786,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this.render();
       });
       this.shadowRoot.querySelectorAll("input[data-fuel-field]").forEach((input) => input.addEventListener("input", () => this.updateFuelField(input.dataset.fuelField, input.value)));
+      this.shadowRoot.querySelector("select[data-fuel-mode]")?.addEventListener("change", (event) => this.updateFuelMode(event.target.value));
       this.shadowRoot.querySelectorAll("button[data-action=tracker]").forEach((button) => button.addEventListener("click", () => this.useTrackerLocation(true)));
       this.shadowRoot.querySelectorAll("button[data-action=search]").forEach((button) => button.addEventListener("click", () => {
         const input = this.shadowRoot.querySelector(`input[data-search-input="${button.dataset.target}"][data-index="${button.dataset.index}"]`);
