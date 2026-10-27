@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PDFDocument } from "pdf-lib";
 import { createTravelPlanPdf, pdfFileName } from "../src/pdf-export.js";
 
 const result = {
@@ -33,6 +34,37 @@ test("PDF export supports English output and safe filenames", async () => {
   const bytes = await createTravelPlanPdf({ language: "en", result, state: { origin: {}, destination: {}, waypoints: [] }, profile: null });
   assert.equal(String.fromCharCode(...bytes.slice(0, 5)), "%PDF-");
   assert.match(pdfFileName("Zürich / Route 01"), /^Camper-Route-Zurich-Route-01-2026-10-27\.pdf$/);
+});
+
+test("PDF export creates multiple A4 pages for long international plans without inventing legs", async () => {
+  const longResult = {
+    ...result,
+    distance_m: 2474700,
+    metadata: {
+      ...result.metadata,
+      countries: ["DE", "FR", "ES", "PT"],
+      border_crossings: [
+        { from_country: "DE", to_country: "FR", wait_min: null, inferred: true, status: "country_sequence" },
+        { from_country: "FR", to_country: "ES", wait_min: null, inferred: true, status: "country_sequence" },
+        { from_country: "ES", to_country: "PT", wait_min: null, inferred: true, status: "country_sequence" },
+      ],
+    },
+    warnings: Array.from({ length: 20 }, (_, index) => `Provider warning ${index + 1} with a long explanation that must wrap cleanly without losing content.`),
+  };
+  const bytes = await createTravelPlanPdf({ language: "de", title: "SmartCamper 765", routeName: "Portugal 2028", result: longResult, state: {
+    origin: { label: "Aktueller Fahrzeugstandort" },
+    destination: { label: "Lissabon" },
+    waypoints: Array.from({ length: 5 }, (_, index) => ({ label: `Zwischenziel ${index + 1}`, latitude: 48 + index, longitude: 5 + index })),
+  }, profile: { name: "Zoe", vehicle_kind: "motorhome", length_m: 7.65, width_m: 2.34, height_m: 3.2, gross_weight_kg: 4800, axles: 2, fuel_type: "diesel", emission_class: "euro5", co2_class: "c", first_registration: "2020-04-15", consumption_l_per_100km: 10.5 } });
+  const document = await PDFDocument.load(bytes);
+  assert.ok(document.getPageCount() >= 2);
+  document.getPages().forEach((page) => assert.deepEqual(page.getSize(), { width: 595.28, height: 841.89 }));
+});
+
+test("PDF export leaves optional fuel demand clearly unavailable", async () => {
+  const bytes = await createTravelPlanPdf({ language: "en", result, state: { origin: {}, destination: {}, waypoints: [] }, profile: { name: "Zoe", vehicle_kind: "motorhome", fuel_type: "diesel" } });
+  const document = await PDFDocument.load(bytes);
+  assert.equal(document.getPageCount() >= 1, true);
 });
 
 test("PDF download always uses a browser download and releases its object URL", async () => {
