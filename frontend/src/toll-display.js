@@ -16,6 +16,7 @@ const KNOWN_PROVIDER_HINTS = [
   { pattern: /(?:vignette|daily fee|daily charge).*(?:valid|period|day)/i, key: "providerPeriodCharge" },
   { pattern: /(?:city|urban)\s+(?:access|entry)\s+(?:fee|charge)/i, key: "providerCityAccess" },
   { pattern: /truck\s+tariff.*(?:motorhome|camper|rv)/i, key: "providerTruckTariff" },
+  { pattern: /truck\s*\(hgv\)\s+toll\s+rates.*motorhome/i, key: "providerTruckTariff" },
 ];
 
 export function formatTollAmount(value, currency = "EUR", language = "en") {

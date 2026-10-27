@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PDFDocument } from "pdf-lib";
-import { createTravelPlanPdf, localizeTollStatus, localizeTollSystem, pdfFileName, placeMarkerLabels } from "../src/pdf-export.js";
+import { createTravelPlanPdf, formatEmissionClass, formatVehicleDate, formatVehicleDimensions, formatVehicleMass, localizeTollStatus, localizeTollSystem, pdfFileName, placeMarkerLabels, providerNoteSections } from "../src/pdf-export.js";
 
 const result = {
   provider: "nakordoni_motorhome",
@@ -13,7 +13,7 @@ const result = {
   metadata: {
     border_state: "ordered_country_sequence",
     border_crossings: [{ from_country: "DE", to_country: "FR", wait_min: null }, { from_country: "FR", to_country: "CH", wait_min: 20 }],
-    tolls: { total: 73.07, currency: "EUR", estimate: true, countries: [{ country: "DE", amount: 0, system: "none", status: "likely" }, { country: "FR", amount: 46.03, system: "section", status: "likely", tariff: "166.7 km x 0.2761 EUR/km" }, { country: "CH", amount: 27.04, system: "flat_daily", status: "confirmed" }], objects: [] },
+    tolls: { total: 73.07, currency: "EUR", estimate: true, coverage_note: "... Truck (HGV) toll rates are never applied to a motorhome.", countries: [{ country: "DE", amount: 0, system: "none", status: "likely" }, { country: "FR", amount: 46.03, system: "section", status: "likely", tariff: "166.7 km x 0.2761 EUR/km" }, { country: "CH", amount: 27.04, system: "flat_daily", status: "confirmed" }], objects: [] },
     tariff_basis_uncertain: true,
   },
 };
@@ -91,6 +91,23 @@ test("PDF localization never exposes technical toll status values", () => {
   assert.equal(localizeTollSystem("section", "en"), "Section toll");
   assert.equal(localizeTollStatus("likely", "de"), "Wahrscheinlich");
   assert.equal(localizeTollStatus("future-provider-value", "de"), "Unbekannt");
+});
+
+test("provider notes are summarized in the main section and retained unchanged only for the appendix", () => {
+  const sections = providerNoteSections(result, "de");
+  assert.deepEqual(sections.summary, ["Ein Lkw-Tarif darf nicht automatisch auf ein Wohnmobil übertragen werden."]);
+  assert.deepEqual(sections.originals, ["... Truck (HGV) toll rates are never applied to a motorhome."]);
+});
+
+test("vehicle values use locale-aware PDF formatting without changing raw profile values", () => {
+  const profile = { length_m: 7.65, width_m: 2.34, height_m: 3.2 };
+  assert.equal(formatVehicleDimensions(profile, "de"), "7,65 × 2,34 × 3,20 m");
+  assert.equal(formatVehicleDimensions(profile, "en"), "7.65 × 2.34 × 3.20 m");
+  assert.equal(formatVehicleMass(4800, "de"), "4.800 kg");
+  assert.equal(formatVehicleMass(4800, "en"), "4,800 kg");
+  assert.equal(formatVehicleDate("2015-02-04", "de"), "04.02.2015");
+  assert.equal(formatEmissionClass("EURO5"), "Euro 5");
+  assert.equal(profile.length_m, 7.65);
 });
 
 test("nearby and duplicate map markers fall back to a numbered legend", () => {
