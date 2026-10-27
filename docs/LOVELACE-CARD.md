@@ -7,7 +7,7 @@ Das Bundle liegt im installierbaren Paket unter
 Die Integration liefert und lädt es über einen versionierten HA-Static-Path:
 
 ```yaml
-url: /camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.12
+url: /camper_route_planner/camper-route-planner-card.js?v=0.1.1
 type: module
 ```
 
