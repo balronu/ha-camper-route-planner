@@ -90,6 +90,8 @@ export function calculateFuelPlan(distanceM, profile = {}) {
   const tankInput = optionalNumber(profile.tank_capacity_l, 0);
   const levelLitersInput = optionalNumber(profile.fuel_level_l, 0);
   const levelPercentInput = optionalNumber(profile.fuel_level_pct, 0, 100);
+  // Legacy reserve values remain readable for backward compatibility, but are
+  // no longer part of the local range calculation in Beta.15.
   const reserveInput = optionalNumber(profile.reserve_l, 0);
   // A manual price is an explicitly rough €/l estimate. Values such as 216
   // are rejected instead of silently being interpreted as cents.
@@ -106,9 +108,9 @@ export function calculateFuelPlan(distanceM, profile = {}) {
     ? selectedLevelInput.valid && selectedLevelInput.present && tank != null ? tank * selectedLevelInput.value / 100 : null
     : selectedLevelInput.valid && selectedLevelInput.present ? selectedLevelInput.value : null;
   const reserve = reserveInput.valid && reserveInput.present ? reserveInput.value : null;
-  const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !selectedLevelInput.valid || !reserveInput.valid || (tank != null && level != null && level > tank) || (tank != null && reserve != null && reserve > tank);
-  const completeTankData = !invalidTankData && tank != null && level != null && reserve != null && consumption != null;
-  const usable = completeTankData ? Math.max(0, level - reserve) : null;
+  const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !selectedLevelInput.valid || (tank != null && level != null && level > tank);
+  const completeTankData = !invalidTankData && tank != null && level != null && consumption != null;
+  const usable = completeTankData ? level : null;
   const rangeKm = usable == null ? null : usable * 100 / consumption;
   const deficit = totalLiters == null || usable == null ? null : Math.max(0, totalLiters - usable);
   const cost = totalLiters != null && priceInput.valid && priceInput.present ? totalLiters * priceInput.value : null;
