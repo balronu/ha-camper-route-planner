@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.12; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.13; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13848,12 +13848,19 @@
       noRestrictions: "Keine belastbaren Einschr\xE4nkungen vorhanden",
       providerWarnings: "Anbieterwarnungen",
       fuelRange: "Kraftstoff & Reichweite",
+      tankCapacity: "Tankgr\xF6\xDFe (Profil)",
+      consumption: "Verbrauch (Profil)",
+      fuelLevelLiters: "Aktueller F\xFCllstand (Liter)",
+      fuelLevelPercent: "Aktueller F\xFCllstand (%)",
+      reserve: "Sicherheitsreserve (Liter)",
+      dieselPrice: "Manueller Dieselpreis (\u20AC/Liter)",
       estimatedFuel: "Gesch\xE4tzter Gesamtverbrauch",
       availableRange: "Reichweite ab aktuellem Stand",
       fuelShortfall: "Reichweite reicht nicht aus",
       fuelSufficient: "Rechnerische Reichweite reicht aus",
-      fuelDataMissing: "Tankinhalt, F\xFCllstand oder Verbrauch fehlen; nur vorhandene Werte werden angezeigt.",
-      estimatedCost: "Voraussichtliche Kosten",
+      fuelDataMissing: "F\xFCr die Reichweitenberechnung Tankinhalt, F\xFCllstand und Sicherheitsreserve erg\xE4nzen.",
+      fuelNotCalculable: "Nicht berechenbar",
+      estimatedCost: "Grobe Kostensch\xE4tzung (manueller Preis)",
       trafficMode: { off: "Ohne Verkehr", live: "Live-Verkehr", forecast: "Verkehrsprognose" },
       mockRoute: "Mock-Route",
       motorhomeBeta: "Nakordoni \u2013 Beta",
@@ -13990,12 +13997,19 @@
       noRestrictions: "No reliable restrictions available",
       providerWarnings: "Provider warnings",
       fuelRange: "Fuel & range",
+      tankCapacity: "Tank capacity (profile)",
+      consumption: "Consumption (profile)",
+      fuelLevelLiters: "Current fuel level (litres)",
+      fuelLevelPercent: "Current fuel level (%)",
+      reserve: "Safety reserve (litres)",
+      dieselPrice: "Manual diesel price (\u20AC/litre)",
       estimatedFuel: "Estimated total consumption",
       availableRange: "Range from current level",
       fuelShortfall: "Available range is insufficient",
       fuelSufficient: "Calculated range is sufficient",
-      fuelDataMissing: "Tank capacity, fuel level or consumption is missing; only available values are shown.",
-      estimatedCost: "Estimated cost",
+      fuelDataMissing: "Add tank capacity, fuel level and safety reserve to calculate range.",
+      fuelNotCalculable: "Not calculable",
+      estimatedCost: "Rough cost estimate (manual price)",
       trafficMode: { off: "Without traffic", live: "Live traffic", forecast: "Traffic forecast" },
       mockRoute: "Mock route",
       motorhomeBeta: "Nakordoni \u2013 Beta",
@@ -14164,17 +14178,31 @@
     };
   }
   function calculateFuelPlan(distanceM, profile = {}) {
-    const consumption = Number(profile.consumption_l_per_100km);
-    const distanceKm = Number(distanceM) / 1e3;
-    const totalLiters = Number.isFinite(consumption) && consumption > 0 && Number.isFinite(distanceKm) ? distanceKm * consumption / 100 : null;
-    const tank = Number(profile.tank_capacity_l);
-    const level = Number.isFinite(Number(profile.fuel_level_l)) ? Number(profile.fuel_level_l) : Number.isFinite(Number(profile.fuel_level_pct)) && Number.isFinite(tank) ? tank * Number(profile.fuel_level_pct) / 100 : null;
-    const reserve = Number.isFinite(Number(profile.reserve_l)) ? Number(profile.reserve_l) : 0;
-    const usable = level == null ? null : Math.max(0, level - reserve);
-    const rangeKm = usable == null || !consumption ? null : usable * 100 / consumption;
+    const optionalNumber = (value, minimum = 0, maximum = Infinity) => {
+      if (value == null || typeof value === "string" && value.trim() === "") return { present: false, valid: true, value: null };
+      const number = Number(value);
+      return { present: true, valid: Number.isFinite(number) && number >= minimum && number <= maximum, value: number };
+    };
+    const distance = optionalNumber(distanceM, 0);
+    const consumptionInput = optionalNumber(profile.consumption_l_per_100km, 0);
+    const tankInput = optionalNumber(profile.tank_capacity_l, 0);
+    const levelLitersInput = optionalNumber(profile.fuel_level_l, 0);
+    const levelPercentInput = optionalNumber(profile.fuel_level_pct, 0, 100);
+    const reserveInput = optionalNumber(profile.reserve_l, 0);
+    const priceInput = optionalNumber(profile.diesel_price_per_l, 0);
+    const distanceKm = distance.valid ? distance.value / 1e3 : null;
+    const consumption = consumptionInput.valid && consumptionInput.present && consumptionInput.value > 0 ? consumptionInput.value : null;
+    const totalLiters = consumption != null && distanceKm != null ? distanceKm * consumption / 100 : null;
+    const tank = tankInput.valid && tankInput.present && tankInput.value > 0 ? tankInput.value : null;
+    const level = levelLitersInput.valid && levelLitersInput.present ? levelLitersInput.value : levelPercentInput.valid && levelPercentInput.present && tank != null ? tank * levelPercentInput.value / 100 : null;
+    const reserve = reserveInput.valid && reserveInput.present ? reserveInput.value : null;
+    const invalidTankData = !distance.valid || !consumptionInput.valid || !tankInput.valid || !levelLitersInput.valid || !levelPercentInput.valid || !reserveInput.valid || tank != null && level != null && level > tank || tank != null && reserve != null && reserve > tank;
+    const completeTankData = !invalidTankData && tank != null && level != null && reserve != null && consumption != null;
+    const usable = completeTankData ? Math.max(0, level - reserve) : null;
+    const rangeKm = usable == null ? null : usable * 100 / consumption;
     const deficit = totalLiters == null || usable == null ? null : Math.max(0, totalLiters - usable);
-    const price = Number(profile.diesel_price_per_l);
-    return { distanceKm, consumption, totalLiters, tank, level, reserve, usable, rangeKm, deficit, cost: totalLiters != null && Number.isFinite(price) ? totalLiters * price : null, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm };
+    const cost = totalLiters != null && priceInput.valid && priceInput.present ? totalLiters * priceInput.value : null;
+    return { distanceKm, consumption, totalLiters, tank, level, reserve, usable, rangeKm, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, completeTankData };
   }
   function routeRecordFromResult(result, state) {
     const routeId = globalThis.crypto?.randomUUID?.() || `route-${Date.now()}`;
@@ -31011,6 +31039,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (!Number.isFinite(number)) return String(value ?? "");
     return number.toFixed(6).replace(/\.?0+$/, "");
   };
+  var FUEL_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l"];
+  var emptyFuelValues = () => Object.fromEntries(FUEL_FIELDS.map((field) => [field, ""]));
+  var fuelStorageKey = (entryId, profileId) => `camper-route-planner:fuel:${String(entryId)}:${String(profileId)}`;
+  function readFuelValues(entryId, profile) {
+    const empty = emptyFuelValues();
+    if (!profile?.profile_id) return empty;
+    try {
+      const stored = JSON.parse(globalThis.localStorage?.getItem(fuelStorageKey(entryId, profile.profile_id)) || "null");
+      if (stored && typeof stored === "object") return { ...empty, ...Object.fromEntries(FUEL_FIELDS.map((field) => [field, stored[field] ?? ""])) };
+    } catch (_error) {
+    }
+    return Object.fromEntries(FUEL_FIELDS.map((field) => [field, profile[field] ?? ""]));
+  }
+  function writeFuelValues(entryId, profileId, values2) {
+    try {
+      globalThis.localStorage?.setItem(fuelStorageKey(entryId, profileId), JSON.stringify(values2));
+    } catch (_error) {
+    }
+  }
   function renderBorderCrossings(result, translate2) {
     const crossings = result?.metadata?.border_crossings;
     if (!Array.isArray(crossings)) return "";
@@ -31070,10 +31117,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const notes = warnings.length ? `<details><summary>${translate2("providerWarnings")}</summary><ul>${warnings.map((item) => row(typeof item === "string" ? { message: item } : item)).join("")}</ul></details>` : "";
     return `<details class="route-details restrictions" open><summary><h3>${translate2("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(translate2(`trafficMode.${result?.metadata?.traffic || "off"}`))}</p>${groups}${notes}</details>`;
   }
-  function renderFuelPlan(result, profile, translate2, language) {
-    const plan = calculateFuelPlan(result?.distance_m, profile || {});
+  function renderFuelPlan(result, profile, fuelValues, translate2, language) {
+    const plan = calculateFuelPlan(result?.distance_m, { ...profile || {}, ...fuelValues || {} });
     const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? "\u2014" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
-    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="metrics"><div><b>${number(plan.totalLiters)} l</b><span>${translate2("estimatedFuel")}</span></div><div><b>${number(plan.rangeKm)} km</b><span>${translate2("availableRange")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate2("fuelShortfall") : translate2("fuelSufficient")} \xB7 ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate2("fuelDataMissing")}</p>`}${plan.cost != null ? `<p>${translate2("estimatedCost")}: ${number(plan.cost, 2)} \u20AC</p>` : ""}</details>`;
+    const range2 = plan.rangeKm == null ? translate2("fuelNotCalculable") : `${number(plan.rangeKm)} km`;
+    const input = (field, label, type = "number", step = "0.1") => `<label class="fuel-input">${label}<input data-fuel-field="${field}" type="${type}" step="${step}" min="0" value="${escapeHtml(fuelValues?.[field] ?? "")}"></label>`;
+    const tankText = profile?.tank_capacity_l == null ? translate2("fuelNotCalculable") : `${number(Number(profile.tank_capacity_l))} l`;
+    const consumptionText = profile?.consumption_l_per_100km == null ? translate2("fuelNotCalculable") : `${number(Number(profile.consumption_l_per_100km))} l/100 km`;
+    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid">${input("fuel_level_l", translate2("fuelLevelLiters"))}${input("fuel_level_pct", translate2("fuelLevelPercent"), "number", "1")}${input("reserve_l", translate2("reserve"))}${input("diesel_price_per_l", translate2("dieselPrice"), "number", "0.01")}</div><div class="metrics"><div><b>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b>${range2}</b><span>${translate2("availableRange")}</span></div><div><b>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate2("fuelShortfall") : translate2("fuelSufficient")} \xB7 ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate2("fuelDataMissing")}</p>`}</details>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
@@ -31122,7 +31173,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -31207,11 +31258,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.routes = Array.isArray(routes?.routes) ? routes.routes : [];
         this._state.mapConfig = mapConfig || { provider: "none", status: "not_configured" };
         if (!this._state.profileId && this._state.profiles[0]) this._state.profileId = this._state.profiles[0].profile_id;
+        this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
         if (this._state.profileId && !this._state.originManual) this.useTrackerLocation(false);
       } catch (error2) {
         this._state.error = error2.message || t(languageOf(this._hass), "providerUnavailable");
       }
       this._state.loaded = true;
+      this.render();
+    }
+    updateFuelField(field, value) {
+      if (!FUEL_FIELDS.includes(field)) return;
+      this._state.fuelValues = { ...this._state.fuelValues, [field]: value };
+      writeFuelValues(this._config.entry_id, this._state.profileId, this._state.fuelValues);
       this.render();
     }
     async calculate(forceRefresh = false) {
@@ -31354,7 +31412,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
     captureInputState() {
       const active = this.shadowRoot?.activeElement;
-      const activeKey = active?.dataset?.searchInput ? `search:${active.dataset.searchInput}:${active.dataset.index}` : active?.dataset?.point ? `point:${active.dataset.point}:${active.dataset.index}:${active.dataset.field}` : active?.dataset?.field || "";
+      const activeKey = active?.dataset?.searchInput ? `search:${active.dataset.searchInput}:${active.dataset.index}` : active?.dataset?.point ? `point:${active.dataset.point}:${active.dataset.index}:${active.dataset.field}` : active?.dataset?.fuelField ? `fuel:${active.dataset.fuelField}` : active?.dataset?.field || "";
       this.shadowRoot?.querySelectorAll("input[data-search-input]").forEach((input) => {
         this._inputDrafts.set(`${input.dataset.searchInput}:${input.dataset.index}`, input.value);
       });
@@ -31381,7 +31439,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       } else if (state.activeKey.startsWith("point:")) {
         const [, target, index, field] = state.activeKey.split(":");
         input = this.shadowRoot?.querySelector(`input[data-point="${target}"][data-index="${index}"][data-field="${field}"]`);
-      } else input = this.shadowRoot?.querySelector(`input[data-field="${state.activeKey}"]`);
+      } else if (state.activeKey.startsWith("fuel:")) input = this.shadowRoot?.querySelector(`input[data-fuel-field="${state.activeKey.slice(5)}"]`);
+      else input = this.shadowRoot?.querySelector(`input[data-field="${state.activeKey}"]`);
       if (input) {
         input.focus({ preventScroll: true });
         if (state.selectionStart != null) input.setSelectionRange(state.selectionStart, state.selectionEnd ?? state.selectionStart);
@@ -31430,6 +31489,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.destination = route.destination || this._state.destination;
         this._state.waypoints = route.waypoints || [];
         this._state.profileId = route.profile_id || this._state.profileId;
+        this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
         this._state.routeOptions = { ...this._state.routeOptions, ...route.route_options || route.metadata?.request_options || {} };
         this._state.result = normalizeServiceResponse(route);
         this.render();
@@ -31617,13 +31677,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const navigationTarget = result ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
       this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(result.provider)}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
       const optionAnchor = this.shadowRoot.querySelector(".map-section");
-      optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><label><input type="checkbox" data-route-option="avoid" value="tolls"> ${translate2("avoidTolls")}</label> <label><input type="checkbox" data-route-option="avoid" value="motorways"> ${translate2("avoidMotorways")}</label> <label><input type="checkbox" data-route-option="avoid" value="ferries"> ${translate2("avoidFerries")}</label> <label><input type="checkbox" data-route-option="avoid" value="tunnels"> ${translate2("avoidTunnels")}</label></details>`);
+      optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate2("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate2("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate2("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate2("avoidTunnels")}</span></label></div></details>`);
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => {
         const key = input.dataset.routeOption;
         if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value);
         else input.value = this._state.routeOptions[key] ?? "";
       });
-      if (result) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("beforeend", `${renderRestrictions(result, translate2)}${renderFuelPlan(result, profile, translate2, language)}`);
+      const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
+      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
         const routeId = exportButton?.dataset.routeId;
@@ -31684,10 +31745,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelectorAll("input[data-point]").forEach((input) => input.addEventListener("input", (event) => this.updatePoint(event.target.dataset.point, Number(event.target.dataset.index), event.target.dataset.field, event.target.value)));
       this.shadowRoot.querySelector("select[data-action=profile]")?.addEventListener("change", (event) => {
         this._state.profileId = event.target.value;
+        this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
         this._state.originManual = false;
         this.useTrackerLocation(false);
         this.render();
       });
+      this.shadowRoot.querySelectorAll("input[data-fuel-field]").forEach((input) => input.addEventListener("input", () => this.updateFuelField(input.dataset.fuelField, input.value)));
       this.shadowRoot.querySelectorAll("button[data-action=tracker]").forEach((button) => button.addEventListener("click", () => this.useTrackerLocation(true)));
       this.shadowRoot.querySelectorAll("button[data-action=search]").forEach((button) => button.addEventListener("click", () => {
         const input = this.shadowRoot.querySelector(`input[data-search-input="${button.dataset.target}"][data-index="${button.dataset.index}"]`);
@@ -31739,7 +31802,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }));
     }
   };
-  var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
+  var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions,.export-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,.export-actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.route-options{margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-options summary{cursor:pointer;min-height:28px}.option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.option-grid label{display:grid;gap:4px;min-width:0}.avoid-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px}.avoid-options label{display:flex;align-items:center;gap:8px;min-height:42px;line-height:1.25;overflow-wrap:anywhere}.avoid-options input{flex:0 0 auto;min-width:22px;min-height:22px}.fuel-profile-facts,.fuel-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.fuel-profile-facts span{display:grid;gap:2px;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.fuel-input{display:grid;gap:4px;min-width:0;line-height:1.25}.fuel-input input{width:100%}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1;min-width:0}.actions>*{flex:1 1 auto;min-width:0}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
   var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from datetime import datetime
+import math
 from typing import Any, Literal
 
 
@@ -82,6 +83,8 @@ class VehicleProfile:
             ("width_m", self.width_m, 1.0, 3.5),
             ("length_m", self.length_m, 2.0, 30.0),
         ):
+            if not math.isfinite(value):
+                raise ValidationError(f"{label} must be finite")
             if not low <= value <= high:
                 raise ValidationError(f"{label} must be between {low} and {high}")
         if not 500 <= self.gross_weight_kg <= 60000:
@@ -107,10 +110,10 @@ class VehicleProfile:
                 date.fromisoformat(self.first_registration)
             except (TypeError, ValueError) as exc:
                 raise ValidationError("first_registration must be an ISO date") from exc
-        if self.consumption_l_per_100km is not None and not 0.1 <= self.consumption_l_per_100km <= 100:
-            raise ValidationError("consumption_l_per_100km must be between 0.1 and 100")
+        if self.consumption_l_per_100km is not None and (not math.isfinite(self.consumption_l_per_100km) or not 0.1 <= self.consumption_l_per_100km <= 100):
+            raise ValidationError("consumption_l_per_100km must be finite and between 0.1 and 100")
         for label, value, low, high in (("tank_capacity_l", self.tank_capacity_l, 1, 5000), ("fuel_level_l", self.fuel_level_l, 0, 5000), ("fuel_level_pct", self.fuel_level_pct, 0, 100), ("reserve_l", self.reserve_l, 0, 5000), ("diesel_price_per_l", self.diesel_price_per_l, 0, 20)):
-            if value is not None and not low <= value <= high:
+            if value is not None and (not math.isfinite(value) or not low <= value <= high):
                 raise ValidationError(f"{label} must be between {low} and {high}")
         if self.fuel_level_l is not None and self.tank_capacity_l is not None and self.fuel_level_l > self.tank_capacity_l:
             raise ValidationError("fuel_level_l cannot exceed tank_capacity_l")

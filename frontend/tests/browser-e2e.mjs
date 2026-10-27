@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.12"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.13"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.12`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.12/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.13`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.13/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -57,7 +57,7 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
       language: "en",
       connection: {},
       callWS: async (message) => {
-        if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
+        if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 100, consumption_l_per_100km: 10 }, { profile_id: "second", name: "Second motorhome", height_m: 3.1, width_m: 2.3, length_m: 7, gross_weight_kg: 4200, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 200, consumption_l_per_100km: 12 }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
         if (message.type.endsWith("/tracker_position")) return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } };
@@ -91,10 +91,18 @@ async function calculate(page) {
 }
 
 const desktop = await preparePage({ width: 1280, height: 900 });
-assert.equal(await desktop.locator(".metrics").count(), 0, "rendering must not calculate");
+assert.equal(await desktop.locator(".result .metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
+await desktop.locator('input[data-fuel-field="fuel_level_l"]').fill("40");
+await desktop.locator('input[data-fuel-field="reserve_l"]').fill("5");
+assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "fuel edits do not call the route service");
+assert.deepEqual(await desktop.evaluate(() => JSON.parse(localStorage.getItem("camper-route-planner:fuel:test-entry:test"))), { fuel_level_l: "40", fuel_level_pct: "", reserve_l: "5", diesel_price_per_l: "" }, "fuel edits persist in the vehicle-scoped local store");
+await desktop.locator('select[data-action="profile"]').selectOption("second");
+assert.equal(await desktop.locator('input[data-fuel-field="fuel_level_l"]').inputValue(), "", "switching vehicles does not reuse another vehicle's fuel level");
+await desktop.locator('select[data-action="profile"]').selectOption("test");
+assert.equal(await desktop.locator('input[data-fuel-field="fuel_level_l"]').inputValue(), "40", "returning to a vehicle restores its local fuel values");
 await desktop.locator(".leaflet-container").waitFor();
-assert.equal(await desktop.locator(".metrics").count(), 0, "a basemap is visible before route calculation");
+assert.equal(await desktop.locator(".result .metrics").count(), 0, "a basemap is visible before route calculation");
 assert.equal(await desktop.locator(".leaflet-tile").count() > 0, true, "geographic tile fixture is visible before route calculation");
 const initialTileCoverage = await desktop.evaluate(() => {
   const map = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".leaflet-container");
@@ -133,7 +141,7 @@ assert.ok(attributionFlag.width <= 20 && attributionFlag.height <= 12, "Leaflet 
 assert.equal(attributionFlag.inAttribution, true, "attribution flag remains inside the attribution control");
 const emptyTileFailure = await preparePage({ width: 1280, height: 900 }, "light", async (route) => route.fulfill({ status: 403, body: "forbidden" }));
 await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").waitFor();
-assert.equal(await emptyTileFailure.locator(".metrics").count(), 0, "tile failure before route calculation does not calculate a route");
+assert.equal(await emptyTileFailure.locator(".result .metrics").count(), 0, "tile failure before route calculation does not calculate a route");
 assert.equal(await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").count(), 1, "empty tile failure explains the map problem");
 await emptyTileFailure.close();
 const longDestination = "Rue de la République, Strasbourg, France";

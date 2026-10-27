@@ -236,10 +236,6 @@ try:
                 "first_registration": (profile.first_registration or "") if profile else "",
                 "consumption_l_per_100km": profile.consumption_l_per_100km if profile and profile.consumption_l_per_100km is not None else "",
                 "tank_capacity_l": profile.tank_capacity_l if profile and profile.tank_capacity_l is not None else "",
-                "fuel_level_l": profile.fuel_level_l if profile and profile.fuel_level_l is not None else "",
-                "fuel_level_pct": profile.fuel_level_pct if profile and profile.fuel_level_pct is not None else "",
-                "reserve_l": profile.reserve_l if profile and profile.reserve_l is not None else "",
-                "diesel_price_per_l": profile.diesel_price_per_l if profile and profile.diesel_price_per_l is not None else "",
                 "tracker_entity_id": profile.tracker_entity_id if profile else "",
             }
             tracker_key = vol.Optional("tracker_entity_id", default=profile.tracker_entity_id) if profile and profile.tracker_entity_id else vol.Optional("tracker_entity_id")
@@ -266,10 +262,6 @@ try:
                 vol.Optional("first_registration", default=defaults["first_registration"]): str,
                 consumption_key: _number_selector(0.1, 100, 0.1),
                 optional_number("tank_capacity_l"): _number_selector(1, 5000, 0.1),
-                optional_number("fuel_level_l"): _number_selector(0, 5000, 0.1),
-                optional_number("fuel_level_pct"): _number_selector(0, 100, 0.1),
-                optional_number("reserve_l"): _number_selector(0, 5000, 0.1),
-                optional_number("diesel_price_per_l"): _number_selector(0, 20, 0.01),
                 tracker_key: _entity_selector(),
             })
 
@@ -288,10 +280,13 @@ try:
                         first_registration=user_input.get("first_registration") or None,
                         consumption_l_per_100km=_optional_decimal(user_input.get("consumption_l_per_100km")),
                         tank_capacity_l=_optional_decimal(user_input.get("tank_capacity_l")),
-                        fuel_level_l=_optional_decimal(user_input.get("fuel_level_l")),
-                        fuel_level_pct=_optional_decimal(user_input.get("fuel_level_pct")),
-                        reserve_l=_optional_decimal(user_input.get("reserve_l")),
-                        diesel_price_per_l=_optional_decimal(user_input.get("diesel_price_per_l")),
+                        # These legacy fields are no longer edited in the
+                        # vehicle dialog. Preserve them byte-for-byte when
+                        # an old Beta.12 profile is saved.
+                        fuel_level_l=existing.fuel_level_l if existing else None,
+                        fuel_level_pct=existing.fuel_level_pct if existing else None,
+                        reserve_l=existing.reserve_l if existing else None,
+                        diesel_price_per_l=existing.diesel_price_per_l if existing else None,
                         tracker_entity_id=user_input.get("tracker_entity_id") or (DEFAULT_ZOE_TRACKER if str(user_input["name"]).strip().casefold() == "zoe" else None),
                     )
                     runtime = self._runtime()
