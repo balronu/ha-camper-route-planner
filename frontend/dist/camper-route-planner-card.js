@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.8; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.9; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -14147,8 +14147,8 @@
     if (platform === "android") {
       return { url: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationValue)}&travelmode=driving&dir_action=navigate`, platform, supportsWaypoints: false, omittedWaypoints: validWaypoints.length > 0 };
     }
-    const routePoints = [validOrigin, ...validWaypoints, destination].filter(Boolean).map(point).join(";");
-    return { url: `https://www.openstreetmap.org/directions?route=${encodeURIComponent(routePoints)}`, platform: "desktop", supportsWaypoints: true, omittedWaypoints: false };
+    const routePoints2 = [validOrigin, ...validWaypoints, destination].filter(Boolean).map(point).join(";");
+    return { url: `https://www.openstreetmap.org/directions?route=${encodeURIComponent(routePoints2)}`, platform: "desktop", supportsWaypoints: true, omittedWaypoints: false };
   }
 
   // src/services.js
@@ -30541,161 +30541,300 @@ svg.leaflet-image-layer.leaflet-interactive path {
   var PAGE_WIDTH = 595.28;
   var PAGE_HEIGHT = 841.89;
   var MARGIN = 42;
-  var BODY_SIZE = 9.5;
+  var BODY_SIZE = 9.2;
   var LINE_HEIGHT = 13;
+  var COLORS = {
+    ink: rgb(0.12, 0.14, 0.16),
+    muted: rgb(0.35, 0.39, 0.42),
+    blue: rgb(0.04, 0.28, 0.48),
+    lightBlue: rgb(0.88, 0.94, 0.97),
+    line: rgb(0.76, 0.8, 0.82),
+    route: rgb(0.04, 0.42, 0.72),
+    start: rgb(0.08, 0.52, 0.29),
+    destination: rgb(0.72, 0.12, 0.13),
+    waypoint: rgb(0.82, 0.48, 0.08)
+  };
   var pdfText = (value) => String(value ?? "\u2014").replaceAll("\u2192", "->").replaceAll("\u2022", "-").replaceAll("\u2026", "...").replaceAll("\u2013", "-").replaceAll("\u2014", "-");
-  var formatDate = (value, language) => {
+  var formatDate = (value, language, includeTime = false) => {
     const date = value ? new Date(value) : /* @__PURE__ */ new Date();
-    return Number.isNaN(date.getTime()) ? pdfText(value) : new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date);
+    if (Number.isNaN(date.getTime())) return pdfText(value);
+    return new Intl.DateTimeFormat(language, includeTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" }).format(date);
   };
   var formatNumber = (value, language, digits = 1) => Number.isFinite(Number(value)) ? new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(Number(value)) : "-";
+  var formatMoney = (value, language, currency = "EUR") => value == null || !Number.isFinite(Number(value)) ? language === "de" ? "nicht verf\xFCgbar" : "not available" : new Intl.NumberFormat(language, { style: "currency", currency }).format(Number(value));
+  var countryName = (value, language) => {
+    if (!value) return "-";
+    try {
+      return new Intl.DisplayNames([language], { type: "region" }).of(String(value)) || String(value);
+    } catch (_error) {
+      return String(value);
+    }
+  };
+  var valueOr = (value, fallback) => value == null || value === "" ? fallback : value;
+  var localizedVehicle = (value, language) => {
+    const labels = language === "de" ? { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw", diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" } : { motorhome: "Motorhome", truck: "Truck", car: "Car", diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" };
+    return labels[value] || pdfText(value);
+  };
+  var coordinateLabel = (point, language) => {
+    if (!point) return language === "de" ? "Nicht verf\xFCgbar" : "Unavailable";
+    const label = point.label || point.address;
+    if (label && !/^([a-z_]+\.)+[a-z0-9_]+$/i.test(String(label))) return label;
+    if (Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) return `${formatNumber(point.latitude, language, 5)}, ${formatNumber(point.longitude, language, 5)}`;
+    return language === "de" ? "Aktueller Fahrzeugstandort" : "Current vehicle location";
+  };
+  var routeCountries = (result, language) => {
+    const values2 = result?.metadata?.country_sequence || result?.metadata?.countries || result?.metadata?.country_split;
+    if (!Array.isArray(values2)) return [];
+    return values2.map((item) => typeof item === "string" ? item : item?.country).filter(Boolean).map((item) => countryName(item, language));
+  };
+  var routePoints = (result) => Array.isArray(result?.geometry?.points) ? result.geometry.points.filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) : [];
   var PdfWriter = class {
-    constructor(document2, fonts, language) {
+    constructor(document2, fonts, language, title) {
       this.document = document2;
       this.font = fonts.regular;
       this.bold = fonts.bold;
       this.language = language;
+      this.title = title;
       this.pages = [];
       this.newPage();
     }
     newPage() {
       this.page = this.document.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       this.pages.push(this.page);
-      this.y = PAGE_HEIGHT - MARGIN;
+      this.y = PAGE_HEIGHT - MARGIN - 16;
     }
     ensure(height = LINE_HEIGHT) {
-      if (this.y - height < MARGIN + 24) this.newPage();
+      if (this.y - height < MARGIN + 28) this.newPage();
     }
-    text(value, { size = BODY_SIZE, bold = false, color = rgb(0.12, 0.12, 0.12), indent = 0 } = {}) {
+    text(value, { size = BODY_SIZE, bold = false, color = COLORS.ink, indent = 0, keepTogether = false } = {}) {
       const words = pdfText(value).split(/\s+/);
+      const lines = [];
       let line = "";
       const maxWidth = PAGE_WIDTH - MARGIN * 2 - indent;
+      const font = bold ? this.bold : this.font;
       for (const word of words) {
         const candidate = line ? `${line} ${word}` : word;
-        const width = (bold ? this.bold : this.font).widthOfTextAtSize(candidate, size);
-        if (line && width > maxWidth) {
-          this.ensure(size + 4);
-          this.page.drawText(line, { x: MARGIN + indent, y: this.y, size, font: bold ? this.bold : this.font, color });
-          this.y -= size + 4;
+        if (line && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+          lines.push(line);
           line = word;
         } else line = candidate;
       }
-      if (line) {
+      if (line) lines.push(line);
+      if (keepTogether && this.y - lines.length * (size + 3) < MARGIN + 28) this.newPage();
+      for (const current of lines) {
         this.ensure(size + 4);
-        this.page.drawText(line, { x: MARGIN + indent, y: this.y, size, font: bold ? this.bold : this.font, color });
-        this.y -= size + 4;
+        this.page.drawText(current, { x: MARGIN + indent, y: this.y, size, font, color });
+        this.y -= size + 3;
       }
     }
     heading(value, level = 2) {
-      this.ensure(level === 1 ? 34 : 25);
+      this.ensure(level === 1 ? 34 : 95);
       this.y -= level === 1 ? 8 : 5;
-      this.text(value, { size: level === 1 ? 18 : 12, bold: true, color: rgb(0.05, 0.25, 0.42) });
+      this.text(value, { size: level === 1 ? 18 : 12, bold: true, color: COLORS.blue, keepTogether: true });
       this.y -= 3;
     }
-    row(label, value) {
-      this.text(`${label}: ${value}`, { indent: 4 });
+    row(label, value, options = {}) {
+      this.text(`${label}: ${value}`, { indent: 4, ...options });
     }
-    bullet(value) {
-      this.text(`- ${value}`, { indent: 8 });
+    bullet(value, options = {}) {
+      this.text(`- ${value}`, { indent: 8, ...options });
     }
     rule() {
       this.ensure(10);
-      this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE_WIDTH - MARGIN, y: this.y }, thickness: 0.5, color: rgb(0.75, 0.75, 0.75) });
+      this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE_WIDTH - MARGIN, y: this.y }, thickness: 0.5, color: COLORS.line });
       this.y -= 8;
     }
-    footer(pageNumber) {
-      this.page.drawText(`${pageNumber}`, { x: PAGE_WIDTH - MARGIN, y: 20, size: 8, font: this.font, color: rgb(0.4, 0.4, 0.4) });
+    table(headers, rows, widths) {
+      const totalWidth = PAGE_WIDTH - MARGIN * 2;
+      const normalized = widths || headers.map(() => totalWidth / headers.length);
+      const drawCell = (value, width, bold = false) => {
+        const words = pdfText(value).split(/\s+/);
+        const lines = [];
+        let line = "";
+        const font = bold ? this.bold : this.font;
+        for (const word of words) {
+          const candidate = line ? `${line} ${word}` : word;
+          if (line && font.widthOfTextAtSize(candidate, 8) > width - 8) {
+            lines.push(line);
+            line = word;
+          } else line = candidate;
+        }
+        if (line) lines.push(line);
+        return { lines, font, color: bold ? COLORS.blue : COLORS.ink };
+      };
+      const drawRow = (values2, bold = false, fill2 = null) => {
+        const cells = values2.map((value, index) => drawCell(value, normalized[index], bold));
+        const height = Math.max(18, ...cells.map((cell) => cell.lines.length * 10 + 8));
+        if (this.y - height < MARGIN + 28) this.newPage();
+        if (fill2) this.page.drawRectangle({ x: MARGIN, y: this.y - height + 2, width: totalWidth, height, color: fill2 });
+        let x = MARGIN;
+        cells.forEach((cell, index) => {
+          cell.lines.forEach((line, lineIndex) => this.page.drawText(line, { x: x + 4, y: this.y - 11 - lineIndex * 10, size: 8, font: cell.font, color: cell.color }));
+          x += normalized[index];
+        });
+        this.page.drawLine({ start: { x: MARGIN, y: this.y - height }, end: { x: MARGIN + totalWidth, y: this.y - height }, thickness: 0.35, color: COLORS.line });
+        this.y -= height;
+      };
+      drawRow(headers, true, COLORS.lightBlue);
+      rows.forEach((row) => drawRow(row));
+    }
+    finish() {
+      this.pages.forEach((page, index) => {
+        page.drawText("SmartCamper 765 - Reiseplan", { x: MARGIN, y: PAGE_HEIGHT - 22, size: 8, font: this.bold, color: COLORS.blue });
+        page.drawText(this.title, { x: PAGE_WIDTH - MARGIN - this.font.widthOfTextAtSize(this.title, 8), y: PAGE_HEIGHT - 22, size: 8, font: this.font, color: COLORS.muted });
+        page.drawLine({ start: { x: MARGIN, y: PAGE_HEIGHT - 28 }, end: { x: PAGE_WIDTH - MARGIN, y: PAGE_HEIGHT - 28 }, thickness: 0.35, color: COLORS.line });
+        page.drawLine({ start: { x: MARGIN, y: 30 }, end: { x: PAGE_WIDTH - MARGIN, y: 30 }, thickness: 0.35, color: COLORS.line });
+        const footer = `${this.language === "de" ? "Reiseplan" : "Travel plan"} | ${index + 1}/${this.pages.length}`;
+        page.drawText(footer, { x: PAGE_WIDTH - MARGIN - this.font.widthOfTextAtSize(footer, 8), y: 18, size: 8, font: this.font, color: COLORS.muted });
+      });
     }
   };
-  function drawRouteMap(writer, result) {
-    const points = result?.geometry?.points;
-    if (!Array.isArray(points) || points.length < 2) return;
-    writer.heading(writer.language === "de" ? "Routen\xFCbersicht" : "Route overview", 2);
-    writer.ensure(190);
-    const box = { x: MARGIN, y: writer.y - 170, width: PAGE_WIDTH - MARGIN * 2, height: 160 };
-    const lats = points.map((point) => Number(point.latitude)).filter(Number.isFinite);
-    const lons = points.map((point) => Number(point.longitude)).filter(Number.isFinite);
+  function drawMarker(page, x, y, color, label, font) {
+    page.drawCircle({ x, y, size: 4, color, borderColor: rgb(1, 1, 1), borderWidth: 1 });
+    page.drawText(label, { x: x + 7, y: y - 3, size: 7.5, font, color: COLORS.ink });
+  }
+  function drawRouteMap(writer, result, state, language) {
+    const points = routePoints(result);
+    if (points.length < 2) return;
+    const de = language === "de";
+    writer.heading(de ? "\xDCbersichtskarte" : "Overview map", 2);
+    writer.text(de ? "Schematische Routen\xFCbersicht aus der gespeicherten Geometrie; keine Stra\xDFenkarte und keine neue Netzwerkabfrage." : "Schematic route overview from the stored geometry; not a street map and no new network request.", { size: 8, color: COLORS.muted });
+    writer.ensure(205);
+    const box = { x: MARGIN, y: writer.y - 176, width: PAGE_WIDTH - MARGIN * 2, height: 166 };
+    const lats = points.map((point) => Number(point.latitude));
+    const lons = points.map((point) => Number(point.longitude));
     const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
-    const scale2 = (value, min, max, start, length) => start + (max === min ? 0.5 : (value - min) / (max - min)) * length;
+    const latSpan = Math.max(maxLat - minLat, 1e-4);
+    const lonSpan = Math.max(maxLon - minLon, 1e-4);
+    const routeAspect = lonSpan / latSpan;
+    let drawWidth = box.width - 24;
+    let drawHeight = drawWidth / routeAspect;
+    if (drawHeight > box.height - 24) {
+      drawHeight = box.height - 24;
+      drawWidth = drawHeight * routeAspect;
+    }
+    const offsetX = box.x + (box.width - drawWidth) / 2;
+    const offsetY = box.y + (box.height - drawHeight) / 2;
+    const x = (lon) => offsetX + (lon - minLon) / lonSpan * drawWidth;
+    const y = (lat) => offsetY + (lat - minLat) / latSpan * drawHeight;
+    writer.page.drawRectangle({ x: box.x, y: box.y, width: box.width, height: box.height, color: rgb(0.97, 0.98, 0.98), borderWidth: 0.5, borderColor: COLORS.line });
+    for (let index = 1; index < 4; index += 1) {
+      const gx = box.x + box.width * index / 4;
+      const gy = box.y + box.height * index / 4;
+      writer.page.drawLine({ start: { x: gx, y: box.y }, end: { x: gx, y: box.y + box.height }, thickness: 0.25, color: COLORS.line });
+      writer.page.drawLine({ start: { x: box.x, y: gy }, end: { x: box.x + box.width, y: gy }, thickness: 0.25, color: COLORS.line });
+    }
     for (let index = 1; index < points.length; index += 1) {
       const previous = points[index - 1];
       const current = points[index];
-      writer.page.drawLine({
-        start: { x: scale2(Number(previous.longitude), minLon, maxLon, box.x + 8, box.width - 16), y: scale2(Number(previous.latitude), minLat, maxLat, box.y + 8, box.height - 16) },
-        end: { x: scale2(Number(current.longitude), minLon, maxLon, box.x + 8, box.width - 16), y: scale2(Number(current.latitude), minLat, maxLat, box.y + 8, box.height - 16) },
-        thickness: 1.5,
-        color: rgb(0.05, 0.45, 0.75)
-      });
+      writer.page.drawLine({ start: { x: x(Number(previous.longitude)), y: y(Number(previous.latitude)) }, end: { x: x(Number(current.longitude)), y: y(Number(current.latitude)) }, thickness: 2, color: COLORS.route });
     }
-    writer.page.drawRectangle({ x: box.x, y: box.y, width: box.width, height: box.height, borderWidth: 0.5, borderColor: rgb(0.65, 0.65, 0.65) });
+    const start = points[0];
+    const end = points[points.length - 1];
+    drawMarker(writer.page, x(Number(start.longitude)), y(Number(start.latitude)), COLORS.start, "Start", writer.font);
+    drawMarker(writer.page, x(Number(end.longitude)), y(Number(end.latitude)), COLORS.destination, de ? "Ziel" : "Destination", writer.font);
+    (Array.isArray(state?.waypoints) ? state.waypoints : []).forEach((point, index) => {
+      if (Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))) drawMarker(writer.page, x(Number(point.longitude)), y(Number(point.latitude)), COLORS.waypoint, `${de ? "Zwischenziel" : "Waypoint"} ${index + 1}`, writer.font);
+    });
     writer.y = box.y - 12;
+    const countries = routeCountries(result, language);
+    writer.text(`${de ? "Legende" : "Legend"}: Start \xB7 ${de ? "Ziel" : "Destination"} \xB7 ${de ? "Zwischenziele" : "Waypoints"}${countries.length ? ` | ${de ? "L\xE4nderfolge" : "Country sequence"}: ${countries.join(" -> ")}` : ""}`, { size: 8, color: COLORS.muted });
   }
-  function renderTolls(writer, result) {
-    const language = writer.language;
-    const countryNames = new Intl.DisplayNames([language], { type: "region" });
-    const tolls = result?.metadata?.tolls;
-    writer.heading(language === "de" ? "Maut und Vignetten" : "Tolls and vignettes", 2);
-    if (!tolls) {
-      writer.text(language === "de" ? "Keine Mautdaten in der Routing-Antwort." : "No toll data was returned by the routing response.");
+  function renderFuel(writer, result, profile, language) {
+    const de = language === "de";
+    writer.heading(de ? "Kraftstoffplanung" : "Fuel planning", 2);
+    const consumption = Number(profile?.consumption_l_per_100km);
+    const distanceKm = Number(result?.distance_m) / 1e3;
+    if (!Number.isFinite(consumption) || consumption <= 0 || !Number.isFinite(distanceKm)) {
+      writer.text(de ? "Kein Verbrauchswert im Fahrzeugprofil vorhanden; der Kraftstoffbedarf wird nicht erfunden." : "No vehicle consumption value is available; fuel demand is not invented.", { color: COLORS.muted });
       return;
     }
-    const money = (amount, currency = tolls.currency || "EUR") => amount == null ? language === "de" ? "nicht verf\xFCgbar" : "not available" : new Intl.NumberFormat(language, { style: "currency", currency }).format(Number(amount));
-    writer.row(language === "de" ? "Gesch\xE4tzte Gesamtkosten" : "Estimated total", money(tolls.total));
-    for (const item of Array.isArray(tolls.countries) ? tolls.countries : []) {
-      const country = item.country ? countryNames.of(String(item.country)) || item.country : "-";
-      writer.bullet(`${country}: ${money(item.total ?? item.amount, item.currency || tolls.currency)} | ${item.system || "-"} | ${item.status || "-"}`);
-      if (item.tariff) writer.text(item.tariff, { indent: 18, size: 8.5, color: rgb(0.3, 0.3, 0.3) });
-    }
-    for (const item of Array.isArray(tolls.objects) ? tolls.objects : []) writer.bullet(`${item.name || item.type || "-"}: ${money(item.cost_eur)}${item.country ? ` (${countryNames.of(String(item.country)) || item.country})` : ""}`);
-    if (tolls.coverage_note) writer.text(`${language === "de" ? "Datenhinweis" : "Data note"}: ${tolls.coverage_note}`, { size: 8.5 });
-    if (result.metadata.tariff_basis_uncertain) writer.text(language === "de" ? "Tarifannahme: Emissionsklasse nicht best\xE4tigt; Betr\xE4ge sind Sch\xE4tzungen." : "Tariff assumption: emission class not confirmed; amounts are estimates.", { size: 8.5 });
+    const liters = distanceKm * consumption / 100;
+    writer.row(de ? "Verbrauchsannahme" : "Consumption assumption", `${formatNumber(consumption, language, 1)} l/100 km`);
+    writer.row(de ? "Gesamtstrecke" : "Total distance", `${formatNumber(distanceKm, language, 1)} km`);
+    writer.row(de ? "Gesch\xE4tzter Gesamtbedarf" : "Estimated total demand", `${formatNumber(liters, language, 1)} l`, { bold: true });
+    writer.text(de ? "Rechnerische Sch\xE4tzung ohne Tankinhalt, Startf\xFCllstand oder Sicherheitsreserve. Tankstopps werden deshalb nicht erfunden." : "Calculated estimate without tank capacity, starting level or safety reserve. Refuelling stops are therefore not invented.", { size: 8, color: COLORS.muted });
+    const price = Number(result?.metadata?.fuel_price_eur_per_l);
+    if (Number.isFinite(price) && price > 0) writer.row(de ? "Planungskosten (Nutzerwert)" : "Planning cost (user value)", formatMoney(liters * price, language));
   }
-  async function createTravelPlanPdf({ language = "en", profile = null, state = {}, result = null, title = "Camper Route Planner" }) {
+  function renderBorders(writer, result, language) {
+    const de = language === "de";
+    writer.heading(de ? "Grenz\xFCberg\xE4nge" : "Border crossings", 2);
+    const crossings = result?.metadata?.border_crossings;
+    if (Array.isArray(crossings) && crossings.length) writer.table([de ? "\xDCbergang" : "Crossing", de ? "Wartezeit" : "Wait", de ? "Datenqualit\xE4t" : "Data quality"], crossings.map((crossing) => [`${countryName(crossing.from_country, language)} -> ${countryName(crossing.to_country, language)}${crossing.name ? `: ${crossing.name}` : ` (${de ? "konkreter \xDCbergang nicht verf\xFCgbar" : "specific crossing unavailable"})`}`, crossing.wait_min == null ? de ? "keine Daten" : "no data" : `${formatNumber(crossing.wait_min, language, 0)} min`, crossing.inferred ? de ? "abgeleitete L\xE4nderfolge" : "inferred country sequence" : valueOr(crossing.status, de ? "unbekannt" : "unknown")]), [235, 120, 156]);
+    else writer.text(result?.metadata?.border_state === "unordered_international" ? de ? "Internationale Route erkannt; konkrete Grenz\xFCberg\xE4nge konnten nicht zuverl\xE4ssig zugeordnet werden." : "International route detected; specific border crossings could not be assigned reliably." : de ? "Keine Grenz\xFCberg\xE4nge in der Routing-Antwort." : "No border crossings were returned by the routing response.", { color: COLORS.muted });
+  }
+  function renderTolls(writer, result, language) {
+    const de = language === "de";
+    writer.heading(de ? "Maut und Vignetten" : "Tolls and vignettes", 2);
+    const tolls = result?.metadata?.tolls;
+    if (!tolls) {
+      writer.text(de ? "Keine Mautdaten in der Routing-Antwort." : "No toll data was returned by the routing response.", { color: COLORS.muted });
+      return;
+    }
+    const currency = tolls.currency || "EUR";
+    const rows = (Array.isArray(tolls.countries) ? tolls.countries : []).map((item) => [countryName(item.country, language), formatMoney(item.total ?? item.amount, language, item.currency || currency), valueOr(item.system, de ? "nicht angegeben" : "not specified"), valueOr(item.status, de ? "unbekannt" : "unknown")]);
+    if (rows.length) writer.table([de ? "Land" : "Country", de ? "Betrag" : "Amount", de ? "Tarifart" : "Tariff", "Status"], rows, [160, 105, 130, 116]);
+    writer.row(de ? "Gesamtsumme" : "Total", formatMoney(tolls.total, language, currency), { bold: true });
+    if (tolls.complete === false || tolls.coverage_note) writer.text(`${de ? "Datenhinweis" : "Data note"}: ${valueOr(tolls.coverage_note, de ? "Mautdaten sind m\xF6glicherweise unvollst\xE4ndig." : "Toll data may be incomplete.")}`, { size: 8, color: COLORS.muted });
+    if (result?.metadata?.tariff_basis_uncertain) writer.text(de ? "Tarifgrundlage unsicher: Die Betr\xE4ge sind Sch\xE4tzungen und nicht rechtsverbindlich." : "Tariff basis uncertain: amounts are estimates and not legally binding.", { size: 8, color: COLORS.muted });
+  }
+  function renderVehicle(writer, profile, language) {
+    if (!profile) return;
+    const de = language === "de";
+    writer.heading(de ? "Fahrzeug\xFCbersicht" : "Vehicle overview", 2);
+    const rows = [[de ? "Fahrzeugname" : "Vehicle name", profile.name], [de ? "Fahrzeugart" : "Vehicle type", localizedVehicle(profile.vehicle_kind, language)], [de ? "Ma\xDFe" : "Dimensions", `${profile.length_m} x ${profile.width_m} x ${profile.height_m} m`], [de ? "Zul\xE4ssige Gesamtmasse" : "Gross vehicle mass", `${profile.gross_weight_kg} kg`], [de ? "Achsen" : "Axles", profile.axles], [de ? "Kraftstoffart" : "Fuel type", localizedVehicle(profile.fuel_type, language)], [de ? "Euro-Schadstoffklasse" : "Euro emission class", profile.emission_class ? profile.emission_class.toUpperCase() : de ? "nicht angegeben" : "not specified"], [de ? "CO2-Klasse" : "CO2 class", profile.co2_class ? profile.co2_class.toUpperCase() : de ? "nicht angegeben" : "not specified"], [de ? "Erstzulassung" : "First registration", valueOr(profile.first_registration, de ? "nicht angegeben" : "not specified")], [de ? "Durchschnittsverbrauch" : "Average consumption", profile.consumption_l_per_100km == null ? de ? "nicht angegeben" : "not specified" : `${formatNumber(profile.consumption_l_per_100km, language, 1)} l/100 km`]];
+    writer.table([de ? "Angabe" : "Field", de ? "Wert" : "Value"], rows, [220, 291]);
+  }
+  function renderRouteOverview(writer, result, state, language) {
+    const de = language === "de";
+    writer.heading(de ? "Reise\xFCbersicht" : "Trip overview", 2);
+    writer.row(de ? "Start" : "Start", coordinateLabel(state.origin || result.origin, language));
+    writer.row(de ? "Ziel" : "Destination", coordinateLabel(state.destination || result.destination, language));
+    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : Array.isArray(result.waypoints) ? result.waypoints : [];
+    writer.row(de ? "Zwischenziele" : "Waypoints", waypoints.length ? waypoints.map((point) => coordinateLabel(point, language)).join("; ") : de ? "Keine" : "None");
+    const countries = routeCountries(result, language);
+    if (countries.length) writer.row(de ? "L\xE4nderfolge" : "Country sequence", countries.join(" -> "));
+    writer.row(de ? "Gesamtdistanz" : "Total distance", `${formatNumber(Number(result.distance_m) / 1e3, language, 1)} km`);
+    writer.row(de ? "Reine Fahrzeit" : "Driving time", `${Math.floor(Number(result.duration_s) / 3600)} h ${Math.round(Number(result.duration_s) % 3600 / 60)} min`);
+    writer.row(de ? "Gesch\xE4tzte Maut" : "Estimated tolls", result.metadata?.tolls ? formatMoney(result.metadata.tolls.total, language, result.metadata.tolls.currency || "EUR") : de ? "nicht verf\xFCgbar" : "not available");
+    writer.row(de ? "Erstellt" : "Created", formatDate(result.created_at, language, true));
+  }
+  function renderWarnings(writer, result, language) {
+    const de = language === "de";
+    writer.heading(de ? "Reisehinweise und Datenqualit\xE4t" : "Travel notes and data quality", 2);
+    const notes = de ? ["Wohnmobil-Routing ist eine Planungshilfe; Verkehrszeichen und geltende Vorschriften haben Vorrang.", "Mautbetr\xE4ge und Grenzwartedaten k\xF6nnen unvollst\xE4ndig oder veraltet sein.", "Die Navigation kann die Strecke neu berechnen; Befahrbarkeit wird nicht rechtsverbindlich zugesichert."] : ["Motorhome routing is a planning aid; traffic signs and applicable rules take precedence.", "Toll amounts and border-wait data may be incomplete or out of date.", "Navigation may recalculate the route; passability is not legally guaranteed."];
+    notes.forEach((note) => writer.bullet(note, { keepTogether: true }));
+    if (Array.isArray(result.warnings) && result.warnings.length) {
+      writer.text(de ? "Anbieterhinweise (Original)" : "Provider notes (original)", { bold: true, size: 9, keepTogether: true });
+      result.warnings.forEach((warning) => writer.bullet(warning, { size: 8.5, color: COLORS.muted, keepTogether: true }));
+    }
+  }
+  async function createTravelPlanPdf({ language = "en", profile = null, state = {}, result = null, title = "Camper Route Planner", routeName = "" }) {
     if (!result || !result.geometry || !Array.isArray(result.geometry.points) || result.geometry.points.length < 2) throw new Error("A valid calculated route is required");
     const document2 = await PDFDocument_default.create();
     const fonts = { regular: await document2.embedFont(StandardFonts.Helvetica), bold: await document2.embedFont(StandardFonts.HelveticaBold) };
-    const writer = new PdfWriter(document2, fonts, language);
     const de = language === "de";
+    const planTitle = pdfText(routeName || title || (de ? "Reiseplan" : "Travel plan"));
+    const writer = new PdfWriter(document2, fonts, language, planTitle);
     writer.heading("SmartCamper 765", 1);
-    writer.text(title, { size: 14, bold: true });
-    writer.text(de ? "Reiseplan" : "Travel plan", { size: 12 });
+    writer.text(de ? "Reiseplan" : "Travel plan", { size: 14, bold: true });
+    writer.text(planTitle, { size: 12, bold: true, color: COLORS.muted });
     writer.rule();
-    writer.row(de ? "Erstellt" : "Created", formatDate(result.created_at, language));
-    writer.row(de ? "Start" : "Start", state.origin?.label || state.origin?.address || `${formatNumber(Number(state.origin?.latitude), language, 5)}, ${formatNumber(Number(state.origin?.longitude), language, 5)}`);
-    writer.row(de ? "Ziel" : "Destination", state.destination?.label || state.destination?.address || `${formatNumber(Number(state.destination?.latitude), language, 5)}, ${formatNumber(Number(state.destination?.longitude), language, 5)}`);
-    writer.row(de ? "Provider" : "Provider", result.provider);
-    writer.row(de ? "Entfernung" : "Distance", `${formatNumber(Number(result.distance_m) / 1e3, language, 1)} km`);
-    writer.row(de ? "Fahrzeit" : "Travel time", `${Math.floor(Number(result.duration_s) / 3600)} h ${Math.round(Number(result.duration_s) % 3600 / 60)} min`);
-    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : [];
-    if (waypoints.length) writer.row(de ? "Zwischenziele" : "Waypoints", waypoints.map((point) => point.label || point.address || `${point.latitude}, ${point.longitude}`).join("; "));
-    writer.heading(de ? "Fahrzeugdaten" : "Vehicle details", 2);
-    if (profile) {
-      writer.row(de ? "Name" : "Name", profile.name);
-      writer.row(de ? "Typ" : "Type", profile.vehicle_kind);
-      writer.row(de ? "Ma\xDFe" : "Dimensions", `${profile.length_m} x ${profile.width_m} x ${profile.height_m} m`);
-      writer.row(de ? "Zul\xE4ssiges Gesamtgewicht" : "Gross weight", `${profile.gross_weight_kg} kg`);
-      writer.row(de ? "Achsen" : "Axles", profile.axles);
-      writer.row(de ? "Kraftstoff" : "Fuel", profile.fuel_type);
-      if (profile.emission_class) writer.row(de ? "Euro-Schadstoffklasse" : "Emission class", profile.emission_class.toUpperCase());
-      if (profile.co2_class) writer.row(de ? "CO2-Klasse" : "CO2 class", profile.co2_class.toUpperCase());
-      if (profile.first_registration) writer.row(de ? "Erstzulassung" : "First registration", profile.first_registration);
-      if (profile.consumption_l_per_100km != null) writer.row(de ? "Verbrauch" : "Consumption", `${profile.consumption_l_per_100km} l/100 km`);
-    }
-    drawRouteMap(writer, result);
-    writer.heading(de ? "Grenz\xFCberg\xE4nge" : "Border crossings", 2);
-    const crossings = result.metadata?.border_crossings;
-    if (Array.isArray(crossings) && crossings.length) for (const crossing of crossings) writer.bullet(`${crossing.from_country || "?"} -> ${crossing.to_country || "?"}: ${crossing.name || (de ? "konkreter \xDCbergang nicht verf\xFCgbar" : "specific crossing unavailable")}; ${crossing.wait_min == null ? de ? "keine aktuellen Wartezeitdaten" : "no current wait-time data" : `${crossing.wait_min} min`}`);
-    else writer.text(result.metadata?.border_state === "unordered_international" ? de ? "Internationale Route erkannt; Reihenfolge nicht eindeutig." : "International route detected; order is not unambiguous." : de ? "Keine Grenz\xFCberg\xE4nge auf dieser Route." : "No border crossings on this route.");
-    renderTolls(writer, result);
-    writer.heading(de ? "Weitere Reiseinformationen" : "Additional travel information", 2);
-    writer.text(de ? "Verkehr, Baustellen, Umweltzonen, Rastpl\xE4tze und Kraftstoffbedarf werden nur ausgegeben, wenn die Routing-Antwort diese Daten enth\xE4lt." : "Traffic, roadworks, low-emission zones, rest areas and fuel demand are shown only when returned by the routing response.");
-    if (Array.isArray(result.warnings) && result.warnings.length) {
-      writer.heading(de ? "Warnungen" : "Warnings", 2);
-      result.warnings.forEach((warning) => writer.bullet(warning));
-    }
-    writer.pages.forEach((page, index) => {
-      page.drawText(`${de ? "Camper Route Planner - Reiseplan" : "Camper Route Planner - Travel plan"} | ${index + 1}/${writer.pages.length}`, { x: MARGIN, y: 20, size: 8, font: fonts.regular, color: rgb(0.4, 0.4, 0.4) });
-    });
+    renderRouteOverview(writer, result, state, language);
+    renderVehicle(writer, profile, language);
+    drawRouteMap(writer, result, state, language);
+    writer.heading(de ? "Reiseverlauf" : "Itinerary", 2);
+    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : Array.isArray(result.waypoints) ? result.waypoints : [];
+    writer.row(de ? "Start" : "Start", coordinateLabel(state.origin || result.origin, language));
+    waypoints.forEach((point, index) => writer.row(`${de ? "Zwischenziel" : "Waypoint"} ${index + 1}`, coordinateLabel(point, language)));
+    writer.row(de ? "Ziel" : "Destination", coordinateLabel(state.destination || result.destination, language));
+    writer.text(de ? "Etappenwerte werden nur ausgewiesen, wenn die Routing-Antwort belastbare Segmentdaten liefert; eine freie Aufteilung der Gesamtdistanz findet nicht statt." : "Leg values are shown only when the routing response provides reliable segment data; the total route is not divided arbitrarily.", { size: 8, color: COLORS.muted });
+    renderFuel(writer, result, profile, language);
+    renderTolls(writer, result, language);
+    renderBorders(writer, result, language);
+    renderWarnings(writer, result, language);
+    writer.finish();
     return document2.save();
   }
   function pdfFileName(routeName = "reiseplan") {
@@ -31164,18 +31303,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       this.render();
     }
-    async exportPdf() {
+    async exportPdf(savedRoute = null) {
       const language = languageOf(this._hass);
-      const result = this._state.result;
-      const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId);
+      const result = savedRoute || this._state.result;
+      const profileId = savedRoute?.profile_id || this._state.profileId;
+      const profile = this._state.profiles.find((item) => item.profile_id === profileId);
+      const state = savedRoute ? { ...this._state, profileId, origin: savedRoute.origin || this._state.origin, destination: savedRoute.destination || this._state.destination, waypoints: savedRoute.waypoints || [] } : this._state;
       if (!result) {
         this._state.error = t(language, "pdfNoRoute");
         this.render();
         return;
       }
       try {
-        const bytes = await createTravelPlanPdf({ language, profile, state: this._state, result, title: this._config.title });
-        const filename = pdfFileName(profile?.name || "Camper");
+        const bytes = await createTravelPlanPdf({ language, profile, state, result, title: this._config.title, routeName: savedRoute?.name || this._state.routeName });
+        const filename = pdfFileName(savedRoute?.name || this._state.routeName || profile?.name || "Camper");
         downloadPdf(bytes, filename);
         this._state.error = "";
       } catch (error2) {
@@ -31307,6 +31448,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const fuelType = profile ? translate2(`fuelType.${profile.fuel_type}`) : "";
       const navigationTarget = result ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
       this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(result.provider)}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
+      this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
+        const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
+        const routeId = exportButton?.dataset.routeId;
+        if (!routeId || row.querySelector('button[data-action="pdf"]')) return;
+        const pdfButton = document.createElement("button");
+        pdfButton.type = "button";
+        pdfButton.dataset.action = "pdf";
+        pdfButton.dataset.routeId = routeId;
+        pdfButton.textContent = translate2("pdfExport");
+        exportButton.after(pdfButton);
+      });
       this.wrapCardContent(profile, language);
       if (navigationTarget) {
         const navigationButton = this.shadowRoot.querySelector('button[data-action="navigation"]');
@@ -31379,7 +31531,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         if (action === "calculate-force") this.calculate(true);
         if (action === "save") this.saveCurrent();
         if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId));
-        if (action === "pdf") this.exportPdf();
+        if (action === "pdf") this.exportPdf(button.dataset.routeId ? this._state.routes.find((route) => route.route_id === button.dataset.routeId) : null);
         if (action === "navigation") this.openNavigation();
         if (action === "add") {
           this._state.waypoints = addWaypoint(this._state.waypoints);

@@ -74,7 +74,8 @@ test("PDF export is a local action available only with the calculated route", ()
   assert.match(source, /data-action="pdf"/);
   assert.match(source, /createTravelPlanPdf/);
   assert.match(source, /downloadPdf/);
-  assert.match(source, /pdfFileName\(profile\?\.name/);
+  assert.match(source, /pdfFileName\(savedRoute\?\.name/);
+  assert.match(source, /routeName: savedRoute\?\.name/);
   assert.doesNotMatch(source, /navigator\.share/);
   assert.doesNotMatch(source, /fetch\([^)]*pdf/i);
 });
