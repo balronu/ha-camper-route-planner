@@ -6,15 +6,14 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.0` Stable. Die Lovelace-Karte ist für eine isolierte
+> **Status:** `v0.1.1` Stable. Die Lovelace-Karte ist für eine isolierte
 > HA-2026.10.1-Fixture, Chromium und den praktischen iPhone-Navigationstest
 > geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
 > automatische Fallbacks.
 >
-> **Aktueller Pre-release:** `v0.1.1-beta.16` korrigiert die Reichweitenmeldung
-> für Langstrecken mit zusätzlichem Tankbedarf. Die Sicherheitsreserve bleibt aus
-> der lokalen Reichweitenplanung und verbessert die iPhone-Bedienung. Stable bleibt
-> `v0.1.0`.
+> `v0.1.1` erweitert die Wohnmobil-Routenplanung, Verkehrs- und Routenoptionen,
+> ECO-Routing, Alternativen, Zeitplanung, mobile Darstellung und die
+> fahrzeugbezogene Kraftstoffplanung. Stable bleibt mit `v0.1.0` kompatibel.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 
@@ -36,6 +35,11 @@ und GPX-Export.
 - dauerhaft sichtbare Leaflet-Karte mit Marker-Drag und Kartenauswahl
 - GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
 - Geoapify-Adresssuche und Reverse-Geocoding über den HA-Options-Flow (Backend-only, mockbar)
+- Verkehrs- und Routenoptionen, Vermeidungen, ECO-Routing und alternative Routen
+- Abfahrts- und Ankunftszeiten sowie verbesserte Karten- und Mobile-Darstellung
+- Fahrzeugbezogene Kraftstoffplanung mit Liter-/Prozentfüllstand, Reichweite,
+  manueller Kostenschätzung und neutralem Hinweis auf erforderliche Tankstopps
+- Verbesserte PDF-/GPX-Funktionen und deutsche/englische Übersetzungen
 
 ## Unterstützte Grenzen
 
@@ -134,6 +138,10 @@ Details: [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md)
 - unbekannte Restriktionen werden nicht als freie Strecke interpretiert
 - Truck-Maut, Truck-Fahrverbote und Ruheplanung sind nicht automatisch auf
   private Wohnmobile übertragbar
+- Es gibt keine automatische Tankstellensuche, keine automatischen
+  Dieselpreisabfragen und keine automatische Tankstopp-Optimierung.
+- Live-Nakordoni-/Mautdaten und einzelne Exportpfade wurden nicht vollständig
+  durch den abschließenden Nutzer-Praxistest abgenommen.
 
 ## Entwicklung und Tests
 
@@ -148,7 +156,7 @@ npm run test:e2e
 ```
 
 Der Stable-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.0.md](docs/releases/v0.1.0.md). Hassfest und
+    [docs/releases/v0.1.1.md](docs/releases/v0.1.1.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Die Installation in produktiven HA-Systemen
@@ -156,7 +164,7 @@ erfolgt weiterhin manuell durch den jeweiligen Betreiber.
 
 ## Roadmap
 
-1. Stable `v0.1.0` ist veröffentlicht und bleibt als eigenständige
+1. Stable `v0.1.1` ist veröffentlicht; `v0.1.0` bleibt als eigenständige
    Rückfallbasis erhalten.
 2. Weitere Funktionen werden erst nach einem separaten Änderungsauftrag
    entwickelt.

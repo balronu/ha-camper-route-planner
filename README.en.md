@@ -5,12 +5,13 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.0` Stable. The Lovelace card is validated with an isolated
+> **Status:** `v0.1.1` Stable. The Lovelace card is validated with an isolated
 > HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 >
-> **Current pre-release:** `v0.1.1-beta.16` presents additional long-route fuel
-> demand as a neutral planning note. Stable remains `v0.1.0`.
+> `v0.1.1` extends motorhome route planning, traffic and route options, ECO
+> routing, alternatives, time planning, mobile presentation, and vehicle-based
+> fuel planning. Stable remains compatible with `v0.1.0`.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -32,6 +33,11 @@ profiles, an interactive map, saved routes, and GPX export.
 - always-visible Leaflet map with draggable markers and map selection
 - per-vehicle GPS start point; Zoe defaults to `device_tracker.wohnmobil_zoe`
 - Geoapify address search and reverse geocoding through the HA Options Flow (backend-only, mockable)
+- traffic and route options, avoidance options, ECO routing, and alternatives
+- departure and arrival times plus improved map and mobile presentation
+- vehicle-based fuel planning with litres/percent level, range, manual cost
+  estimation, and a neutral required-refuelling planning note
+- improved PDF/GPX features and German/English translations
 
 ## Supported limitations
 
@@ -108,6 +114,10 @@ See the [planning update](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
 - unknown restrictions are not treated as a clear road
 - truck tolls, truck restrictions, and rest planning are not automatically
   valid for private motorhomes
+- There is no automatic station search, automatic diesel-price lookup, or
+  automatic refuelling-stop optimization.
+- Live Nakordoni/toll data and some export paths were not fully accepted in the
+  final user practical test.
 
 ## Development and tests
 
@@ -121,14 +131,14 @@ npm run build
 npm run test:e2e
 ```
 
-See the [Stable release notes](docs/releases/v0.1.0.md) for the installation and
+See the [Stable release notes](docs/releases/v0.1.1.md) for the installation and
 test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is validated by GitHub
 Actions. Installation into productive HA systems remains an operator action.
 
 ## Roadmap
 
-1. Stable `v0.1.0` is published and remains an independent fallback basis.
+1. Stable `v0.1.1` is published; `v0.1.0` remains an independent fallback basis.
 2. Further features require a separate change request.
 3. Migration to the discontinued SmartCamper Suite is outside this release;
    the Suite remains only as a historical, discontinued repository.
