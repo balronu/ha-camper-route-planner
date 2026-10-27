@@ -180,6 +180,22 @@ export async function createTravelPlanPdf({ language = "en", profile = null, sta
 }
 
 export function pdfFileName(routeName = "reiseplan") {
-  const safe = String(routeName || "reiseplan").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "reiseplan";
-  return `${safe}.pdf`;
+  const safe = String(routeName || "Camper").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "Camper";
+  const date = new Date().toISOString().slice(0, 10);
+  return `Camper-Route-${safe}-${date}.pdf`;
+}
+
+export function downloadPdf(bytes, filename) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    anchor.click();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+  return "downloaded";
 }

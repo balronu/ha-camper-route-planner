@@ -22,6 +22,13 @@ from custom_components.camper_route_planner.storage import MemoryStore, ProfileR
 
 
 class Phase5AStablePreparationTests(unittest.TestCase):
+    def test_profile_numbers_use_visible_ha_selectors(self):
+        source = Path("custom_components/camper_route_planner/config_flow.py").read_text(encoding="utf-8")
+        self.assertIn("def _number_selector", source)
+        self.assertIn("consumption_l_per_100km", source)
+        self.assertIn("_number_selector(0.1, 100, 0.1)", source)
+        self.assertNotIn('vol.Any("", vol.Coerce(float))', source)
+
     def test_provider_translations_expose_only_mock_and_motorhome(self):
         translation_paths = [
             Path(__file__).parents[1] / "custom_components" / "camper_route_planner" / "strings.json",

@@ -12,6 +12,14 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
+try:
+    from aiohttp import ClientTimeout
+except ImportError:  # pragma: no cover - HA supplies aiohttp; offline tests do not.
+    @dataclass(frozen=True, slots=True)
+    class ClientTimeout:  # type: ignore[no-redef]
+        total: float
+        connect: float
+
 from .nakordoni_motorhome import ROUTE_ENDPOINT
 
 
@@ -26,7 +34,8 @@ class NakordoniHttpTransport:
 
     session: Any
     api_key: str
-    timeout_s: float = 10.0
+    timeout_s: float = 60.0
+    connect_timeout_s: float = 10.0
     endpoint: str = ROUTE_ENDPOINT
 
     async def __call__(self, parameters: dict[str, Any]) -> dict[str, Any]:
@@ -38,7 +47,7 @@ class NakordoniHttpTransport:
                 self.endpoint,
                 params=parameters,
                 headers=headers,
-                timeout=self.timeout_s,
+                timeout=ClientTimeout(total=self.timeout_s, connect=self.connect_timeout_s),
             ) as response:
                 try:
                     payload = await response.json(content_type=None)

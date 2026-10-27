@@ -246,7 +246,8 @@ def _route_points(raw: Any) -> tuple[RouteWaypoint, ...]:
 class NakordoniMotorhomeProvider:
     api_key: str | None = None
     live_enabled: bool = False
-    timeout_s: float = 10.0
+    timeout_s: float = 60.0
+    connect_timeout_s: float = 10.0
     transport: Transport | None = None
     name: str = PROVIDER_NAME
 
@@ -267,7 +268,11 @@ class NakordoniMotorhomeProvider:
         try:
             payload = await self.transport(parameters)
         except TimeoutError as exc:
-            raise ProviderError("Nakordoni request timed out", code="timeout", retryable=True) from exc
+            raise ProviderError(
+                f"Nakordoni request timed out after {self.timeout_s:.0f}s "
+                f"(connect limit {self.connect_timeout_s:.0f}s); no automatic retry was made.",
+                code="timeout",
+            ) from exc
         except OSError as exc:
             raise ProviderError("Nakordoni network request failed", code="network_error", retryable=True) from exc
         except ValueError as exc:

@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.6; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.7; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13817,6 +13817,7 @@
       addressUnavailable: "Adresse nicht verf\xFCgbar \u2013 Koordinaten werden verwendet",
       noSearchResults: "Keine Treffer",
       calculate: "Route berechnen",
+      recalculate: "Neu berechnen",
       save: "Route speichern",
       delete: "Route l\xF6schen",
       load: "Laden",
@@ -13891,6 +13892,7 @@
       latitude: "Breitengrad",
       longitude: "L\xE4ngengrad",
       mockDataNotice: "Synthetische Testdaten \u2013 keine gepr\xFCfte Stra\xDFenroute",
+      cachedRouteNotice: "Zwischengespeicherte Route: Grenzwartezeiten und Maut k\xF6nnen veraltet sein. F\xFCr aktuelle Daten bitte neu berechnen.",
       pdfExport: "Reiseplan als PDF",
       pdfNoRoute: "PDF-Export ist erst mit einer g\xFCltigen Route verf\xFCgbar.",
       pdfExportFailed: "PDF-Export fehlgeschlagen",
@@ -13927,6 +13929,7 @@
       addressUnavailable: "Address unavailable \u2013 coordinates are used",
       noSearchResults: "No results",
       calculate: "Calculate route",
+      recalculate: "Recalculate",
       save: "Save route",
       delete: "Delete route",
       load: "Load",
@@ -14001,6 +14004,7 @@
       latitude: "Latitude",
       longitude: "Longitude",
       mockDataNotice: "Synthetic test data \u2013 not a checked road route",
+      cachedRouteNotice: "Cached route: border waits and tolls may be out of date. Recalculate for current data.",
       pdfExport: "Travel plan as PDF",
       pdfNoRoute: "PDF export requires a valid calculated route.",
       pdfExportFailed: "PDF export failed",
@@ -30695,8 +30699,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return document2.save();
   }
   function pdfFileName(routeName = "reiseplan") {
-    const safe = String(routeName || "reiseplan").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "reiseplan";
-    return `${safe}.pdf`;
+    const safe = String(routeName || "Camper").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "Camper";
+    const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    return `Camper-Route-${safe}-${date}.pdf`;
+  }
+  function downloadPdf(bytes, filename) {
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.rel = "noopener";
+      anchor.click();
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+    return "downloaded";
   }
 
   // src/camper-route-planner-card.js
@@ -30890,7 +30909,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._state.loaded = true;
       this.render();
     }
-    async calculate() {
+    async calculate(forceRefresh = false) {
       if (this._state.busy) return;
       const language = languageOf(this._hass);
       if (!isValidWaypoint(this._state.origin) || !isValidWaypoint(this._state.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point))) {
@@ -30907,7 +30926,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._state.error = "";
       this.render();
       try {
-        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName });
+        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh });
         this._state.result = normalizeServiceResponse(payload);
         this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
       } catch (error2) {
@@ -31156,19 +31175,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       try {
         const bytes = await createTravelPlanPdf({ language, profile, state: this._state, result, title: this._config.title });
-        const blob = new Blob([bytes], { type: "application/pdf" });
-        const filename = pdfFileName(this._state.routeName || "reiseplan");
-        const file = new File([blob], filename, { type: "application/pdf" });
-        if (navigator.share && navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: this._config.title });
-        } else {
-          const url = URL.createObjectURL(blob);
-          const anchor = document.createElement("a");
-          anchor.href = url;
-          anchor.download = filename;
-          anchor.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1e3);
-        }
+        const filename = pdfFileName(profile?.name || "Camper");
+        downloadPdf(bytes, filename);
         this._state.error = "";
       } catch (error2) {
         this._state.error = error2.message || t(language, "pdfExportFailed");
@@ -31298,7 +31306,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const vehicleKind = profile ? translate2(`vehicleKind.${profile.vehicle_kind}`) : "";
       const fuelType = profile ? translate2(`fuelType.${profile.fuel_type}`) : "";
       const navigationTarget = result ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
-      this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button><input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(result.provider)}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div><div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
+      this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(result.provider)}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
       this.wrapCardContent(profile, language);
       if (navigationTarget) {
         const navigationButton = this.shadowRoot.querySelector('button[data-action="navigation"]');
@@ -31368,6 +31376,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         const action = button.dataset.action;
         const index = Number(button.dataset.index);
         if (action === "calculate") this.calculate();
+        if (action === "calculate-force") this.calculate(true);
         if (action === "save") this.saveCurrent();
         if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId));
         if (action === "pdf") this.exportPdf();
