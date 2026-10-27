@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from .const import CONF_API_KEY, CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
@@ -88,7 +89,24 @@ class RuntimeData:
         profile = profiles.get(data["profile_id"])
         if profile is None:
             raise ValueError("unknown vehicle profile")
-        request = RouteRequest(RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile, tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])))
+        def _time(name: str):
+            raw = data.get(name)
+            if not raw:
+                return None
+            value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if value.tzinfo is None:
+                raise ValueError(f"{name} must include a timezone")
+            return value
+        avoid = data.get("avoid", [])
+        if isinstance(avoid, str):
+            avoid = [item.strip() for item in avoid.split(",") if item.strip()]
+        request = RouteRequest(
+            RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile,
+            tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])),
+            alternatives=int(data.get("alternatives", 0)), traffic=data.get("traffic", "off"),
+            depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
+            arrive_at=_time("arrive_at"),
+        )
         result = await self.coordinator.async_calculate_manual(
             request, force_refresh=bool(data.get("force_refresh", False))
         )
@@ -96,6 +114,9 @@ class RuntimeData:
             "provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m,
             "duration_s": result.duration_s, "warnings": [warning.message for warning in result.warnings],
             "geometry": result.geometry.as_dict(), "metadata": result.metadata,
+            "origin": request.origin.as_dict(), "destination": request.destination.as_dict(),
+            "waypoints": [point.as_dict() for point in request.waypoints],
+            "route_options": result.metadata.get("request_options", {}),
             "beta": result.metadata.get("beta", False), "attribution_url": result.metadata.get("attribution_url"),
             "created_at": result.created_at.isoformat() if result.created_at else None,
         }

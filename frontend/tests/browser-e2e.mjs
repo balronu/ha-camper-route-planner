@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
-const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.11"></script></body></html>`;
+const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.12"></script></body></html>`;
 const server = createServer((request, response) => {
   if (request.url === "/") { response.writeHead(200, { "content-type": "text/html" }); response.end(html); return; }
   if (request.url === "/resource-test") { response.writeHead(200, { "content-type": "text/html" }); response.end(resourceHtml); return; }
@@ -23,8 +23,8 @@ const resourceResponse = await resourcePage.goto(`http://127.0.0.1:${port}/resou
 assert.equal(resourceResponse.status(), 200, "HA-like resource page loads");
 assert.equal(await resourcePage.evaluate(() => customElements.whenDefined("camper-route-planner-card").then(() => true)), true, "custom element is registered from the served module");
 assert.equal(await resourcePage.locator("camper-route-planner-card").count(), 1, "card is instantiated from the resource URL");
-const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.11`);
-assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.11/);
+const resourceBody = await resourcePage.evaluate((url) => fetch(url).then((response) => response.text()), `http://127.0.0.1:${port}/camper_route_planner/camper-route-planner-card.js?v=0.1.1-beta.12`);
+assert.match(resourceBody, /Camper Route Planner Card v0\.1\.1-beta\.12/);
 const editorResult = await resourcePage.evaluate(() => {
   const cardClass = customElements.get("camper-route-planner-card");
   const catalogEntry = window.customCards.find((item) => item.type === "camper-route-planner-card");
@@ -87,7 +87,7 @@ async function calculate(page) {
   await page.locator('input[data-point="destination"][data-field="latitude"]').fill("50");
   await page.locator('input[data-point="destination"][data-field="longitude"]').fill("8");
   await page.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card._state.origin = { ...card._state.origin, latitude: 49, longitude: 7 }; card._state.destination = { ...card._state.destination, latitude: 50, longitude: 8 }; return card.calculate(); });
-  await page.locator(".metrics").waitFor();
+  await page.locator(".result .metrics").first().waitFor();
 }
 
 const desktop = await preparePage({ width: 1280, height: 900 });
@@ -233,7 +233,7 @@ await desktop.evaluate(() => document.querySelector("camper-route-planner-card")
 await desktop.waitForFunction(() => document.querySelector("camper-route-planner-card")._state.origin.latitude === 47.3769);
 assert.equal(await desktop.locator('input[data-point="origin"][data-field="longitude"]').inputValue(), "8.5417", "tracker point fills origin coordinates");
 await desktop.evaluate(() => document.querySelector("camper-route-planner-card").calculate());
-await desktop.locator(".metrics").waitFor();
+await desktop.locator(".result .metrics").first().waitFor();
 const collapseState = await desktop.evaluate(() => {
   const card = document.querySelector("camper-route-planner-card");
   const host = card.shadowRoot.querySelector(".crp-map");
@@ -241,10 +241,10 @@ const collapseState = await desktop.evaluate(() => {
 });
 await desktop.locator("summary.route-planner-summary").click();
 assert.equal(await desktop.locator("details.route-planner-shell").getAttribute("open"), null, "header click collapses the card");
-assert.equal(await desktop.locator(".metrics").isVisible(), false, "route details are hidden while collapsed");
+assert.equal(await desktop.locator(".result .metrics").first().isVisible(), false, "route details are hidden while collapsed");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), collapseState.calls, "collapsing does not calculate again");
 await desktop.locator("summary.route-planner-summary").click();
-await desktop.locator(".metrics").waitFor();
+await desktop.locator(".result .metrics").first().waitFor();
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), collapseState.calls, "reopening does not calculate again");
 assert.deepEqual(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination), collapseState.destination, "destination survives collapse and reopen");
 assert.deepEqual(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.result.geometry), collapseState.geometry, "route geometry survives collapse and reopen");

@@ -37,3 +37,42 @@ calculate_route:
       required: false
       selector:
         text:
+    traffic:
+      name: Traffic mode
+      description: off, live or forecast; applied only when the route is explicitly calculated.
+      required: false
+      selector:
+        select:
+          options: ["off", "live", "forecast"]
+    alternatives:
+      name: Alternative routes
+      description: Up to two alternatives, only without waypoints.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 2
+          mode: box
+    avoid:
+      name: Avoidances
+      required: false
+      selector:
+        select:
+          multiple: true
+          options: ["tolls", "motorways", "ferries", "tunnels"]
+    route_type:
+      name: Route type
+      required: false
+      selector:
+        select:
+          options: ["fastest", "eco"]
+    depart_at:
+      name: Planned departure
+      required: false
+      selector:
+        text:
+    arrive_at:
+      name: Planned arrival
+      required: false
+      selector:
+        text:

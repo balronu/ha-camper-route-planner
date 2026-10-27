@@ -11,6 +11,7 @@ const CRP_LEAFLET_OPTIONS = Symbol("camper-route-planner-leaflet-options");
 const CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
 const CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
 const CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
+const CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-restriction-markers");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -70,6 +71,7 @@ export function destroyMap(container) {
     container[CRP_LEAFLET_OPTIONS] = null;
     container[CRP_LEAFLET_LABELS] = null;
     container[CRP_LEAFLET_BORDER_MARKERS] = null;
+    container[CRP_LEAFLET_RESTRICTION_MARKERS] = null;
   }
 }
 
@@ -122,6 +124,19 @@ function updateLeafletBorderMarkers(container, crossings = []) {
   return true;
 }
 
+function updateLeafletRestrictionMarkers(container, items = []) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return false;
+  for (const marker of container[CRP_LEAFLET_RESTRICTION_MARKERS] || []) marker.remove();
+  const markers = items.filter((item) => Number.isFinite(Number(item?.lat ?? item?.latitude)) && Number.isFinite(Number(item?.lon ?? item?.longitude))).map((item) => {
+    const marker = L.circleMarker([Number(item.lat ?? item.latitude), Number(item.lon ?? item.longitude)], { radius: 7, color: "#d32f2f", fillColor: "#ef5350", fillOpacity: 0.85 });
+    marker.addTo(map).bindTooltip(String(item.message || item.type || item.code || "Restriction"));
+    return marker;
+  });
+  container[CRP_LEAFLET_RESTRICTION_MARKERS] = markers;
+  return true;
+}
+
 function updateLeafletRoute(container, route, points = []) {
   const map = container?.[CRP_LEAFLET_MAP];
   if (!map) return false;
@@ -162,6 +177,7 @@ export function updateMapPoints(container, points, labels = {}, options = {}) {
   updateLeafletRoute(container, options.route, validPoints);
   updateLeafletMarkers(container, validPoints);
   updateLeafletBorderMarkers(container, options.borderCrossings || []);
+  updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
   fitMapToPoints(container, validPoints, Boolean(options.fitBounds));
   return true;
 }
@@ -219,6 +235,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     updateLeafletRoute(container, route, points);
     updateLeafletMarkers(container, points);
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
+    updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
     if (points.length === 1) {
       map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
     } else if (points.length > 1) {

@@ -74,6 +74,11 @@
           "co2_class": "CO2 class (optional; not sent to Nakordoni)",
           "first_registration": "First registration (YYYY-MM-DD, optional)",
           "consumption_l_per_100km": "Average consumption (l/100 km, optional)",
+          "tank_capacity_l": "Tank capacity (l, optional)",
+          "fuel_level_l": "Current fuel level (l, optional)",
+          "fuel_level_pct": "Current fuel level (%, optional)",
+          "reserve_l": "Safety reserve (l, optional)",
+          "diesel_price_per_l": "Diesel price per litre (optional)",
           "tracker_entity_id": "Vehicle GPS tracker entity"
         }
       },

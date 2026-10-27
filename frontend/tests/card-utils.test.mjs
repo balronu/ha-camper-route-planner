@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -22,6 +22,14 @@ test("formatters and service response normalization handle mock data", () => {
   const result = normalizeServiceResponse({ response: { provider: "mock", distance_m: 12000, duration_s: 3660, warnings: ["synthetic"], synthetic: true } });
   assert.equal(result.synthetic, true);
   assert.deepEqual(result.warnings, ["synthetic"]);
+});
+
+test("fuel planning stays local and handles optional profile data", () => {
+  const plan = calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5, tank_capacity_l: 300, fuel_level_pct: 100, reserve_l: 20, diesel_price_per_l: 1.8 });
+  assert.equal(Math.round(plan.totalLiters * 10) / 10, 259.8);
+  assert.equal(plan.deficit, 0);
+  assert.equal(Math.round(plan.cost * 100) / 100, 467.72);
+  assert.equal(calculateFuelPlan(1000, {}).totalLiters, null);
 });
 
 test("German and English labels are available", () => {

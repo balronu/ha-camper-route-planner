@@ -15,6 +15,8 @@ class ValidationError(ValueError):
 VehicleKind = Literal["motorhome", "truck", "car"]
 FuelType = Literal["diesel", "petrol", "electric", "hybrid", "other"]
 TrafficMode = Literal["forecast", "live", "off"]
+AvoidOption = Literal["tolls", "motorways", "ferries", "tunnels"]
+RouteType = Literal["fastest", "eco"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +65,11 @@ class VehicleProfile:
     co2_class: str | None = None
     first_registration: str | None = None
     consumption_l_per_100km: float | None = None
+    tank_capacity_l: float | None = None
+    fuel_level_l: float | None = None
+    fuel_level_pct: float | None = None
+    reserve_l: float | None = None
+    diesel_price_per_l: float | None = None
     schema_version: int = 1
 
     def __post_init__(self) -> None:
@@ -102,6 +109,15 @@ class VehicleProfile:
                 raise ValidationError("first_registration must be an ISO date") from exc
         if self.consumption_l_per_100km is not None and not 0.1 <= self.consumption_l_per_100km <= 100:
             raise ValidationError("consumption_l_per_100km must be between 0.1 and 100")
+        for label, value, low, high in (("tank_capacity_l", self.tank_capacity_l, 1, 5000), ("fuel_level_l", self.fuel_level_l, 0, 5000), ("fuel_level_pct", self.fuel_level_pct, 0, 100), ("reserve_l", self.reserve_l, 0, 5000), ("diesel_price_per_l", self.diesel_price_per_l, 0, 20)):
+            if value is not None and not low <= value <= high:
+                raise ValidationError(f"{label} must be between {low} and {high}")
+        if self.fuel_level_l is not None and self.tank_capacity_l is not None and self.fuel_level_l > self.tank_capacity_l:
+            raise ValidationError("fuel_level_l cannot exceed tank_capacity_l")
+        if self.fuel_level_pct is not None and self.fuel_level_l is not None:
+            raise ValidationError("provide either fuel_level_l or fuel_level_pct")
+        if self.reserve_l is not None and self.tank_capacity_l is not None and self.reserve_l > self.tank_capacity_l:
+            raise ValidationError("reserve_l cannot exceed tank_capacity_l")
         if self.schema_version != 1:
             raise ValidationError("unsupported vehicle profile schema")
 
@@ -127,6 +143,9 @@ class VehicleProfile:
             "co2_class": self.co2_class,
             "first_registration": self.first_registration,
             "consumption_l_per_100km": self.consumption_l_per_100km,
+            "tank_capacity_l": self.tank_capacity_l, "fuel_level_l": self.fuel_level_l,
+            "fuel_level_pct": self.fuel_level_pct, "reserve_l": self.reserve_l,
+            "diesel_price_per_l": self.diesel_price_per_l,
         }
 
     @classmethod
@@ -175,6 +194,9 @@ class RouteRequest:
     traffic: TrafficMode = "off"
     geometry_format: Literal["geojson", "polyline5", "polyline6"] = "geojson"
     depart_at: datetime | None = None
+    avoid: tuple[AvoidOption, ...] = ()
+    route_type: RouteType = "fastest"
+    arrive_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if len(self.waypoints) > 5:
@@ -183,9 +205,17 @@ class RouteRequest:
             raise ValidationError("alternatives must be between 0 and 2")
         if self.depart_at is not None and self.depart_at.tzinfo is None:
             raise ValidationError("depart_at must be timezone-aware")
+        if self.arrive_at is not None and self.arrive_at.tzinfo is None:
+            raise ValidationError("arrive_at must be timezone-aware")
+        if self.depart_at is not None and self.arrive_at is not None:
+            raise ValidationError("depart_at and arrive_at are mutually exclusive")
+        if self.alternatives and self.waypoints:
+            raise ValidationError("alternatives are not supported with waypoints")
+        if self.route_type not in ("fastest", "eco") or any(item not in {"tolls", "motorways", "ferries", "tunnels"} for item in self.avoid):
+            raise ValidationError("unsupported route option")
 
     def cache_key(self) -> str:
-        return repr((self.origin, self.destination, self.vehicle.as_dict(), self.waypoints, self.alternatives, self.traffic, self.geometry_format, self.depart_at))
+        return repr((self.origin, self.destination, self.vehicle.as_dict(), self.waypoints, self.alternatives, self.traffic, self.geometry_format, self.depart_at, self.arrive_at, self.avoid, self.route_type))
 
 
 @dataclass(frozen=True, slots=True)

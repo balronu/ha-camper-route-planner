@@ -1,5 +1,5 @@
 import { languageOf, t } from "./localization.js";
-import { addWaypoint, buildNavigationLink, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry } from "./card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeConfig, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry } from "./card-utils.js";
 import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
@@ -61,6 +61,27 @@ function renderTollDetails(result, translate, language) {
   return `<section class="route-details toll-details"><h3>${translate("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>`;
 }
 
+function renderRestrictions(result, translate) {
+  const metadata = result?.metadata || {};
+  const items = [...(Array.isArray(metadata.restriction_hits) ? metadata.restriction_hits : []), ...(Array.isArray(metadata.low_emission_zones_on_route) ? metadata.low_emission_zones_on_route : [])];
+  const warnings = Array.isArray(metadata.provider_warnings) ? metadata.provider_warnings : [];
+  const row = (item) => {
+    const applies = item?.applies === true || item?.active === true;
+    const status = applies ? translate("restrictionActive") : item?.applies === false ? translate("restrictionConsidered") : translate("restrictionInfo");
+    const validity = [item.valid_from, item.valid_until, item.data_at || item.timestamp].filter(Boolean).join(" – ");
+    return `<li><b>${escapeHtml(item.code || item.type || translate("restriction"))}</b> · ${escapeHtml(status)}${item.message ? `: ${escapeHtml(item.message)}` : ""}${validity ? `<small>${escapeHtml(translate("validity"))}: ${escapeHtml(validity)}</small>` : ""}</li>`;
+  };
+  const groups = items.length ? `<ul>${items.map(row).join("")}</ul>` : `<p class="subtle">${translate("noRestrictions")}</p>`;
+  const notes = warnings.length ? `<details><summary>${translate("providerWarnings")}</summary><ul>${warnings.map((item) => row(typeof item === "string" ? { message: item } : item)).join("")}</ul></details>` : "";
+  return `<details class="route-details restrictions" open><summary><h3>${translate("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(translate(`trafficMode.${result?.metadata?.traffic || "off"}`))}</p>${groups}${notes}</details>`;
+}
+
+function renderFuelPlan(result, profile, translate, language) {
+  const plan = calculateFuelPlan(result?.distance_m, profile || {});
+  const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? "—" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
+  return `<details class="route-details fuel-range" open><summary><h3>${translate("fuelRange")}</h3></summary><div class="metrics"><div><b>${number(plan.totalLiters)} l</b><span>${translate("estimatedFuel")}</span></div><div><b>${number(plan.rangeKm)} km</b><span>${translate("availableRange")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate("fuelShortfall") : translate("fuelSufficient")} · ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate("fuelDataMissing")}</p>`}${plan.cost != null ? `<p>${translate("estimatedCost")}: ${number(plan.cost, 2)} €</p>` : ""}</details>`;
+}
+
 class CamperRoutePlannerCardEditor extends HTMLElement {
   setConfig(config) { this.config = { ...config }; this.render(); }
   set hass(hass) { this._hass = hass; this._connection = hass?.connection || hass; this.loadEntries(); }
@@ -88,7 +109,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = normalizeConfig();
-    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._cardExpanded = false;
     this._connection = null;
     this._reverseTimers = new Map();
@@ -184,7 +205,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (!this._state.profileId) { this._state.error = t(language, "noProfiles"); this.render(); return; }
     this._state.busy = true; this._state.error = ""; this.render();
     try {
-      const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh });
+      if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
+      const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...this._state.routeOptions });
       this._state.result = normalizeServiceResponse(payload);
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
     } catch (error) { this._state.error = error.message || t(language, "calculationFailed"); }
@@ -371,7 +393,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   async loadRoute(routeId) {
-    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = route.origin || this._state.origin; this._state.destination = route.destination || this._state.destination; this._state.waypoints = route.waypoints || []; this._state.profileId = route.profile_id || this._state.profileId; this._state.result = normalizeServiceResponse(route); this.render(); }
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = route.origin || this._state.origin; this._state.destination = route.destination || this._state.destination; this._state.waypoints = route.waypoints || []; this._state.profileId = route.profile_id || this._state.profileId; this._state.routeOptions = { ...this._state.routeOptions, ...(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this.render(); }
     catch (error) { this._state.error = error.message || t(languageOf(this._hass), "calculationFailed"); this.render(); }
   }
 
@@ -517,6 +539,10 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const fuelType = profile ? translate(`fuelType.${profile.fuel_type}`) : "";
     const navigationTarget = result ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
     this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} · ${escapeHtml(fuelType)}${profile.emission_class ? ` · ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">＋ ${translate("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate("geocodingPrivacy")}</p><section class="map-section"><h3>${translate("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate("provider")}: ${escapeHtml(result.provider)}` : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportCombined")}</button><button type="button" data-action="pdf">${translate("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>🧭 ${translate("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+    const optionAnchor = this.shadowRoot.querySelector(".map-section");
+    optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate("routeOptions")}</h3></summary><div class="option-grid"><label>${translate("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate("trafficMode.off")}</option><option value="live">${translate("trafficMode.live")}</option><option value="forecast">${translate("trafficMode.forecast")}</option></select></label><label>${translate("routeType")}<select data-route-option="route_type"><option value="fastest">${translate("fastest")}</option><option value="eco">${translate("eco")}</option></select></label><label>${translate("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate("plannedRequest")}</p><label><input type="checkbox" data-route-option="avoid" value="tolls"> ${translate("avoidTolls")}</label> <label><input type="checkbox" data-route-option="avoid" value="motorways"> ${translate("avoidMotorways")}</label> <label><input type="checkbox" data-route-option="avoid" value="ferries"> ${translate("avoidFerries")}</label> <label><input type="checkbox" data-route-option="avoid" value="tunnels"> ${translate("avoidTunnels")}</label></details>`);
+    this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => { const key = input.dataset.routeOption; if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value); else input.value = this._state.routeOptions[key] ?? ""; });
+    if (result) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("beforeend", `${renderRestrictions(result, translate)}${renderFuelPlan(result, profile, translate, language)}`);
     this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
       const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
       const routeId = exportButton?.dataset.routeId;
@@ -553,7 +579,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") };
-    const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+    const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], restrictionItems: [...(result?.metadata?.restriction_hits || []), ...(result?.metadata?.low_emission_zones_on_route || [])], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
     const mapHost = this.shadowRoot.querySelector(".map-host");
     if (preserveMap) {
       mapHost.append(oldMap);
@@ -572,6 +598,11 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   bindEvents() {
+    this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => input.addEventListener("change", () => {
+      const key = input.dataset.routeOption;
+      if (key === "avoid") this._state.routeOptions.avoid = [...this.shadowRoot.querySelectorAll('input[data-route-option="avoid"]:checked')].map((item) => item.value);
+      else this._state.routeOptions[key] = key === "alternatives" ? Number(input.value) : input.value;
+    }));
     this.shadowRoot.querySelectorAll("input[data-point]").forEach((input) => input.addEventListener("input", (event) => this.updatePoint(event.target.dataset.point, Number(event.target.dataset.index), event.target.dataset.field, event.target.value)));
     this.shadowRoot.querySelector("select[data-action=profile]")?.addEventListener("change", (event) => { this._state.profileId = event.target.value; this._state.originManual = false; this.useTrackerLocation(false); this.render(); });
     this.shadowRoot.querySelectorAll("button[data-action=tracker]").forEach((button) => button.addEventListener("click", () => this.useTrackerLocation(true)));
