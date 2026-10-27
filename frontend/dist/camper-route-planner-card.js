@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.1-beta.15; reproducible local bundle */
+/* Camper Route Planner Card v0.1.1-beta.16; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13858,6 +13858,7 @@
       availableRange: "Reichweite ab aktuellem Stand",
       fuelShortfall: "Reichweite reicht nicht aus",
       fuelSufficient: "Rechnerische Reichweite reicht aus",
+      fuelRefuelRequired: "Tankstopps erforderlich \u2013 zus\xE4tzlicher Kraftstoffbedarf ca.",
       fuelDataMissing: "F\xFCr die Reichweitenberechnung Tankgr\xF6\xDFe, F\xFCllstand und Verbrauch erg\xE4nzen.",
       fuelNotCalculable: "Nicht berechenbar",
       estimatedCost: "Grobe Kostensch\xE4tzung (manueller Preis)",
@@ -14010,6 +14011,7 @@
       availableRange: "Range from current level",
       fuelShortfall: "Available range is insufficient",
       fuelSufficient: "Calculated range is sufficient",
+      fuelRefuelRequired: "Refuelling stops required \u2013 additional fuel needed approx.",
       fuelDataMissing: "Add tank capacity, fuel level and consumption to calculate range.",
       fuelNotCalculable: "Not calculable",
       estimatedCost: "Rough cost estimate (manual price)",
@@ -31140,7 +31142,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const tankText = profile?.tank_capacity_l == null ? translate2("fuelNotCalculable") : `${number(Number(profile.tank_capacity_l))} l`;
     const consumptionText = profile?.consumption_l_per_100km == null ? translate2("fuelNotCalculable") : `${number(Number(profile.consumption_l_per_100km))} l/100 km`;
     const validation = plan.invalidPrice ? `<p class="error" role="alert">${translate2("fuelPriceInvalid")}</p>` : plan.invalidTankData ? `<p class="error" role="alert">${translate2("fuelInputInvalid")}</p>` : "";
-    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div>${validation}<div class="metrics"><div><b>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b>${range2}</b><span>${translate2("availableRange")}</span></div><div><b>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div>${plan.deficit != null ? `<p class="${plan.deficit > 0 ? "error" : "notice"}">${plan.deficit > 0 ? translate2("fuelShortfall") : translate2("fuelSufficient")} \xB7 ${number(plan.deficit)} l</p>` : `<p class="subtle">${translate2("fuelDataMissing")}</p>`}</details>`;
+    const planningNotice = plan.deficit > 0 ? `<p class="fuel-planning-notice notice">${translate2("fuelRefuelRequired")} ${number(plan.deficit)} l</p>` : plan.deficit == null ? `<p class="subtle">${translate2("fuelDataMissing")}</p>` : "";
+    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div>${validation}<div class="metrics"><div><b>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b>${range2}</b><span>${translate2("availableRange")}</span></div><div><b>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div>${planningNotice}</details>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {

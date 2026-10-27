@@ -9,8 +9,8 @@ profiles, an interactive map, saved routes, and GPX export.
 > HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 >
-> **Current pre-release:** `v0.1.1-beta.15` removes the safety reserve from local
-> range planning and improves iPhone usability. Stable remains `v0.1.0`.
+> **Current pre-release:** `v0.1.1-beta.16` presents additional long-route fuel
+> demand as a neutral planning note. Stable remains `v0.1.0`.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 

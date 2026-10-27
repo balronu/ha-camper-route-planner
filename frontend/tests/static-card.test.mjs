@@ -123,6 +123,13 @@ test("fuel section no longer renders the legacy safety reserve input", () => {
   assert.match(source, /fuelDataMissing/);
 });
 
+test("fuel shortfall is a neutral planning note and sufficient routes stay quiet", () => {
+  assert.match(source, /fuelRefuelRequired/);
+  assert.match(source, /fuel-planning-notice notice/);
+  assert.doesNotMatch(source, /plan\.deficit > 0 \? "error"/);
+  assert.match(source, /plan\.deficit > 0 \? `.*fuelRefuelRequired/);
+});
+
 test("fuel controls use locale-tolerant mobile decimal text input and validation", () => {
   assert.match(source, /inputmode="decimal"/);
   assert.match(source, /type="text"/);

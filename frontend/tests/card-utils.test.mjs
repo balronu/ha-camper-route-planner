@@ -96,6 +96,16 @@ test("range needs no reserve and ignores legacy reserve values", () => {
   assert.equal(withLegacyReserve.deficit, withoutReserve.deficit);
 });
 
+test("fuel planning exposes additional demand without changing the formulas", () => {
+  const portugal = calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5, tank_capacity_l: 90, fuel_level_l: 90, diesel_price_per_l: "2,16" });
+  assert.equal(Math.round(portugal.totalLiters * 10) / 10, 259.8);
+  assert.equal(Math.round(portugal.rangeKm * 10) / 10, 857.1);
+  assert.equal(Math.round(portugal.deficit * 10) / 10, 169.8);
+  assert.equal(portugal.invalidTankData, false);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 10 }).deficit, 0);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100 }).deficit, null);
+});
+
 test("German and English labels are available", () => {
   assert.equal(languageOf({ locale: { language: "de-DE" } }), "de");
   assert.equal(languageOf({ locale: { language: "en-US" } }), "en");
