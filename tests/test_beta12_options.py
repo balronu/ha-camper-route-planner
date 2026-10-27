@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import math
 import unittest
 
 from custom_components.camper_route_planner.models import RouteRequest, RouteWaypoint, ValidationError, VehicleProfile
@@ -32,3 +33,18 @@ class Beta12OptionsTests(unittest.TestCase):
     self.assertIsNone(restored.tank_capacity_l)
     fuel = profile(tank_capacity_l=300, fuel_level_pct=80, reserve_l=20)
     self.assertEqual(fuel.as_dict()["fuel_level_pct"], 80)
+
+  def test_invalid_finite_tank_values_are_rejected(self):
+    for field in ("tank_capacity_l", "fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l"):
+      with self.assertRaises(ValueError):
+        profile(**{field: math.nan})
+      with self.assertRaises(ValueError):
+        profile(**{field: math.inf})
+
+  def test_explicit_zero_values_round_trip_without_synthetic_defaults(self):
+    fuel = profile(tank_capacity_l=100, fuel_level_l=0, reserve_l=0, diesel_price_per_l=0)
+    restored = VehicleProfile.from_dict(fuel.as_dict())
+    self.assertEqual(restored.fuel_level_l, 0)
+    self.assertEqual(restored.reserve_l, 0)
+    self.assertEqual(restored.diesel_price_per_l, 0)
+    self.assertIsNone(profile().reserve_l)

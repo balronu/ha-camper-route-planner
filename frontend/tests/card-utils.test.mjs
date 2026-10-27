@@ -24,12 +24,37 @@ test("formatters and service response normalization handle mock data", () => {
   assert.deepEqual(result.warnings, ["synthetic"]);
 });
 
-test("fuel planning stays local and handles optional profile data", () => {
+test("fuel planning keeps total demand separate from optional tank calculations", () => {
   const plan = calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5, tank_capacity_l: 300, fuel_level_pct: 100, reserve_l: 20, diesel_price_per_l: 1.8 });
   assert.equal(Math.round(plan.totalLiters * 10) / 10, 259.8);
   assert.equal(plan.deficit, 0);
   assert.equal(Math.round(plan.cost * 100) / 100, 467.72);
   assert.equal(calculateFuelPlan(1000, {}).totalLiters, null);
+});
+
+test("missing tank fields never become zero and suppress range warnings", () => {
+  const plan = calculateFuelPlan(2474700, { consumption_l_per_100km: 10.5 });
+  assert.equal(Math.round(plan.totalLiters * 10) / 10, 259.8);
+  assert.equal(plan.rangeKm, null);
+  assert.equal(plan.deficit, null);
+  assert.equal(plan.cost, null);
+  assert.equal(plan.sufficient, null);
+});
+
+test("tank planning distinguishes missing values from explicit zero", () => {
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 0, reserve_l: 0 }).rangeKm, 0);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 0, reserve_l: 0 }).deficit, 10);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50 }).rangeKm, null);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_pct: 50, reserve_l: 0 }).rangeKm, 500);
+});
+
+test("fuel planning rejects invalid tank relationships and preserves liter priority", () => {
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 110, reserve_l: 0 }).rangeKm, null);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50, fuel_level_pct: 10, reserve_l: 0 }).rangeKm, 500);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 110 }).rangeKm, null);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 0, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 0 }).totalLiters, null);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 0, diesel_price_per_l: 0 }).cost, 0);
+  assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 50, reserve_l: 0, diesel_price_per_l: -1 }).cost, null);
 });
 
 test("German and English labels are available", () => {

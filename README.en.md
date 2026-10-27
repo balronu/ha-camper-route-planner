@@ -8,6 +8,9 @@ profiles, an interactive map, saved routes, and GPX export.
 > **Status:** `v0.1.0` Stable. The Lovelace card is validated with an isolated
 > HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
+>
+> **Current pre-release:** `v0.1.1-beta.13` improves local fuel planning and
+> iPhone usability. Stable remains `v0.1.0`.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 

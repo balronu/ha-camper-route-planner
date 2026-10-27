@@ -100,6 +100,23 @@ test("card renders route-provided border crossings and toll details without brow
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest\(/);
 });
 
+test("fuel inputs are local, vehicle-scoped, and do not trigger routing", () => {
+  assert.match(source, /camper-route-planner:fuel:/);
+  assert.match(source, /profile\.profile_id/);
+  assert.match(source, /data-fuel-field/);
+  assert.match(source, /writeFuelValues/);
+  assert.match(source, /updateFuelField/);
+  assert.match(source, /fuelNotCalculable/);
+  assert.doesNotMatch(source, /updateFuelField[\s\S]{0,500}calculateRoute/);
+});
+
+test("fuel values remain editable when no route has been calculated", () => {
+  assert.match(source, /fuelHost = result \? .* : this\.shadowRoot\.querySelector\("\.map-section"\)/);
+  assert.match(source, /renderFuelPlan\(result, profile, this\._state\.fuelValues/);
+  assert.match(source, /tankCapacity/);
+  assert.match(source, /fuelLevelPercent/);
+});
+
 test("toll details use a structured summary and collapsed technical provider section", () => {
   assert.match(source, /tollSummary/);
   assert.match(source, /toll-country-heading/);

@@ -10,6 +10,9 @@ und GPX-Export.
 > HA-2026.10.1-Fixture, Chromium und den praktischen iPhone-Navigationstest
 > geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
 > automatische Fallbacks.
+>
+> **Aktueller Pre-release:** `v0.1.1-beta.13` verbessert die lokale
+> Tankplanung und die iPhone-Bedienung. Stable bleibt `v0.1.0`.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 
