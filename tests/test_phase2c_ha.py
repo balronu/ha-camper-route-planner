@@ -156,7 +156,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert f"Camper Route Planner Card v0.1.1-beta.5" in body
+    assert f"Camper Route Planner Card v0.1.1-beta.6" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert 'return { entry_id: "" }' in body
     assert 'card.type === "camper-route-planner-card"' in body
@@ -179,7 +179,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.1-beta.5" in await response.text()
+    assert "Camper Route Planner Card v0.1.1-beta.6" in await response.text()
 
 
 @pytest.mark.asyncio
@@ -461,13 +461,19 @@ async def test_options_flow_edits_existing_vehicle_without_changing_id_or_routes
     result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={
         "profile_id": "must-not-change-id", "name": "Zoe Wohnmobil", "vehicle_kind": "motorhome",
         "height_m": 3.25, "width_m": 2.34, "length_m": 7.65, "gross_weight_kg": 4900,
-        "fuel_type": "diesel", "axles": 2, "tracker_entity_id": "device_tracker.wohnmobil_zoe",
+        "fuel_type": "diesel", "axles": 2, "emission_class": "euro5", "co2_class": "c",
+        "first_registration": "2020-04-15", "consumption_l_per_100km": 11.2,
+        "tracker_entity_id": "device_tracker.wohnmobil_zoe",
     })
     assert result["type"] == "create_entry"
     assert entry.options["geocoding_api_key"] == "new-geo-key"
     profile = next(item for item in runtime.store.profiles() if item.profile_id == "zoe")
     assert profile.name == "Zoe Wohnmobil"
     assert profile.tracker_entity_id == "device_tracker.wohnmobil_zoe"
+    assert profile.emission_class == "euro5"
+    assert profile.co2_class == "c"
+    assert profile.first_registration == "2020-04-15"
+    assert profile.consumption_l_per_100km == 11.2
     assert runtime.store.route("zoe-route")["profile_id"] == "zoe"
 
 

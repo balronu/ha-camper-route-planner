@@ -28,6 +28,29 @@ class Phase2GMotorhomeTests(unittest.TestCase):
         profile = VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", axles=2, emission_class="euro6")
         self.assertEqual(build_motorhome_parameters(request(vehicle=profile))["emission_class"], "euro6")
 
+    def test_optional_profile_fields_are_persisted_but_only_supported_api_fields_are_sent(self):
+        profile = VehicleProfile(
+            "c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel",
+            axles=2, emission_class="euro5", co2_class="c",
+            first_registration="2020-04-15", consumption_l_per_100km=11.2,
+        )
+        self.assertEqual(profile.as_dict()["co2_class"], "c")
+        self.assertEqual(profile.as_dict()["first_registration"], "2020-04-15")
+        self.assertEqual(profile.as_dict()["consumption_l_per_100km"], 11.2)
+        params = build_motorhome_parameters(request(vehicle=profile))
+        self.assertEqual(params["emission_class"], "euro5")
+        self.assertNotIn("co2_class", params)
+        self.assertNotIn("first_registration", params)
+        self.assertNotIn("consumption_l_per_100km", params)
+
+    def test_optional_profile_field_validation_is_explicit(self):
+        with self.assertRaises(ValidationError):
+            VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", co2_class="z")
+        with self.assertRaises(ValidationError):
+            VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", first_registration="15.04.2020")
+        with self.assertRaises(ValidationError):
+            VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", consumption_l_per_100km=0)
+
     def test_missing_required_dimension_is_rejected(self):
         profile = VehicleProfile("c", "Carthago", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", axles=2)
         object.__setattr__(profile, "height_m", None)

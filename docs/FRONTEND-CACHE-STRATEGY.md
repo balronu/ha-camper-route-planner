@@ -2,7 +2,7 @@
 
 - Der Build erzeugt deterministisch `frontend/dist/camper-route-planner-card.js`.
 - Eine spätere HA-Ressource verwendet den festen Versionsquery-Parameter
-  `?v=0.1.1-beta.5`; bei einer neuen Version wird der Parameter geändert.
+  `?v=0.1.1-beta.6`; bei einer neuen Version wird der Parameter geändert.
 - `window.customCards` wird nur ergänzt, wenn der Kartentyp noch nicht
   vorhanden ist. `customElements.define` wird ebenfalls nur bei fehlender
   Registrierung ausgeführt.

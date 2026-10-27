@@ -70,6 +70,9 @@
           "fuel_type": "Fuel type",
           "axles": "Number of axles",
           "emission_class": "Emission class (optional; leave unspecified if unknown)",
+          "co2_class": "CO2 class (optional; not sent to Nakordoni)",
+          "first_registration": "First registration (YYYY-MM-DD, optional)",
+          "consumption_l_per_100km": "Average consumption (l/100 km, optional)",
           "tracker_entity_id": "Vehicle GPS tracker entity",
           "delete_profile": "Delete this vehicle profile"
         }

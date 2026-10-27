@@ -209,6 +209,9 @@ try:
                 "fuel_type": profile.fuel_type if profile else "diesel",
                 "axles": profile.axles if profile else 2,
                 "emission_class": (profile.emission_class or "") if profile else "",
+                "co2_class": (profile.co2_class or "") if profile else "",
+                "first_registration": (profile.first_registration or "") if profile else "",
+                "consumption_l_per_100km": profile.consumption_l_per_100km if profile and profile.consumption_l_per_100km is not None else "",
                 "tracker_entity_id": profile.tracker_entity_id if profile else "",
             }
             tracker_key = vol.Optional("tracker_entity_id", default=profile.tracker_entity_id) if profile and profile.tracker_entity_id else vol.Optional("tracker_entity_id")
@@ -223,6 +226,9 @@ try:
                 vol.Required("fuel_type", default=defaults["fuel_type"]): _select_selector(("diesel", "petrol", "electric", "hybrid", "other"), "fuel_type"),
                 vol.Required("axles", default=defaults["axles"]): vol.Coerce(int),
                 vol.Optional("emission_class", default=defaults["emission_class"]): vol.In({"": "Not specified", **{f"euro{index}": f"Euro {index}" for index in range(7)}}),
+                vol.Optional("co2_class", default=defaults["co2_class"]): vol.In({"": "Not specified", **{letter: f"CO₂ {letter.upper()}" for letter in "abcdefg"}}),
+                vol.Optional("first_registration", default=defaults["first_registration"]): str,
+                vol.Optional("consumption_l_per_100km", default=defaults["consumption_l_per_100km"]): vol.Any("", vol.Coerce(float)),
                 tracker_key: _entity_selector(),
                 **({vol.Optional("delete_profile", default=False): bool} if profile else {}),
             })
@@ -241,6 +247,9 @@ try:
                         height_m=float(user_input["height_m"]), width_m=float(user_input["width_m"]), length_m=float(user_input["length_m"]),
                         gross_weight_kg=int(user_input["gross_weight_kg"]), fuel_type=user_input["fuel_type"], axles=int(user_input.get("axles", 2)),
                         emission_class=user_input.get("emission_class") or None,
+                        co2_class=user_input.get("co2_class") or None,
+                        first_registration=user_input.get("first_registration") or None,
+                        consumption_l_per_100km=float(user_input["consumption_l_per_100km"]) if user_input.get("consumption_l_per_100km") not in (None, "") else None,
                         tracker_entity_id=user_input.get("tracker_entity_id") or (DEFAULT_ZOE_TRACKER if str(user_input["name"]).strip().casefold() == "zoe" else None),
                     )
                     runtime = self._runtime()

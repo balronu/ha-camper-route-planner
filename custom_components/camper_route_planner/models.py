@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from datetime import datetime
 from typing import Any, Literal
 
@@ -59,6 +60,9 @@ class VehicleProfile:
     preferences: dict[str, Any] = field(default_factory=dict)
     tracker_entity_id: str | None = None
     emission_class: str | None = None
+    co2_class: str | None = None
+    first_registration: str | None = None
+    consumption_l_per_100km: float | None = None
     schema_version: int = 1
 
     def __post_init__(self) -> None:
@@ -89,6 +93,15 @@ class VehicleProfile:
             raise ValidationError("tracker_entity_id must be a device_tracker entity")
         if self.emission_class is not None and self.emission_class not in {f"euro{index}" for index in range(7)}:
             raise ValidationError("emission_class must be euro0 through euro6")
+        if self.co2_class is not None and self.co2_class not in {letter for letter in "abcdefg"}:
+            raise ValidationError("co2_class must be a through g")
+        if self.first_registration is not None:
+            try:
+                date.fromisoformat(self.first_registration)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError("first_registration must be an ISO date") from exc
+        if self.consumption_l_per_100km is not None and not 0.1 <= self.consumption_l_per_100km <= 100:
+            raise ValidationError("consumption_l_per_100km must be between 0.1 and 100")
         if self.schema_version != 1:
             raise ValidationError("unsupported vehicle profile schema")
 
@@ -110,6 +123,10 @@ class VehicleProfile:
             "preferences": dict(self.preferences),
             "tracker_entity_id": self.tracker_entity_id,
             "schema_version": self.schema_version,
+            "emission_class": self.emission_class,
+            "co2_class": self.co2_class,
+            "first_registration": self.first_registration,
+            "consumption_l_per_100km": self.consumption_l_per_100km,
         }
 
     @classmethod
