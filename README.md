@@ -44,6 +44,27 @@ und GPX-Export.
   manueller Kostenschätzung und neutralem Hinweis auf erforderliche Tankstopps
 - Verbesserte PDF-/GPX-Funktionen und deutsche/englische Übersetzungen
 
+## Projektbeschreibung und Datenqualität
+
+Camper Route Planner ist eine Home-Assistant-Integration für
+wohnmobilspezifische Routenplanung. Sie richtet sich an Reisende, die
+Fahrzeugabmessungen, Gewicht, Zwischenziele und lokale Kraftstoffdaten in
+Home Assistant verwalten möchten. Fahrzeugprofile sind nicht auf das
+Beispielprofil Carthago beschränkt.
+
+Die Karte unterstützt parallel NaKordoni API v2 und API v3 über getrennte
+Adapter. Provider und tatsächlich ausgeführte API-Version werden getrennt
+ausgewiesen. Entfernung, Fahrzeit, verfügbare Verkehrsinformationen,
+Grenzübergänge und Restriktionshinweise stammen aus der jeweiligen Antwort.
+Verbrauch, Füllstand und manueller Dieselpreis werden lokal zu Reichweite,
+Gesamtverbrauchskosten und zusätzlichem Kraftstoffbedarf berechnet. Routen
+können gespeichert sowie als GPX oder PDF exportiert werden.
+
+Die v2-Mautantwort kann Schätzwerte liefern. v3 verarbeitet seine eigenen
+`total_eur`- und `by_country`-Felder; bei unvollständiger Abdeckung bleibt
+`complete=false` sichtbar. V2-Werte und ungeprüfte Lkw-Tarife werden nicht als
+v3-Wohnmobilwerte übernommen.
+
 ## Unterstützte Grenzen
 
 - Die Routenberechnung wird ausschließlich durch eine Benutzeraktion gestartet.

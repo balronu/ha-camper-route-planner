@@ -41,6 +41,26 @@ profiles, an interactive map, saved routes, and GPX export.
   estimation, and a neutral required-refuelling planning note
 - improved PDF/GPX features and German/English translations
 
+## Project description and data quality
+
+Camper Route Planner is a Home Assistant integration for motorhome-specific
+route planning. It is intended for travellers who want to manage vehicle
+dimensions, weight, waypoints, and local fuel data in Home Assistant. Vehicle
+profiles are not limited to the example Carthago profile.
+
+The card supports NaKordoni API v2 and API v3 in parallel through separate
+adapters. The configured provider and the API version actually executed are
+shown separately. Distance, driving time, available traffic information,
+border crossings, and restriction notes come from the relevant response.
+Consumption, fuel level, and manual diesel price are calculated locally into
+range, total fuel cost, and additional fuel demand. Routes can be saved and
+exported as GPX or PDF.
+
+The v2 toll response may provide estimates. v3 processes its own `total_eur`
+and `by_country` fields; when coverage is incomplete, `complete=false` remains
+visible. V2 values and unverified truck tariffs are never presented as v3
+motorhome values.
+
 ## Supported limitations
 
 - Route calculation starts only after an explicit user action.
