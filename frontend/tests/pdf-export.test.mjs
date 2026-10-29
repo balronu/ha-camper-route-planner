@@ -18,6 +18,26 @@ const result = {
   },
 };
 
+function withFixedDate(isoDate, callback) {
+  const RealDate = globalThis.Date;
+  const fixedTimestamp = RealDate.parse(isoDate);
+  class FixedDate extends RealDate {
+    constructor(...args) {
+      super(...(args.length ? args : [fixedTimestamp]));
+    }
+
+    static now() {
+      return fixedTimestamp;
+    }
+  }
+  globalThis.Date = FixedDate;
+  try {
+    return callback();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
+
 test("PDF export requires a valid calculated route", async () => {
   await assert.rejects(() => createTravelPlanPdf({ result: null }), /valid calculated route/);
 });
@@ -33,7 +53,19 @@ test("PDF export creates a multi-section German A4 document without network inpu
 test("PDF export supports English output and safe filenames", async () => {
   const bytes = await createTravelPlanPdf({ language: "en", result, state: { origin: {}, destination: {}, waypoints: [] }, profile: null });
   assert.equal(String.fromCharCode(...bytes.slice(0, 5)), "%PDF-");
-  assert.match(pdfFileName("Zürich / Route 01"), /^Camper-Route-Zurich-Route-01-2026-10-27\.pdf$/);
+  const filename = withFixedDate("2026-10-27T10:00:00Z", () => pdfFileName("Zürich / Route 01"));
+  assert.equal(filename, "Camper-Route-Zurich-Route-01-2026-10-27.pdf");
+});
+
+test("PDF filenames are reproducible for a controlled clock", () => {
+  const filenames = withFixedDate("2026-10-27T10:00:00Z", () => [
+    pdfFileName("Zürich / Route 01"),
+    pdfFileName("Zürich / Route 01"),
+  ]);
+  assert.deepEqual(filenames, [
+    "Camper-Route-Zurich-Route-01-2026-10-27.pdf",
+    "Camper-Route-Zurich-Route-01-2026-10-27.pdf",
+  ]);
 });
 
 test("PDF export creates multiple A4 pages for long international plans without inventing legs", async () => {
