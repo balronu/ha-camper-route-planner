@@ -58,22 +58,17 @@ class Beta3DiagnosticTests(unittest.TestCase):
         runtime = self.runtime(route_payload(complete=True, source="primary", total=250.24))
         asyncio.run(runtime.async_calculate_service(self.request_data()))
         diagnostic = runtime.diagnostics()
-        self.assertEqual(diagnostic["last_operation"]["api_version"], "v3")
-        self.assertEqual(diagnostic["last_operation"]["routing_source"], "primary")
-        self.assertTrue(diagnostic["last_operation"]["tolls"]["complete"])
-        self.assertEqual(diagnostic["last_operation"]["tolls"]["total_eur"], 250.24)
-        self.assertEqual(diagnostic["last_operation"]["tolls"]["by_country"][0]["country"], "FR")
+        self.assertEqual(diagnostic["route_calls"], {"v2": 0, "v3": 1})
+        self.assertIsNone(diagnostic["last_operation"])
         self.assertNotIn("Authorization", str(diagnostic))
         self.assertNotIn("geometry", str(diagnostic))
 
     def test_v3_incomplete_fallback_and_retry_count_are_exposed(self):
         runtime = self.runtime(route_payload(complete=False, source="fallback", attempts=2, total=15.59))
         asyncio.run(runtime.async_calculate_service(self.request_data()))
-        diagnostic = runtime.diagnostics()["last_operation"]
-        self.assertEqual(diagnostic["routing_source"], "fallback")
-        self.assertFalse(diagnostic["tolls"]["complete"])
-        self.assertEqual(diagnostic["retry_count"], 1)
-        self.assertEqual(diagnostic["api_calls"]["v3"], 2)
+        diagnostic = runtime.diagnostics()
+        self.assertEqual(diagnostic["route_calls"], {"v2": 0, "v3": 2})
+        self.assertIsNone(diagnostic["last_operation"])
 
     def test_v2_estimate_is_separate_and_increments_v2_only(self):
         runtime = self.runtime(route_payload(complete=False, total=15.59))
@@ -83,22 +78,22 @@ class Beta3DiagnosticTests(unittest.TestCase):
         result = asyncio.run(runtime.async_estimate_tolls_v2({**self.request_data(), "current_result": {"distance_m": 100000, "duration_s": 3600, "metadata": {"api_version": "v3", "tolls": {"complete": False}}}}))
         self.assertEqual(result["source_api"], "v2")
         self.assertEqual(runtime.diagnostics()["route_calls"], {"v2": 1, "v3": 1})
-        self.assertEqual(runtime.diagnostics()["last_operation"]["operation"], "v2_toll_estimate")
+        self.assertIsNone(runtime.diagnostics()["last_operation"])
 
     def test_provider_error_is_diagnostic_without_secret_or_location(self):
         runtime = self.runtime({"ok": False, "status": 503, "error": {"code": "busy", "message": "busy"}, "transport": {"attempts": 1, "status": 503, "elapsed_s": 0.1, "route_source": "primary"}})
         with self.assertRaises(ProviderError):
             asyncio.run(runtime.async_calculate_service(self.request_data()))
-        diagnostic = runtime.diagnostics()["last_operation"]
-        self.assertEqual(diagnostic["http_status"], 503)
-        self.assertEqual(diagnostic["error"]["code"], "busy")
+        diagnostic = runtime.diagnostics()
+        self.assertEqual(diagnostic["route_calls"], {"v2": 0, "v3": 1})
+        self.assertIsNone(diagnostic["last_operation"])
         self.assertNotIn("48.1", str(diagnostic))
         self.assertNotIn("K" * 24, str(diagnostic))
 
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
-        runtime.arm_request_diagnostics()
-        result = asyncio.run(runtime.async_calculate_service({**self.request_data(), "via": [{"latitude": 40.0, "longitude": -3.0}]}))
+        token = runtime.arm_request_diagnostics()
+        result = asyncio.run(runtime.async_calculate_service({**self.request_data(), "via": [{"latitude": 40.0, "longitude": -3.0}], "diagnostic_token": token}))
         snapshot = result["request_diagnostic"]
         self.assertEqual(snapshot["request"]["api_version"], "v3")
         self.assertEqual(snapshot["request"]["parameters"]["via"], "40.0,-3.0")
@@ -106,16 +101,39 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertEqual(snapshot["response"]["duration_s"], 3600)
         self.assertNotIn("Authorization", str(snapshot))
         self.assertNotIn("KKKK", str(snapshot))
-        self.assertNotIn("request_diagnostic", runtime.diagnostics()["last_operation"])
+        self.assertIsNone(runtime.diagnostics()["last_operation"])
 
     def test_request_diagnostic_arm_is_consumed_on_failed_call(self):
         runtime = self.runtime({"ok": False, "status": 503, "error": {"code": "busy", "message": "busy"}, "transport": {"attempts": 1, "status": 503}})
-        runtime.arm_request_diagnostics()
+        token = runtime.arm_request_diagnostics()
         with self.assertRaises(ProviderError):
-            asyncio.run(runtime.async_calculate_service(self.request_data()))
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
         runtime.coordinator.provider.transport.response = route_payload()
-        result = asyncio.run(runtime.async_calculate_service(self.request_data()))
+        result = asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
         self.assertNotIn("request_diagnostic", result)
+
+    def test_request_diagnostic_token_is_one_shot_for_parallel_calls(self):
+        runtime = self.runtime(route_payload())
+        token = runtime.arm_request_diagnostics()
+
+        async def run_parallel():
+            return await asyncio.gather(
+                runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}),
+                runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}),
+            )
+
+        results = asyncio.run(run_parallel())
+        self.assertEqual(sum("request_diagnostic" in result for result in results), 1)
+
+    def test_native_diagnostics_never_expose_request_snapshot(self):
+        runtime = self.runtime(route_payload())
+        token = runtime.arm_request_diagnostics()
+        asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token, "via": [{"latitude": 40.0, "longitude": -3.0}]}))
+        snapshot = runtime.diagnostics()
+        self.assertIsNone(snapshot["last_operation"])
+        self.assertNotIn("coordinates", str(snapshot))
+        self.assertNotIn("waypoints", str(snapshot))
+        self.assertNotIn("KKKK", str(snapshot))
 
     def test_native_diagnostics_selects_the_matching_runtime(self):
         first = self.runtime(route_payload(total=1.0))
