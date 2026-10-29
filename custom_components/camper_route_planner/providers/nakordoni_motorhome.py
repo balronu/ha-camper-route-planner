@@ -311,6 +311,7 @@ class NakordoniMotorhomeProvider:
             else:
                 border_crossings, border_state = _fallback_border_data(route)
             metadata = {
+                "api_version": "v2",
                 "fixture": synthetic,
                 "beta": True,
                 "provider_mode": PROVIDER_NAME,

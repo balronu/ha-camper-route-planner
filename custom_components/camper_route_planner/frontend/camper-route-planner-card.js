@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.2-beta.1; reproducible local bundle */
+/* Camper Route Planner Card v0.1.2-beta.2; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13905,6 +13905,7 @@
       providerUnavailable: "Provider nicht verf\xFCgbar",
       invalidCoordinates: "Ung\xFCltige Koordinaten",
       calculationFailed: "Berechnung fehlgeschlagen",
+      invalidDateTime: "Bitte eine g\xFCltige lokale Zeit ausw\xE4hlen; Sommer-/Winterzeit wird automatisch ber\xFCcksichtigt.",
       addWaypoint: "Zwischenziel hinzuf\xFCgen",
       remove: "Entfernen",
       moveUp: "Nach oben",
@@ -13918,6 +13919,7 @@
       geometryFallback: "Routenverlauf als Geometrie-Fallback",
       manualOnly: "Berechnung nur nach Klick",
       providerName: { mock: "Mock (offline)", nakordoni: "Nakordoni", unknown: "Provider unbekannt" },
+      providerApiVersion: { v2: "API v2", v3: "API v3 (Beta)" },
       provider: "Provider",
       calculatedAt: "Berechnet",
       confirmation: "Route wirklich l\xF6schen?",
@@ -14058,6 +14060,7 @@
       providerUnavailable: "Provider unavailable",
       invalidCoordinates: "Invalid coordinates",
       calculationFailed: "Calculation failed",
+      invalidDateTime: "Choose a valid local time; daylight-saving changes are handled automatically.",
       addWaypoint: "Add waypoint",
       remove: "Remove",
       moveUp: "Move up",
@@ -14071,6 +14074,7 @@
       geometryFallback: "Route geometry fallback",
       manualOnly: "Calculation only after click",
       providerName: { mock: "Mock (offline)", nakordoni: "Nakordoni", unknown: "Provider unknown" },
+      providerApiVersion: { v2: "API v2", v3: "API v3 (Beta)" },
       provider: "Provider",
       calculatedAt: "Calculated",
       confirmation: "Delete this route?",
@@ -14128,6 +14132,36 @@
   }
   function normalizeConfig(config = {}) {
     return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
+  }
+  var LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/;
+  var OFFSET_DATE_TIME = /(?:Z|[+-]\d{2}:\d{2})$/;
+  var padDatePart = (value) => String(value).padStart(2, "0");
+  function localDateTimeToIso(value, makeDate = (raw) => new Date(raw)) {
+    if (value == null || String(value).trim() === "") return "";
+    const raw = String(value).trim();
+    if (OFFSET_DATE_TIME.test(raw)) {
+      const explicit = new Date(raw);
+      return Number.isNaN(explicit.getTime()) ? null : raw;
+    }
+    const match = raw.match(LOCAL_DATE_TIME);
+    if (!match) return null;
+    const [, year, month, day, hour, minute, second = "00"] = match;
+    const date = makeDate(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    if (date.getFullYear() !== Number(year) || date.getMonth() + 1 !== Number(month) || date.getDate() !== Number(day) || date.getHours() !== Number(hour) || date.getMinutes() !== Number(minute) || date.getSeconds() !== Number(second)) return null;
+    const offsetMinutes = -date.getTimezoneOffset();
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const absoluteOffset = Math.abs(offsetMinutes);
+    const offset = `${sign}${padDatePart(Math.floor(absoluteOffset / 60))}:${padDatePart(absoluteOffset % 60)}`;
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+  }
+  function isoDateTimeToLocalInput(value) {
+    if (value == null || String(value).trim() === "") return "";
+    const raw = String(value).trim();
+    if (!OFFSET_DATE_TIME.test(raw)) return raw.slice(0, 16);
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
   }
   function selectConfigEntry(config = {}, entries = []) {
     const explicit = String(config.entry_id || "");
@@ -31326,7 +31360,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.render();
       try {
         if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
-        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...this._state.routeOptions });
+        const routeOptions = { ...this._state.routeOptions };
+        for (const field of ["depart_at", "arrive_at"]) {
+          if (routeOptions[field]) {
+            const normalized = localDateTimeToIso(routeOptions[field]);
+            if (!normalized) throw new Error(t(language, "invalidDateTime"));
+            routeOptions[field] = normalized;
+          }
+        }
+        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...routeOptions });
         this._state.result = normalizeServiceResponse(payload);
         this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
       } catch (error2) {
@@ -31616,13 +31658,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
     mapPoints() {
       return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point));
     }
-    providerLabel(provider, language) {
+    providerLabel(provider, language, apiVersion = null) {
       const key = provider === "mock" ? "providerName.mock" : provider === "nakordoni" || provider === "nakordoni_motorhome" ? "providerName.nakordoni" : "providerName.unknown";
-      return t(language, key);
+      const base = t(language, key);
+      if ((provider === "nakordoni" || provider === "nakordoni_motorhome") && (apiVersion === "v2" || apiVersion === "v3")) return `${base} \xB7 ${t(language, `providerApiVersion.${apiVersion}`)}`;
+      return base;
     }
     statusLine(profile, language) {
       const vehicle = profile?.name || t(language, "noProfiles");
-      const provider = this.providerLabel(this._state.provider || this._state.result?.provider, language);
+      const provider = this.providerLabel(this._state.provider || this._state.result?.provider, language, this._state.result?.metadata?.api_version);
       return `${vehicle} \xB7 ${provider} \xB7 ${t(language, "manualOnly")}`;
     }
     handleCardToggle(details) {
@@ -31713,13 +31757,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const vehicleKind = profile ? translate2(`vehicleKind.${profile.vehicle_kind}`) : "";
       const fuelType = profile ? translate2(`fuelType.${profile.fuel_type}`) : "";
       const navigationTarget = result ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
-      this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(result.provider)}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
+      this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(this.providerLabel(result.provider, language, result.metadata?.api_version))}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
       const optionAnchor = this.shadowRoot.querySelector(".map-section");
       optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate2("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate2("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate2("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate2("avoidTunnels")}</span></label></div></details>`);
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => {
         const key = input.dataset.routeOption;
         if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value);
-        else input.value = this._state.routeOptions[key] ?? "";
+        else input.value = key === "depart_at" || key === "arrive_at" ? isoDateTimeToLocalInput(this._state.routeOptions[key]) : this._state.routeOptions[key] ?? "";
       });
       const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
       fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
