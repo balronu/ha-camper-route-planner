@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.2-beta.4; reproducible local bundle */
+/* Camper Route Planner Card v0.1.2-beta.5; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -31216,7 +31216,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const consumptionText = profile?.consumption_l_per_100km == null ? translate2("fuelNotCalculable") : `${number(Number(profile.consumption_l_per_100km))} l/100 km`;
     const validation = plan.invalidPrice ? `<p class="error" role="alert">${translate2("fuelPriceInvalid")}</p>` : plan.invalidTankData ? `<p class="error" role="alert">${translate2("fuelInputInvalid")}</p>` : "";
     const planningNotice = plan.deficit > 0 ? `<p class="fuel-planning-notice notice">${translate2("fuelRefuelRequired")} ${number(plan.deficit)} l</p>` : plan.deficit == null ? `<p class="subtle">${translate2("fuelDataMissing")}</p>` : "";
-    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div>${validation}<div class="metrics"><div><b>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b>${range2}</b><span>${translate2("availableRange")}</span></div><div><b>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div>${planningNotice}</details>`;
+    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div><div data-fuel-validation>${validation}</div><div class="metrics"><div><b data-fuel-total>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b data-fuel-range>${range2}</b><span>${translate2("availableRange")}</span></div><div><b data-fuel-cost>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div><div data-fuel-planning>${planningNotice}</div></details>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
@@ -31362,7 +31362,40 @@ svg.leaflet-image-layer.leaflet-interactive path {
       if (!FUEL_FIELDS.includes(field)) return;
       this._state.fuelValues = { ...this._state.fuelValues, [field]: value };
       writeFuelValues(this._config.entry_id, this._state.profileId, this._state.fuelValues);
-      this.render();
+      this.updateFuelPlanDom();
+    }
+    updateFuelPlanDom() {
+      const fuelRange = this.shadowRoot?.querySelector(".fuel-range");
+      if (!fuelRange) {
+        this.render();
+        return;
+      }
+      const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId);
+      const language = languageOf(this._hass);
+      const translate2 = (key) => t(language, key);
+      const enteredFuelValues = Object.fromEntries(Object.entries(this._state.fuelValues || {}).filter(([, value]) => value !== "" && value != null));
+      const plan = calculateFuelPlan(this._state.result?.distance_m, { ...profile || {}, ...enteredFuelValues });
+      const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? "\u2014" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
+      const metricValues = [
+        plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`,
+        plan.rangeKm == null ? translate2("fuelNotCalculable") : `${number(plan.rangeKm)} km`,
+        plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`
+      ];
+      fuelRange.querySelectorAll(".metrics > div > b").forEach((element, index) => {
+        element.textContent = metricValues[index] || "\u2014";
+      });
+      const mode = this._state.fuelValues?.fuel_level_mode === "percent" ? "percent" : "liters";
+      const activeField = mode === "percent" ? "fuel_level_pct" : "fuel_level_l";
+      fuelRange.querySelectorAll("input[data-fuel-field]").forEach((input) => input.setAttribute("aria-invalid", String(Boolean(plan.invalidTankData && input.dataset.fuelField === activeField))));
+      const validation = plan.invalidPrice ? `<p class="error" role="alert">${translate2("fuelPriceInvalid")}</p>` : plan.invalidTankData ? `<p class="error" role="alert">${translate2("fuelInputInvalid")}</p>` : "";
+      const planningNotice = plan.deficit > 0 ? `<p class="fuel-planning-notice notice">${translate2("fuelRefuelRequired")} ${number(plan.deficit)} l</p>` : plan.deficit == null ? `<p class="subtle">${translate2("fuelDataMissing")}</p>` : "";
+      fuelRange.querySelector("[data-fuel-validation]")?.replaceChildren(...this.htmlNodes(validation));
+      fuelRange.querySelector("[data-fuel-planning]")?.replaceChildren(...this.htmlNodes(planningNotice));
+    }
+    htmlNodes(html) {
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      return [...template.content.childNodes];
     }
     updateFuelMode(mode) {
       const nextMode = mode === "percent" ? "percent" : "liters";
@@ -31578,10 +31611,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
         if (!current || Number(current.latitude) !== Number(point.latitude) || Number(current.longitude) !== Number(point.longitude)) return;
         if (response?.configured && response.address) current.address = response.address;
-        this.render();
+        this.updatePointAddressDom(target, index, current.address || "");
       } catch (_error) {
         const current = target === "waypoint" ? this._state.waypoints[index] : this._state[target];
-        if (current && Number(current.latitude) === Number(point.latitude) && Number(current.longitude) === Number(point.longitude)) this.render();
+        if (current && Number(current.latitude) === Number(point.latitude) && Number(current.longitude) === Number(point.longitude)) this.updatePointAddressDom(target, index, current.address || "");
       }
     }
     async saveCurrent() {
@@ -31694,8 +31727,36 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       if (target === "waypoint") this._state.waypoints = list;
       this._state.resultStale = Boolean(this._state.result);
-      this.render();
+      this.updatePointAddressDom(target, index, "");
+      this.updateStaleRouteDom();
+      this.updateMapPreview();
       this.scheduleReverseGeocode(target, index, point);
+    }
+    updatePointAddressDom(target, index, address) {
+      const input = this.shadowRoot?.querySelector(`input[data-point="${target}"][data-index="${index}"][data-field="latitude"]`);
+      const row = input?.closest(".point-row");
+      if (!row) return;
+      const current = row.nextElementSibling?.classList.contains("point-address") ? row.nextElementSibling : null;
+      if (!address) {
+        current?.remove();
+        return;
+      }
+      const element = current || document.createElement("small");
+      element.className = "point-address";
+      element.textContent = address;
+      if (!current) row.after(element);
+    }
+    updateStaleRouteDom() {
+      const result = this.shadowRoot?.querySelector(".result");
+      const current = result?.querySelector("[data-stale-route]");
+      if (this._state.resultStale && result && !current) result.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${t(languageOf(this._hass), "staleRoute")}</p>`);
+      if (!this._state.resultStale) current?.remove();
+    }
+    updateMapPreview() {
+      const map = this.shadowRoot?.querySelector(".crp-map");
+      if (!map) return;
+      const translate2 = (key) => t(languageOf(this._hass), key);
+      updateMapPoints(map, this.mapPoints(), { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") }, { route: this._state.result, fitBounds: false, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
     }
     mapPoints() {
       return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point));
@@ -31813,7 +31874,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       });
       const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
       fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
-      if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice">${translate2("staleRoute")}</p>`);
+      if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${translate2("staleRoute")}</p>`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
         const routeId = exportButton?.dataset.routeId;

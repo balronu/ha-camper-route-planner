@@ -13,7 +13,7 @@ profiles, an interactive map, saved routes, and GPX export.
 > routing, alternatives, time planning, mobile presentation, and vehicle-based
 > fuel planning. Stable remains compatible with `v0.1.0`.
 >
-> **Active beta:** `v0.1.2-beta.4` is available as a published pre-release for
+> **Active beta:** `v0.1.2-beta.5` is available as a published pre-release for
 > testing. For normal installations, `v0.1.1` remains the recommended Stable
 > version.
 
