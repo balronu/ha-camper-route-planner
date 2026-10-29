@@ -1,0 +1,112 @@
+import asyncio
+import unittest
+from dataclasses import dataclass
+from types import SimpleNamespace
+
+from custom_components.camper_route_planner.const import CONF_PROVIDER, PROVIDER_NAKORDONI_MOTORHOME_V3
+from custom_components.camper_route_planner.coordinator import RouteCoordinator
+from custom_components.camper_route_planner.models import RouteRequest, RouteWaypoint, VehicleProfile, ProviderError
+from custom_components.camper_route_planner.providers.nakordoni_motorhome import ROUTE_ENDPOINT
+from custom_components.camper_route_planner.providers.nakordoni_v3 import NakordoniRouteAdapterV3, V3_ROUTE_ENDPOINT
+from custom_components.camper_route_planner.runtime import RuntimeData
+from custom_components.camper_route_planner.storage import MemoryStore, ProfileRouteStore
+from custom_components.camper_route_planner.diagnostics import async_get_config_entry_diagnostics
+
+
+def route_payload(version="v3", *, complete=False, source="primary", total=12.5, status=200, attempts=1):
+    return {
+        "ok": True, "status": status, "api_version": version,
+        "headers": {"X-Route-Source": source},
+        "transport": {"attempts": attempts, "elapsed_s": 0.25, "status": status, "route_source": source},
+        "data": {"vehicle": {"type": "motorhome", "beta": True, "height_m": 3.2, "width_m": 2.34, "length_m": 7.65, "weight_t": 4.8, "axles": 2},
+                 "route": {"distance_m": 100000, "duration_s": 3600, "geometry": [[48.1, 11.5], [49.0, 12.0]],
+                           "legal": True, "restriction_hits": [], "tolls": {"currency": "EUR", "total_eur": total, "complete": complete, "by_country": [{"country": "FR", "amount": total, "status": "likely"}]}}},
+    }
+
+
+@dataclass
+class DiagnosticTransport:
+    endpoint: str
+    response: dict
+
+    async def __call__(self, _parameters):
+        return self.response
+
+
+class Beta3DiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        self.profile = VehicleProfile("z", "Zoe", "motorhome", 3.2, 2.34, 7.65, 4800, "diesel", axles=2)
+
+    def runtime(self, response):
+        store = ProfileRouteStore(MemoryStore())
+        async def seed():
+            await store.async_load()
+            await store.async_save_profile(self.profile)
+        asyncio.run(seed())
+        provider = NakordoniRouteAdapterV3(api_key="K" * 24, transport=DiagnosticTransport(V3_ROUTE_ENDPOINT, response))
+        return RuntimeData(RouteCoordinator(provider), store, {CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME_V3})
+
+    def request_data(self):
+        return {"profile_id": "z", "origin": {"latitude": 48.1, "longitude": 11.5}, "destination": {"latitude": 49.0, "longitude": 12.0}}
+
+    def test_before_first_route_is_explicitly_empty(self):
+        runtime = self.runtime(route_payload())
+        self.assertEqual(runtime.diagnostics()["status"], "no_route_calculation")
+        self.assertIsNone(runtime.diagnostics()["last_operation"])
+
+    def test_v3_complete_primary_contains_only_safe_toll_fields(self):
+        runtime = self.runtime(route_payload(complete=True, source="primary", total=250.24))
+        asyncio.run(runtime.async_calculate_service(self.request_data()))
+        diagnostic = runtime.diagnostics()
+        self.assertEqual(diagnostic["last_operation"]["api_version"], "v3")
+        self.assertEqual(diagnostic["last_operation"]["routing_source"], "primary")
+        self.assertTrue(diagnostic["last_operation"]["tolls"]["complete"])
+        self.assertEqual(diagnostic["last_operation"]["tolls"]["total_eur"], 250.24)
+        self.assertEqual(diagnostic["last_operation"]["tolls"]["by_country"][0]["country"], "FR")
+        self.assertNotIn("Authorization", str(diagnostic))
+        self.assertNotIn("geometry", str(diagnostic))
+
+    def test_v3_incomplete_fallback_and_retry_count_are_exposed(self):
+        runtime = self.runtime(route_payload(complete=False, source="fallback", attempts=2, total=15.59))
+        asyncio.run(runtime.async_calculate_service(self.request_data()))
+        diagnostic = runtime.diagnostics()["last_operation"]
+        self.assertEqual(diagnostic["routing_source"], "fallback")
+        self.assertFalse(diagnostic["tolls"]["complete"])
+        self.assertEqual(diagnostic["retry_count"], 1)
+        self.assertEqual(diagnostic["api_calls"]["v3"], 2)
+
+    def test_v2_estimate_is_separate_and_increments_v2_only(self):
+        runtime = self.runtime(route_payload(complete=False, total=15.59))
+        asyncio.run(runtime.async_calculate_service(self.request_data()))
+        v2 = route_payload("v2", complete=True, total=250.24)
+        runtime.coordinator.provider.transport = DiagnosticTransport(ROUTE_ENDPOINT, v2)
+        result = asyncio.run(runtime.async_estimate_tolls_v2({**self.request_data(), "current_result": {"distance_m": 100000, "duration_s": 3600, "metadata": {"api_version": "v3", "tolls": {"complete": False}}}}))
+        self.assertEqual(result["source_api"], "v2")
+        self.assertEqual(runtime.diagnostics()["route_calls"], {"v2": 1, "v3": 1})
+        self.assertEqual(runtime.diagnostics()["last_operation"]["operation"], "v2_toll_estimate")
+
+    def test_provider_error_is_diagnostic_without_secret_or_location(self):
+        runtime = self.runtime({"ok": False, "status": 503, "error": {"code": "busy", "message": "busy"}, "transport": {"attempts": 1, "status": 503, "elapsed_s": 0.1, "route_source": "primary"}})
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service(self.request_data()))
+        diagnostic = runtime.diagnostics()["last_operation"]
+        self.assertEqual(diagnostic["http_status"], 503)
+        self.assertEqual(diagnostic["error"]["code"], "busy")
+        self.assertNotIn("48.1", str(diagnostic))
+        self.assertNotIn("K" * 24, str(diagnostic))
+
+    def test_native_diagnostics_selects_the_matching_runtime(self):
+        first = self.runtime(route_payload(total=1.0))
+        second = self.runtime(route_payload(total=2.0))
+        hass = SimpleNamespace(data={"camper_route_planner": {"first": first, "second": second}})
+        first_entry = SimpleNamespace(entry_id="first")
+        second_entry = SimpleNamespace(entry_id="second")
+        first_snapshot = asyncio.run(async_get_config_entry_diagnostics(hass, first_entry))
+        second_snapshot = asyncio.run(async_get_config_entry_diagnostics(hass, second_entry))
+        self.assertEqual(first_snapshot["configured_provider"], PROVIDER_NAKORDONI_MOTORHOME_V3)
+        self.assertIsNone(first_snapshot["last_operation"])
+        self.assertEqual(second_snapshot["route_calls"], {"v2": 0, "v3": 0})
+
+
+if __name__ == "__main__":
+    unittest.main()

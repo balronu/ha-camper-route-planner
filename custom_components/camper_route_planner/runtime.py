@@ -18,6 +18,34 @@ from .storage import ProfileRouteStore
 from .geocoding import GeoapifyGeocoder
 
 
+def _safe_toll_diagnostic(tolls: Any) -> dict[str, Any]:
+    """Return only schema-level toll data suitable for HA diagnostics."""
+    if not isinstance(tolls, dict):
+        return {"complete": None, "total_eur": None, "by_country": []}
+    countries = []
+    raw_countries = tolls.get("countries", tolls.get("by_country", []))
+    if isinstance(raw_countries, list):
+        for item in raw_countries:
+            if not isinstance(item, dict):
+                continue
+            country = item.get("country")
+            amount = item.get("total", item.get("amount", item.get("total_eur")))
+            if not isinstance(country, str) or not country or not isinstance(amount, (int, float)):
+                continue
+            countries.append({
+                "country": country,
+                "amount": float(amount),
+                "currency": item.get("currency", tolls.get("currency", "EUR")),
+                "status": item.get("status"),
+            })
+    total = tolls.get("total", tolls.get("total_eur"))
+    return {
+        "complete": tolls.get("complete") if isinstance(tolls.get("complete"), bool) else None,
+        "total_eur": float(total) if isinstance(total, (int, float)) else None,
+        "by_country": countries,
+    }
+
+
 def build_routing_provider(values: dict[str, Any], *, transport: Any = None):
     """Build exactly the provider explicitly selected in entry data/options."""
     provider_name = values.get(CONF_PROVIDER)
@@ -49,6 +77,8 @@ class RuntimeData:
         self.config_values = config_values or {}
         self.geocoder = geocoder
         self.usage_transport = None
+        self._diagnostic_counts = {"v2": 0, "v3": 0}
+        self._last_diagnostic: dict[str, Any] | None = None
 
     @classmethod
     def from_config_entry(cls, hass: Any, entry: Any) -> "RuntimeData":
@@ -109,6 +139,44 @@ class RuntimeData:
             raise ValueError("Nakordoni account usage is unavailable")
         return normalize_usage(payload).as_public_dict(status=payload.get("status"))
 
+    def diagnostics(self) -> dict[str, Any]:
+        """Return the in-memory, secret-free snapshot for HA diagnostics."""
+        return {
+            "configured_provider": self.config_values.get(CONF_PROVIDER),
+            "route_calls": dict(self._diagnostic_counts),
+            "last_operation": self._last_diagnostic,
+            "status": "available" if self._last_diagnostic is not None else "no_route_calculation",
+        }
+
+    def _record_diagnostic(
+        self,
+        *,
+        operation: str,
+        api_version: str,
+        metadata: dict[str, Any] | None = None,
+        error: ProviderError | None = None,
+    ) -> None:
+        metadata = metadata if isinstance(metadata, dict) else {}
+        transport = metadata.get("transport") if isinstance(metadata.get("transport"), dict) else {}
+        attempts = transport.get("attempts")
+        attempts = int(attempts) if isinstance(attempts, (int, float)) and attempts >= 1 else 1
+        self._diagnostic_counts[api_version] = self._diagnostic_counts.get(api_version, 0) + attempts
+        tolls = metadata.get("tolls")
+        self._last_diagnostic = {
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "operation": operation,
+            "api_version": api_version,
+            "routing_source": transport.get("route_source") or metadata.get("routing_source"),
+            "http_status": transport.get("status") if isinstance(transport.get("status"), int) else (error.status if error else None),
+            "response_duration_s": transport.get("elapsed_s"),
+            "tolls": _safe_toll_diagnostic(tolls),
+            "source_api": tolls.get("source_api") if isinstance(tolls, dict) else api_version,
+            "api_calls": dict(self._diagnostic_counts),
+            "retry_count": max(attempts - 1, 0),
+            "cache_hit": bool(metadata.get("cache_hit", False)),
+            "error": {"code": error.code, "status": error.status} if error else None,
+        }
+
     async def async_calculate_service(self, data: dict[str, Any]) -> dict[str, Any]:
         profiles = {profile.profile_id: profile for profile in self.store.profiles()}
         profile = profiles.get(data["profile_id"])
@@ -132,9 +200,16 @@ class RuntimeData:
             depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
             arrive_at=_time("arrive_at"),
         )
-        result = await self.coordinator.async_calculate_manual(
-            request, force_refresh=bool(data.get("force_refresh", False))
-        )
+        try:
+            result = await self.coordinator.async_calculate_manual(
+                request, force_refresh=bool(data.get("force_refresh", False))
+            )
+        except ProviderError as exc:
+            api_version = "v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"
+            self._record_diagnostic(operation="route", api_version=api_version, error=exc)
+            raise
+        api_version = str(result.metadata.get("api_version") or ("v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"))
+        self._record_diagnostic(operation="route", api_version=api_version, metadata=result.metadata)
         return {
             "provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m,
             "duration_s": result.duration_s, "warnings": [warning.message for warning in result.warnings],
@@ -185,12 +260,17 @@ class RuntimeData:
             raise ValueError("Nakordoni API key is not configured")
         from dataclasses import replace
         v2_transport = replace(transport, endpoint=ROUTE_ENDPOINT)
-        estimate = await NakordoniMotorhomeProvider(
-            api_key=configured.api_key, live_enabled=True, transport=v2_transport
-        ).calculate(request)
+        try:
+            estimate = await NakordoniMotorhomeProvider(
+                api_key=configured.api_key, live_enabled=True, transport=v2_transport
+            ).calculate(request)
+        except ProviderError as exc:
+            self._record_diagnostic(operation="v2_toll_estimate", api_version="v2", error=exc)
+            raise
         v2_tolls = estimate.metadata.get("tolls")
         if not isinstance(v2_tolls, dict):
             raise ValueError("v2 returned no toll data")
+        self._record_diagnostic(operation="v2_toll_estimate", api_version="v2", metadata=estimate.metadata)
         distance = current.get("distance_m")
         duration = current.get("duration_s")
         comparable = (
