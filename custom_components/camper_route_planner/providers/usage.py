@@ -22,12 +22,35 @@ class QuotaUsage:
     upgrade_url: str | None
     pass_url: str | None
 
+    def as_public_dict(self, *, status: int | None = None) -> dict[str, Any]:
+        """Return only account fields safe for an authenticated admin client."""
+        return {
+            "status": status,
+            "ok": True,
+            "plan": self.plan,
+            "quota": {
+                "limit": self.limit,
+                "used": self.used,
+                "remaining": self.remaining,
+                "reset_at": self.reset_at,
+            },
+            "markets": list(self.markets),
+            "trip_pass_active": self.trip_pass_active,
+            "trip_pass_expires_at": self.trip_pass_expires_at,
+            "upgrade_url": self.upgrade_url,
+            "pass_url": self.pass_url,
+        }
+
 
 def _int(value: Any) -> int | None:
     return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 def normalize_usage(payload: dict[str, Any], *, quota_class: str = "route") -> QuotaUsage:
+    if payload.get("ok") is False:
+        error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+        code = str(error.get("code", "usage_request_failed"))
+        raise ValueError(f"Nakordoni usage request failed: {code}")
     data = payload.get("data", payload)
     if not isinstance(data, dict):
         data = {}

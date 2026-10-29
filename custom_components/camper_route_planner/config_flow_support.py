@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import MAP_PROVIDER_CARTO, MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME
+from .const import MAP_PROVIDER_CARTO, MAP_PROVIDER_NONE, PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3
 from .map_provider import validate_carto_browser_key
 
 
@@ -24,11 +24,11 @@ def normalize_api_key(value: Any) -> str:
 
 def validate_user_input(user_input: dict[str, Any]) -> dict[str, str]:
     provider = str(user_input.get("provider", "")).strip()
-    if provider not in (PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
+    if provider not in (PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3):
         return {"base": "invalid_provider"}
     if provider == PROVIDER_NAKORDONI and user_input.get("live_enabled", False):
         return {"base": "live_routing_requires_separate_phase"}
-    if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME):
+    if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3):
         try:
             normalize_api_key(user_input.get("api_key"))
         except ValueError:

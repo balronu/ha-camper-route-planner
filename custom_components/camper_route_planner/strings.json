@@ -100,7 +100,7 @@
     }
   },
   "selector": {
-    "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni" } },
+    "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni v2 (beta baseline)", "nakordoni_motorhome_v3": "Nakordoni v3 (beta)" } },
     "vehicle_action": { "options": { "none": "No vehicle changes", "add": "Add new vehicle", "delete": "Delete a vehicle" } },
     "map_provider": { "options": { "none": "No map", "carto": "CARTO" } },
     "vehicle_kind": { "options": { "motorhome": "Motorhome", "truck": "Truck", "car": "Car" } },

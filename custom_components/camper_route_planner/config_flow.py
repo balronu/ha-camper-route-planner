@@ -10,7 +10,7 @@ from .const import (
     CONF_MAP_PROVIDER, CONF_PROVIDER, CONF_REMOVE_API_KEY,
     CONF_REMOVE_CARTO_API_KEY, CONF_REMOVE_GEOCODING_API_KEY, DEFAULT_ZOE_TRACKER,
     CONF_VEHICLE_ACTION, DOMAIN, MAP_PROVIDER_CARTO, MAP_PROVIDER_NONE,
-    PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME,
+    PROVIDER_MOCK, PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3,
     VEHICLE_ACTION_ADD, VEHICLE_ACTION_DELETE, VEHICLE_ACTION_NONE,
 )
 from .models import VehicleProfile
@@ -61,7 +61,7 @@ try:
             value = value.strip().replace(",", ".")
         return float(value)
 
-    _VISIBLE_PROVIDERS = (PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME)
+    _VISIBLE_PROVIDERS = (PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3)
     class CamperRoutePlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         VERSION = 1
 
@@ -71,7 +71,7 @@ try:
                 errors = validate_user_input(user_input)
                 if not errors:
                     provider = user_input[CONF_PROVIDER]
-                    api_key = normalize_api_key(user_input[CONF_API_KEY]) if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME) else ""
+                    api_key = normalize_api_key(user_input[CONF_API_KEY]) if provider in (PROVIDER_NAKORDONI, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3) else ""
                     return self.async_create_entry(title=user_input.get(CONF_NAME, "Camper Route Planner"), data={
                         CONF_PROVIDER: provider, CONF_API_KEY: api_key, CONF_LIVE_ENABLED: False,
                         CONF_MAP_PROVIDER: user_input.get(CONF_MAP_PROVIDER, MAP_PROVIDER_NONE),

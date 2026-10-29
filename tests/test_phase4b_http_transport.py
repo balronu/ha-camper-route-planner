@@ -3,7 +3,8 @@ import unittest
 
 from custom_components.camper_route_planner.providers.http_transport import ClientTimeout
 
-from custom_components.camper_route_planner.providers.http_transport import NakordoniHttpTransport
+from custom_components.camper_route_planner.providers.http_transport import NakordoniHttpTransport, NakordoniUsageTransport
+from custom_components.camper_route_planner.providers.usage import normalize_usage
 from custom_components.camper_route_planner.providers.nakordoni_motorhome import NakordoniMotorhomeProvider
 
 
@@ -52,6 +53,32 @@ class Phase4BHttpTransportTests(unittest.TestCase):
     def test_missing_key_is_rejected_before_transport(self):
         with self.assertRaises(ValueError):
             asyncio.run(NakordoniHttpTransport(FakeSession(), "")({}))
+
+    def test_usage_transport_is_single_bounded_get_without_redirects(self):
+        class UsageResponse(FakeResponse):
+            async def json(self, *, content_type=None):
+                del content_type
+                return {"ok": True, "data": {"plan": {"name": "Explorer"}, "quotas": {"route": {"limit": 10, "used": 2, "remaining": 8}}}}
+
+        class UsageSession(FakeSession):
+            def get(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+                return UsageResponse()
+
+        session = UsageSession()
+        payload = asyncio.run(NakordoniUsageTransport(session, "SECRET-KEY")())
+        args, kwargs = session.calls[0]
+        self.assertEqual(args[0], "https://api.nakordoni.dev/api/v2/account/usage")
+        self.assertEqual(kwargs["headers"], {"Authorization": "Bearer SECRET-KEY"})
+        self.assertFalse(kwargs["allow_redirects"])
+        self.assertEqual(normalize_usage(payload).remaining, 8)
+        self.assertEqual(len(session.calls), 1)
+
+    def test_usage_public_projection_contains_no_secret_or_headers(self):
+        result = normalize_usage({"ok": True, "status": 200, "data": {"plan": {"name": "Explorer"}, "quotas": {"route": {"limit": 10, "used": 2, "remaining": 8}}}}).as_public_dict(status=200)
+        self.assertEqual(result["quota"]["remaining"], 8)
+        self.assertNotIn("headers", result)
+        self.assertNotIn("api_key", result)
 
     def test_geojson_geometry_uses_longitude_latitude_order(self):
         result = NakordoniMotorhomeProvider().normalize_fixture({

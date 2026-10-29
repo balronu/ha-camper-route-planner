@@ -40,6 +40,7 @@ EXPECTED = (
     "providers/mock.py",
     "providers/nakordoni.py",
     "providers/nakordoni_motorhome.py",
+    "providers/nakordoni_v3.py",
     "providers/oauth.py",
     "providers/usage.py",
 )
