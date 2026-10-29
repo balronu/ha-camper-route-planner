@@ -13,7 +13,7 @@ export function validOrEmptyWaypoint(point) {
 }
 
 export function normalizeConfig(config = {}) {
-  return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
+  return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner"), show_developer_diagnostics: config.show_developer_diagnostics === true };
 }
 
 const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -19,6 +19,12 @@ test("coordinates and waypoint ordering are validated deterministically", () => 
 test("invalid saved coordinates are cleared instead of becoming route inputs", () => {
   assert.deepEqual(validOrEmptyWaypoint({ latitude: 0, longitude: 0, label: "Gondifelos" }), { latitude: "", longitude: "", label: "Gondifelos" });
   assert.deepEqual(validOrEmptyWaypoint({ latitude: 41.4, longitude: -8.6 }), { latitude: 41.4, longitude: -8.6 });
+});
+
+test("developer diagnostics are disabled by default and opt in per card", () => {
+  assert.equal(normalizeConfig({}).show_developer_diagnostics, false);
+  assert.equal(normalizeConfig({ show_developer_diagnostics: true }).show_developer_diagnostics, true);
+  assert.equal(normalizeConfig({ show_developer_diagnostics: "true" }).show_developer_diagnostics, false);
 });
 
 test("optional route times omit null values but preserve valid values", () => {

@@ -125,6 +125,13 @@ class Beta3DiagnosticTests(unittest.TestCase):
         results = asyncio.run(run_parallel())
         self.assertEqual(sum("request_diagnostic" in result for result in results), 1)
 
+    def test_request_diagnostic_can_be_disarmed_before_calculation(self):
+        runtime = self.runtime(route_payload())
+        token = runtime.arm_request_diagnostics()
+        runtime.disarm_request_diagnostics()
+        result = asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        self.assertNotIn("request_diagnostic", result)
+
     def test_native_diagnostics_never_expose_request_snapshot(self):
         runtime = self.runtime(route_payload())
         token = runtime.arm_request_diagnostics()

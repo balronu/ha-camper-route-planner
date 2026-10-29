@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.4";
+const bundleVersion = "0.1.4-beta.5";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
@@ -51,13 +51,15 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
   await page.addScriptTag({ content: bundle });
   await page.evaluate(({ shouldFailGeocode, fixture }) => {
     const card = document.querySelector("camper-route-planner-card");
-    card.setConfig({ type: "custom:camper-route-planner-card", entry_id: "test-entry" });
+    card.setConfig({ type: "custom:camper-route-planner-card", entry_id: "test-entry", show_developer_diagnostics: fixture.showDeveloperDiagnostics === true });
     let calculateCalls = 0;
     let lastServiceData = null;
     let reverseCalls = 0;
+    let disarmCalls = 0;
     card.hass = {
       language: fixture.language || "en",
       connection: {},
+      user: { is_admin: fixture.isAdmin === true },
       callWS: async (message) => {
         if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: fixture.profile?.tank_capacity_l ?? 100, consumption_l_per_100km: fixture.profile?.consumption_l_per_100km ?? 10 }, { profile_id: "second", name: "Second motorhome", height_m: 3.1, width_m: 2.3, length_m: 7, gross_weight_kg: 4200, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 200, consumption_l_per_100km: 12 }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
@@ -67,6 +69,7 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
         if (message.type.endsWith("/geocode")) { if (shouldFailGeocode) throw new Error("mock geocoding unavailable"); await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: true, results: [{ label: "Fixture address", latitude: 48.137, longitude: 11.575 }, { label: "Second fixture address", latitude: 48.138, longitude: 11.576 }] }; }
         if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: false, address: "" }; }
         if (message.type.endsWith("/arm_request_diagnostics")) return { armed: true, diagnostic_token: "fixture-diagnostic-token" };
+        if (message.type.endsWith("/disarm_request_diagnostics")) { disarmCalls += 1; return { armed: false }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
@@ -77,7 +80,7 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
         return {};
       }
     };
-    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; }, get lastServiceData() { return lastServiceData; } };
+    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; }, get lastServiceData() { return lastServiceData; }, get disarmCalls() { return disarmCalls; } };
   }, { shouldFailGeocode: geocodeError, fixture });
   await page.locator("details.route-planner-shell").waitFor();
   assert.equal(await page.locator("details.route-planner-shell").getAttribute("open"), null, "card starts collapsed");
@@ -99,8 +102,13 @@ async function calculate(page) {
 const desktop = await preparePage({ width: 1280, height: 900 });
 assert.equal(await desktop.locator(".result .metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
+assert.equal(await desktop.locator("button[data-action=arm-diagnostics]").count(), 0, "developer diagnostics are hidden by default");
 
-const diagnosticPage = await preparePage({ width: 900, height: 800 }, "light", null, false, false, { requestDiagnostic: { request: { coordinates: { origin: { latitude: 49, longitude: 7 } } }, response: { distance_m: 1234 } } });
+const nonAdminDiagnosticPage = await preparePage({ width: 900, height: 800 }, "light", null, false, false, { showDeveloperDiagnostics: true, isAdmin: false });
+assert.equal(await nonAdminDiagnosticPage.locator("button[data-action=arm-diagnostics]").count(), 0, "non-admins cannot see developer diagnostics");
+await nonAdminDiagnosticPage.close();
+
+const diagnosticPage = await preparePage({ width: 900, height: 800 }, "light", null, false, false, { showDeveloperDiagnostics: true, isAdmin: true, requestDiagnostic: { request: { coordinates: { origin: { latitude: 49, longitude: 7 } } }, response: { distance_m: 1234 } } });
 await diagnosticPage.getByRole("button", { name: /Diagnose der nächsten Anfrage|Request diagnostics/ }).click();
 await diagnosticPage.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card._state.origin = { ...card._state.origin, latitude: 49, longitude: 7 }; card._state.destination = { ...card._state.destination, latitude: 50, longitude: 8 }; return card.calculate(); });
 await diagnosticPage.locator("textarea[data-diagnostic-copy]").waitFor();
@@ -109,6 +117,10 @@ assert.match(await diagnosticPage.locator("textarea[data-diagnostic-copy]").inpu
 await diagnosticPage.locator("button[data-action=copy-diagnostics]").click();
 assert.match(await diagnosticPage.locator("[role=status]").textContent(), /Clipboard unavailable|Zwischenablage nicht verfügbar|copied|kopiert/i, "copy action gives a success or safe manual-copy status");
 assert.equal((await diagnosticPage.evaluate(() => globalThis.__crp.lastServiceData.diagnostic_token)), "fixture-diagnostic-token", "diagnostic token is bound to the single calculation request");
+await diagnosticPage.evaluate(() => document.querySelector("camper-route-planner-card").setConfig({ entry_id: "test-entry", show_developer_diagnostics: false }));
+assert.equal(await diagnosticPage.locator("button[data-action=arm-diagnostics]").count(), 0, "disabling the option hides the action");
+assert.equal(await diagnosticPage.locator("textarea[data-diagnostic-copy]").count(), 0, "disabling the option clears the diagnostic view");
+assert.equal(await diagnosticPage.evaluate(() => globalThis.__crp.disarmCalls), 1, "disabling the option revokes an armed diagnostic");
 await diagnosticPage.close();
 await desktop.locator('input[data-fuel-field="fuel_level_l"]').fill("40");
 assert.equal(await desktop.locator('input[data-fuel-field="reserve_l"]').count(), 0, "legacy reserve is not editable in the fuel section");
