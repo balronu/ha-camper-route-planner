@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.4-beta.1; reproducible local bundle */
+/* Camper Route Planner Card v0.1.4-beta.2; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -31752,6 +31752,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.routeOptions = { ...this._state.routeOptions, ...route.route_options || route.metadata?.request_options || {} };
         this._state.result = normalizeServiceResponse(route);
         this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
+        for (const key of this._inputDrafts.keys()) if (key.startsWith("point:")) this._inputDrafts.delete(key);
+        this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => this._preserveInputDraftKeys.add(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`));
         this.render();
       } catch (error2) {
         this._state.error = error2.message || t(languageOf(this._hass), "calculationFailed");
