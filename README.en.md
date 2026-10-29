@@ -15,7 +15,9 @@ profiles, an interactive map, saved routes, and GPX export.
 >
 > Stable `v0.1.2` contains the verified Beta.3–Beta.5 corrections.
 >
-> **In development:** `v0.1.3-beta.3` adds volatile native HA diagnostics for
+> **In development:** `v0.1.3-beta.4` adds localized border crossings,
+> a clear distinction between detected country transitions and identified
+> crossings, and volatile native HA diagnostics for
 > the actually executed routing responses. `v0.1.3-beta.2` adds an explicitly labelled separate
 > API v2 toll estimate for incomplete v3 toll data and safe routing
 > diagnostics. Stable remains the production recommendation.
