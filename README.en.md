@@ -15,7 +15,7 @@ profiles, an interactive map, saved routes, and GPX export.
 >
 > Stable `v0.1.2` contains the verified Beta.3–Beta.5 corrections.
 >
-> **In development:** `v0.1.3-beta.1` adds an explicitly requested separate
+> **In development:** `v0.1.3-beta.2` adds an explicitly labelled separate
 > API v2 toll estimate for incomplete v3 toll data and safe routing
 > diagnostics. Stable remains the production recommendation.
 

@@ -18,7 +18,7 @@ und GPX-Export.
 >
 > Die stabile `v0.1.2` enthält die geprüften Beta.3–Beta.5-Korrekturen.
 >
-> **Entwicklung:** `v0.1.3-beta.1` ergänzt eine ausdrücklich angeforderte,
+> **Entwicklung:** `v0.1.3-beta.2` ergänzt eine eindeutig gekennzeichnete,
 > getrennte API-v2-Mautschätzung für unvollständige v3-Mautdaten sowie sichere
 > Routingdiagnostik. Stable bleibt die empfohlene Produktivversion.
 

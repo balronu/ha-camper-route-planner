@@ -43,6 +43,7 @@ class Phase5NakordoniOptimizationTests(unittest.TestCase):
         normalized = NakordoniRouteAdapterV3(api_key="K" * 24).normalize_response(payload(version="v3", total=None, complete=False), request=request, synthetic=False)
         self.assertEqual(normalized.metadata["routing_source"], "primary")
         self.assertFalse(normalized.metadata["tolls"]["complete"])
+        self.assertEqual(normalized.metadata["tolls"]["source_api"], "v3")
 
     def test_explicit_v2_estimate_is_separate_and_uses_v2_endpoint(self):
         async def run():
@@ -63,6 +64,8 @@ class Phase5NakordoniOptimizationTests(unittest.TestCase):
         estimate = asyncio.run(run())
         self.assertEqual(estimate["api_version"], "v2")
         self.assertEqual(estimate["tolls"]["total"], 250.24)
+        self.assertEqual(estimate["tolls"]["source_api"], "v2")
+        self.assertEqual(estimate["source_api"], "v2")
         self.assertEqual(ROUTE_ENDPOINT, "https://nakordoni.eu/api/v2/data/truck-route")
         self.assertNotIn("total", estimate)
 

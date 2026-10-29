@@ -112,10 +112,11 @@ def safe_provider_link(value: Any) -> str | None:
     return value
 
 
-def _toll_summary(raw: Any) -> dict[str, Any] | None:
+def _toll_summary(raw: Any, *, source_api: str = "v2") -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
     result: dict[str, Any] = {
+        "source_api": source_api,
         "priced": raw.get("priced") if isinstance(raw.get("priced"), bool) else None,
         "status": str(raw["status"]) if raw.get("status") is not None else "unknown",
         "complete": raw.get("complete") if isinstance(raw.get("complete"), bool) else None,

@@ -185,7 +185,11 @@ test("toll amounts and calculation bases are locale-aware and data-driven", () =
   assert.equal(formatTollAmount(27.04, "CHF", "en"), "CHF 27.04");
   assert.equal(tollCountryName("DE", "de"), "Deutschland");
   assert.equal(tollCountryName("CH", "en"), "Switzerland");
+  assert.equal(tollCountryName("ES", "de"), "Spanien");
+  assert.equal(tollCountryName("PT", "en"), "Portugal");
+  assert.equal(tollCountryName("XX", "de"), "XX");
   assert.match(tollCalculationText({ distance_km: 166.7, rate_eur_per_km: 0.2761 }, "de"), /166,7 km/);
+  assert.match(tollCalculationText({ tariff: "763.9 km x 0.2761 EUR/km network average" }, "en"), /763\.9 km/);
   assert.equal(tollCalculationText({ distance_km: 166.7 }, "de"), "");
 });
 
