@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.3-beta.1; reproducible local bundle */
+/* Camper Route Planner Card v0.1.3-beta.2; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -14126,6 +14126,14 @@
       shareFailed: "Sharing/download is unavailable"
     }
   };
+  TRANSLATIONS.de.providerNetworkAverage = "Durchschnittlicher Netzpreis; die tats\xE4chliche Abschnittsgeb\xFChr kann abweichen.";
+  TRANSLATIONS.de.tollSourceApiV2 = "Quelle: NaKordoni API v2 \u2013 separate Mautsch\xE4tzung, nicht verbindlich.";
+  TRANSLATIONS.de.tollSourceApiV3 = "Quelle: NaKordoni API v3";
+  TRANSLATIONS.de.tollV3IncompleteNote = "Die Route wurde mit API v3 berechnet; deren Mautdaten sind unvollst\xE4ndig. Eine optionale v2-Sch\xE4tzung bleibt getrennt und kann abweichen.";
+  TRANSLATIONS.en.providerNetworkAverage = "Average network price; the actual section charge may differ.";
+  TRANSLATIONS.en.tollSourceApiV2 = "Source: NaKordoni API v2 \u2013 separate toll estimate, not binding.";
+  TRANSLATIONS.en.tollSourceApiV3 = "Source: NaKordoni API v3";
+  TRANSLATIONS.en.tollV3IncompleteNote = "The route was calculated with API v3; its toll data is incomplete. An optional v2 estimate remains separate and may differ.";
   function languageOf(hass) {
     const language = hass?.locale?.language || hass?.language || "en";
     return String(language).toLowerCase().startsWith("de") ? "de" : "en";
@@ -15311,10 +15319,26 @@ svg.leaflet-image-layer.leaflet-interactive path {
   // src/toll-display.js
   var COUNTRY_NAMES = {
     AT: { de: "\xD6sterreich", en: "Austria" },
+    BE: { de: "Belgien", en: "Belgium" },
+    BG: { de: "Bulgarien", en: "Bulgaria" },
     CH: { de: "Schweiz", en: "Switzerland" },
+    CZ: { de: "Tschechien", en: "Czechia" },
     DE: { de: "Deutschland", en: "Germany" },
+    DK: { de: "D\xE4nemark", en: "Denmark" },
+    ES: { de: "Spanien", en: "Spain" },
     FR: { de: "Frankreich", en: "France" },
-    IT: { de: "Italien", en: "Italy" }
+    HR: { de: "Kroatien", en: "Croatia" },
+    HU: { de: "Ungarn", en: "Hungary" },
+    IT: { de: "Italien", en: "Italy" },
+    LI: { de: "Liechtenstein", en: "Liechtenstein" },
+    LU: { de: "Luxemburg", en: "Luxembourg" },
+    NL: { de: "Niederlande", en: "Netherlands" },
+    PL: { de: "Polen", en: "Poland" },
+    PT: { de: "Portugal", en: "Portugal" },
+    RO: { de: "Rum\xE4nien", en: "Romania" },
+    SE: { de: "Schweden", en: "Sweden" },
+    SI: { de: "Slowenien", en: "Slovenia" },
+    SK: { de: "Slowakei", en: "Slovakia" }
   };
   var KNOWN_PROVIDER_HINTS = [
     { pattern: /emission\s+class\s+not\s+given/i, key: "providerEmissionAssumed" },
@@ -15324,7 +15348,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     { pattern: /(?:vignette|daily fee|daily charge).*(?:valid|period|day)/i, key: "providerPeriodCharge" },
     { pattern: /(?:city|urban)\s+(?:access|entry)\s+(?:fee|charge)/i, key: "providerCityAccess" },
     { pattern: /truck\s+tariff.*(?:motorhome|camper|rv)/i, key: "providerTruckTariff" },
-    { pattern: /truck\s*\(hgv\)\s+toll\s+rates.*motorhome/i, key: "providerTruckTariff" }
+    { pattern: /truck\s*\(hgv\)\s+toll\s+rates.*motorhome/i, key: "providerTruckTariff" },
+    { pattern: /(?:average\s+)?network\s+(?:price|average)|network\s+average/i, key: "providerNetworkAverage" }
   ];
   function formatTollAmount(value, currency = "EUR", language = "en") {
     if (value == null || value === "") return "";
@@ -15360,8 +15385,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return known ? { known: [known], unknown: [] } : { known: [], unknown: [note] };
   }
   function tollCalculationText(item, language = "en") {
-    const distance = item?.distance_km ?? item?.kilometers ?? item?.km;
-    const rate = item?.rate_eur_per_km ?? item?.rate_per_km ?? item?.price_per_km;
+    let distance = item?.distance_km ?? item?.kilometers ?? item?.km;
+    let rate = item?.rate_eur_per_km ?? item?.rate_per_km ?? item?.price_per_km;
+    if ((distance == null || rate == null) && typeof item?.tariff === "string") {
+      const match = item.tariff.match(/([\d.,]+)\s*km\s*x\s*([\d.,]+)\s*(?:EUR|€)\s*\/\s*km/i);
+      if (match) {
+        distance = Number(match[1].replace(/,/g, ""));
+        rate = Number(match[2].replace(",", "."));
+      }
+    }
     if (distance == null || rate == null) return "";
     const distanceText = new Intl.NumberFormat(language === "de" ? "de-DE" : "en-US", { maximumFractionDigits: 1 }).format(Number(distance));
     const rateText = formatTollAmount(rate, "EUR", language);
@@ -31176,6 +31208,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   function renderTollDetails(result, translate2, language) {
     const tolls = result?.metadata?.tolls;
     if (!tolls) return "";
+    const apiVersion = result?.metadata?.api_version || tolls.source_api;
+    const sourceKey = apiVersion === "v2" ? "tollSourceApiV2" : apiVersion === "v3" ? "tollSourceApiV3" : null;
+    const sourceNote = sourceKey ? `<p class="subtle toll-source">${translate2(sourceKey)}</p>` : "";
     const total = tolls.total != null ? formatTollAmount(tolls.total, tolls.currency || "EUR", language) : tolls.complete === false ? translate2("tollIncomplete") : translate2("tollUnavailable");
     const knownHints = [];
     const unknownTexts = [];
@@ -31203,8 +31238,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const estimate = result?.metadata?.toll_estimate_v2;
     const estimateTolls = estimate?.tolls;
     const estimateTotal = estimateTolls?.total != null ? formatTollAmount(estimateTolls.total, estimateTolls.currency || "EUR", language) : translate2("tollUnavailable");
+    const incompleteNote = apiVersion === "v3" && tolls.complete === false ? `<p class="subtle toll-source-note">${translate2("tollV3IncompleteNote")}</p>` : "";
     const estimateSection = estimate ? `<section class="route-details toll-details"><h3>${translate2("tollV2Estimate")}</h3><div class="toll-total">${escapeHtml(estimateTotal)} <span class="subtle">(${translate2("tollEstimate")})</span></div><p class="subtle">${translate2(estimate.comparable_route ? "tollV2Comparable" : "tollV2NotComparable")}</p><p class="subtle">${translate2("tollV2Separate")}</p></section>` : "";
-    return `<section class="route-details toll-details"><h3>${translate2("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate2("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate2("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>${estimateSection}`;
+    return `<section class="route-details toll-details"><h3>${translate2("tollSummary")}</h3>${sourceNote}${incompleteNote}<div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate2("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate2("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>${estimateSection}`;
   }
   function renderRestrictions(result, translate2) {
     const metadata = result?.metadata || {};

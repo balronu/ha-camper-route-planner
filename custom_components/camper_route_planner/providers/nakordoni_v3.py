@@ -183,11 +183,12 @@ def _border_crossings(raw: Any) -> list[dict[str, Any]]:
     return result
 
 
-def _toll_summary(raw: Any) -> dict[str, Any] | None:
+def _toll_summary(raw: Any, *, source_api: str = "v3") -> dict[str, Any] | None:
     """Normalize the v3 toll envelope to the card's stable display shape."""
     if not isinstance(raw, dict):
         return None
     result: dict[str, Any] = {
+        "source_api": source_api,
         "priced": raw.get("priced") if isinstance(raw.get("priced"), bool) else None,
         "complete": raw.get("complete") if isinstance(raw.get("complete"), bool) else None,
         "estimate": raw.get("estimate") if isinstance(raw.get("estimate"), bool) else None,

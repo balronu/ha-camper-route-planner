@@ -37,6 +37,15 @@ const TRANSLATIONS = {
   }
 };
 
+TRANSLATIONS.de.providerNetworkAverage = "Durchschnittlicher Netzpreis; die tatsächliche Abschnittsgebühr kann abweichen.";
+TRANSLATIONS.de.tollSourceApiV2 = "Quelle: NaKordoni API v2 – separate Mautschätzung, nicht verbindlich.";
+TRANSLATIONS.de.tollSourceApiV3 = "Quelle: NaKordoni API v3";
+TRANSLATIONS.de.tollV3IncompleteNote = "Die Route wurde mit API v3 berechnet; deren Mautdaten sind unvollständig. Eine optionale v2-Schätzung bleibt getrennt und kann abweichen.";
+TRANSLATIONS.en.providerNetworkAverage = "Average network price; the actual section charge may differ.";
+TRANSLATIONS.en.tollSourceApiV2 = "Source: NaKordoni API v2 – separate toll estimate, not binding.";
+TRANSLATIONS.en.tollSourceApiV3 = "Source: NaKordoni API v3";
+TRANSLATIONS.en.tollV3IncompleteNote = "The route was calculated with API v3; its toll data is incomplete. An optional v2 estimate remains separate and may differ.";
+
 export function languageOf(hass) {
   const language = hass?.locale?.language || hass?.language || "en";
   return String(language).toLowerCase().startsWith("de") ? "de" : "en";

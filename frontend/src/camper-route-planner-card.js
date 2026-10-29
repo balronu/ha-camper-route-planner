@@ -51,6 +51,9 @@ function renderBorderCrossings(result, translate) {
 function renderTollDetails(result, translate, language) {
   const tolls = result?.metadata?.tolls;
   if (!tolls) return "";
+  const apiVersion = result?.metadata?.api_version || tolls.source_api;
+  const sourceKey = apiVersion === "v2" ? "tollSourceApiV2" : apiVersion === "v3" ? "tollSourceApiV3" : null;
+  const sourceNote = sourceKey ? `<p class="subtle toll-source">${translate(sourceKey)}</p>` : "";
   const total = tolls.total != null ? formatTollAmount(tolls.total, tolls.currency || "EUR", language) : tolls.complete === false ? translate("tollIncomplete") : translate("tollUnavailable");
   const knownHints = [];
   const unknownTexts = [];
@@ -78,8 +81,9 @@ function renderTollDetails(result, translate, language) {
   const estimate = result?.metadata?.toll_estimate_v2;
   const estimateTolls = estimate?.tolls;
   const estimateTotal = estimateTolls?.total != null ? formatTollAmount(estimateTolls.total, estimateTolls.currency || "EUR", language) : translate("tollUnavailable");
+  const incompleteNote = apiVersion === "v3" && tolls.complete === false ? `<p class="subtle toll-source-note">${translate("tollV3IncompleteNote")}</p>` : "";
   const estimateSection = estimate ? `<section class="route-details toll-details"><h3>${translate("tollV2Estimate")}</h3><div class="toll-total">${escapeHtml(estimateTotal)} <span class="subtle">(${translate("tollEstimate")})</span></div><p class="subtle">${translate(estimate.comparable_route ? "tollV2Comparable" : "tollV2NotComparable")}</p><p class="subtle">${translate("tollV2Separate")}</p></section>` : "";
-  return `<section class="route-details toll-details"><h3>${translate("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>${estimateSection}`;
+  return `<section class="route-details toll-details"><h3>${translate("tollSummary")}</h3>${sourceNote}${incompleteNote}<div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>${estimateSection}`;
 }
 
 function renderRestrictions(result, translate) {

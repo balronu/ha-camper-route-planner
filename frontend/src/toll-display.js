@@ -2,10 +2,26 @@ import { t } from "./localization.js";
 
 const COUNTRY_NAMES = {
   AT: { de: "Österreich", en: "Austria" },
+  BE: { de: "Belgien", en: "Belgium" },
+  BG: { de: "Bulgarien", en: "Bulgaria" },
   CH: { de: "Schweiz", en: "Switzerland" },
+  CZ: { de: "Tschechien", en: "Czechia" },
   DE: { de: "Deutschland", en: "Germany" },
+  DK: { de: "Dänemark", en: "Denmark" },
+  ES: { de: "Spanien", en: "Spain" },
   FR: { de: "Frankreich", en: "France" },
+  HR: { de: "Kroatien", en: "Croatia" },
+  HU: { de: "Ungarn", en: "Hungary" },
   IT: { de: "Italien", en: "Italy" },
+  LI: { de: "Liechtenstein", en: "Liechtenstein" },
+  LU: { de: "Luxemburg", en: "Luxembourg" },
+  NL: { de: "Niederlande", en: "Netherlands" },
+  PL: { de: "Polen", en: "Poland" },
+  PT: { de: "Portugal", en: "Portugal" },
+  RO: { de: "Rumänien", en: "Romania" },
+  SE: { de: "Schweden", en: "Sweden" },
+  SI: { de: "Slowenien", en: "Slovenia" },
+  SK: { de: "Slowakei", en: "Slovakia" },
 };
 
 const KNOWN_PROVIDER_HINTS = [
@@ -17,6 +33,7 @@ const KNOWN_PROVIDER_HINTS = [
   { pattern: /(?:city|urban)\s+(?:access|entry)\s+(?:fee|charge)/i, key: "providerCityAccess" },
   { pattern: /truck\s+tariff.*(?:motorhome|camper|rv)/i, key: "providerTruckTariff" },
   { pattern: /truck\s*\(hgv\)\s+toll\s+rates.*motorhome/i, key: "providerTruckTariff" },
+  { pattern: /(?:average\s+)?network\s+(?:price|average)|network\s+average/i, key: "providerNetworkAverage" },
 ];
 
 export function formatTollAmount(value, currency = "EUR", language = "en") {
@@ -60,8 +77,15 @@ export function classifyProviderText(raw, language = "en") {
 }
 
 export function tollCalculationText(item, language = "en") {
-  const distance = item?.distance_km ?? item?.kilometers ?? item?.km;
-  const rate = item?.rate_eur_per_km ?? item?.rate_per_km ?? item?.price_per_km;
+  let distance = item?.distance_km ?? item?.kilometers ?? item?.km;
+  let rate = item?.rate_eur_per_km ?? item?.rate_per_km ?? item?.price_per_km;
+  if ((distance == null || rate == null) && typeof item?.tariff === "string") {
+    const match = item.tariff.match(/([\d.,]+)\s*km\s*x\s*([\d.,]+)\s*(?:EUR|€)\s*\/\s*km/i);
+    if (match) {
+      distance = Number(match[1].replace(/,/g, ""));
+      rate = Number(match[2].replace(",", "."));
+    }
+  }
   if (distance == null || rate == null) return "";
   const distanceText = new Intl.NumberFormat(language === "de" ? "de-DE" : "en-US", { maximumFractionDigits: 1 }).format(Number(distance));
   const rateText = formatTollAmount(rate, "EUR", language);

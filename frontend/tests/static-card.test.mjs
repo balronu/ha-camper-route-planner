@@ -145,6 +145,9 @@ test("toll details use a structured summary and collapsed technical provider sec
   assert.match(source, /provider-details/);
   assert.match(source, /<details class="provider-details"><summary>/);
   assert.match(source, /classifyProviderText/);
+  assert.match(source, /tollSourceApiV2/);
+  assert.match(source, /tollV3IncompleteNote/);
+  assert.match(source, /estimateTollsV2/);
   assert.match(source, /formatTollAmount/);
   assert.doesNotMatch(source, /providerNoteText\(item\.tariff/);
 });
