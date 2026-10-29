@@ -143,6 +143,19 @@ class Phase2ATests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "forbidden credential"):
             asyncio.run(store.async_save_route_record(record))
 
+    def test_storage_preserves_additive_saved_route_fuel_values(self):
+        store = ProfileRouteStore(MemoryStore())
+        asyncio.run(store.async_load())
+        asyncio.run(store.async_save_route_record({
+            "route_id": "route-fuel",
+            "geometry": {"points": [{"latitude": 49, "longitude": 7}, {"latitude": 50, "longitude": 8}]},
+            "fuel_values": {"diesel_price_per_l": "2,16", "fuel_level_l": "90"},
+            "ignored": "not persisted",
+        }))
+        saved = store.route("route-fuel")
+        self.assertEqual(saved["fuel_values"], {"diesel_price_per_l": "2,16", "fuel_level_l": "90"})
+        self.assertNotIn("ignored", saved)
+
     def test_config_flow_validation_and_optional_contracts(self):
         self.assertEqual(validate_user_input({"provider": "mock"}), {})
         self.assertEqual(validate_user_input({"provider": "nakordoni"}), {"api_key": "invalid_api_key"})

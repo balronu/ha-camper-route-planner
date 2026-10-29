@@ -113,6 +113,36 @@ export function normalizeServiceResponse(response) {
   };
 }
 
+const PROVIDER_ALIASES = {
+  nakordoni: "nakordoni",
+  nakordoni_v2: "nakordoni",
+  nakordoni_v3: "nakordoni",
+  nakordoni_motorhome: "nakordoni",
+  nakordoni_motorhome_v2: "nakordoni",
+  nakordoni_motorhome_v3: "nakordoni",
+};
+
+export function normalizeProviderId(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return PROVIDER_ALIASES[raw] || raw;
+}
+
+export function providerApiVersion(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw.endsWith("_v3") || raw === "nakordoni_v3" ? "v3" : raw.endsWith("_v2") || raw === "nakordoni_v2" || raw === "nakordoni_motorhome" ? "v2" : null;
+}
+
+/** Prefer the executed result version while retaining the configured fallback. */
+export function resolveProviderStatus(configuredProvider, resultProvider, resultApiVersion = null) {
+  const configured = normalizeProviderId(configuredProvider);
+  const actual = normalizeProviderId(resultProvider);
+  return {
+    configuredProvider: configured,
+    provider: actual || configured,
+    apiVersion: resultApiVersion === "v2" || resultApiVersion === "v3" ? resultApiVersion : providerApiVersion(resultProvider) || providerApiVersion(configuredProvider),
+  };
+}
+
 export function normalizeDecimalInput(value, { minimum = 0, maximum = Infinity } = {}) {
   if (value == null || (typeof value === "string" && value.trim() === "")) return { present: false, valid: true, intermediate: false, value: null };
   if (typeof value === "number") return { present: true, valid: Number.isFinite(value) && value >= minimum && value <= maximum, intermediate: false, value };
@@ -157,6 +187,13 @@ export function calculateFuelPlan(distanceM, profile = {}) {
   return { distanceKm, consumption, tank, level, reserve, usable, rangeKm, totalLiters, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, invalidPrice: priceInput.present && !priceInput.valid, completeTankData, fuelLevelMode: levelMode };
 }
 
+const FUEL_VALUE_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l", "fuel_level_mode"];
+
+/** Keep card-local fuel inputs with a saved route without changing profile data. */
+export function pickFuelValues(values = {}) {
+  return Object.fromEntries(FUEL_VALUE_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(values, field)).map((field) => [field, values[field]]));
+}
+
 export function routeRecordFromResult(result, state) {
   const routeId = globalThis.crypto?.randomUUID?.() || `route-${Date.now()}`;
   return {
@@ -173,7 +210,8 @@ export function routeRecordFromResult(result, state) {
     waypoints: state.waypoints,
     warnings: result.warnings,
     metadata: result.metadata,
-    created_at: result.created_at
+    created_at: result.created_at,
+    fuel_values: pickFuelValues(state.fuelValues)
     ,route_options: result.route_options || result.metadata?.request_options || {}
   };
 }

@@ -161,7 +161,7 @@ class ProfileRouteStore:
             raise ValueError("route_id and geometry are required")
         if _contains_secret_field(record):
             raise ValueError("route record contains a forbidden credential field")
-        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "metadata", "created_at", "route_options"}
+        allowed = {"route_id", "name", "provider", "distance_m", "duration_s", "geometry", "synthetic", "profile_id", "origin", "destination", "waypoints", "warnings", "metadata", "created_at", "route_options", "fuel_values"}
         self.data["routes"][route_id] = {key: value for key, value in record.items() if key in allowed}
         await self._store.async_save(self.data)
         return route_id

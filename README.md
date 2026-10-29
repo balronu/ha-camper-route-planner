@@ -15,7 +15,7 @@ und GPX-Export.
 > ECO-Routing, Alternativen, Zeitplanung, mobile Darstellung und die
 > fahrzeugbezogene Kraftstoffplanung. Stable bleibt mit `v0.1.0` kompatibel.
 >
-> **Aktive Beta:** `v0.1.2-beta.3` ist als Pre-release für Tests verfügbar.
+> **Aktive Beta:** `v0.1.2-beta.4` ist als Pre-release für Tests verfügbar.
 > Für normale Installationen bleibt `v0.1.1` die empfohlene Stable-Version.
 
 [English version](README.en.md) · [Dokumentation](docs/)

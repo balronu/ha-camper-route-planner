@@ -1,5 +1,5 @@
 import { languageOf, t } from "./localization.js";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeServiceResponse, pickFuelValues, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
 import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
@@ -460,7 +460,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   async loadRoute(routeId) {
-    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)); this._state.routeOptions = { ...this._state.routeOptions, ...(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point)); this.render(); }
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point)); this.render(); }
     catch (error) { this._state.error = error.message || t(languageOf(this._hass), "calculationFailed"); this.render(); }
   }
 
@@ -524,17 +524,18 @@ export class CamperRoutePlannerCard extends HTMLElement {
   mapPoints() { return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point)); }
 
   providerLabel(provider, language, apiVersion = null) {
-    const key = provider === "mock" ? "providerName.mock" : provider === "nakordoni" || provider === "nakordoni_motorhome" || provider === "nakordoni_motorhome_v3" ? "providerName.nakordoni" : "providerName.unknown";
+    const normalizedProvider = normalizeProviderId(provider);
+    const key = normalizedProvider === "mock" ? "providerName.mock" : normalizedProvider === "nakordoni" ? "providerName.nakordoni" : "providerName.unknown";
     const base = t(language, key);
-    if ((provider === "nakordoni" || provider === "nakordoni_motorhome" || provider === "nakordoni_motorhome_v3") && (apiVersion === "v2" || apiVersion === "v3")) return `${base} · ${t(language, `providerApiVersion.${apiVersion}`)}`;
+    if (normalizedProvider === "nakordoni" && (apiVersion === "v2" || apiVersion === "v3")) return `${base} · ${t(language, `providerApiVersion.${apiVersion}`)}`;
     return base;
   }
 
   statusLine(profile, language) {
     const vehicle = profile?.name || t(language, "noProfiles");
     const configuredProvider = this._state.provider || this._state.result?.provider;
-    const configuredVersion = configuredProvider === "nakordoni_motorhome_v3" ? "v3" : configuredProvider === "nakordoni_motorhome" ? "v2" : null;
-    const provider = this.providerLabel(configuredProvider, language, this._state.result?.metadata?.api_version || configuredVersion);
+    const status = resolveProviderStatus(configuredProvider, this._state.result?.provider, this._state.result?.metadata?.api_version);
+    const provider = this.providerLabel(status.provider, language, status.apiVersion);
     return `${vehicle} · ${provider} · ${t(language, "manualOnly")}`;
   }
 

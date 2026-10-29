@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.2-beta.3; reproducible local bundle */
+/* Camper Route Planner Card v0.1.2-beta.4; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -14224,6 +14224,31 @@
       route_options: payload.route_options || payload.metadata?.request_options || {}
     };
   }
+  var PROVIDER_ALIASES = {
+    nakordoni: "nakordoni",
+    nakordoni_v2: "nakordoni",
+    nakordoni_v3: "nakordoni",
+    nakordoni_motorhome: "nakordoni",
+    nakordoni_motorhome_v2: "nakordoni",
+    nakordoni_motorhome_v3: "nakordoni"
+  };
+  function normalizeProviderId(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    return PROVIDER_ALIASES[raw] || raw;
+  }
+  function providerApiVersion(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    return raw.endsWith("_v3") || raw === "nakordoni_v3" ? "v3" : raw.endsWith("_v2") || raw === "nakordoni_v2" || raw === "nakordoni_motorhome" ? "v2" : null;
+  }
+  function resolveProviderStatus(configuredProvider, resultProvider, resultApiVersion = null) {
+    const configured = normalizeProviderId(configuredProvider);
+    const actual = normalizeProviderId(resultProvider);
+    return {
+      configuredProvider: configured,
+      provider: actual || configured,
+      apiVersion: resultApiVersion === "v2" || resultApiVersion === "v3" ? resultApiVersion : providerApiVersion(resultProvider) || providerApiVersion(configuredProvider)
+    };
+  }
   function normalizeDecimalInput(value, { minimum = 0, maximum = Infinity } = {}) {
     if (value == null || typeof value === "string" && value.trim() === "") return { present: false, valid: true, intermediate: false, value: null };
     if (typeof value === "number") return { present: true, valid: Number.isFinite(value) && value >= minimum && value <= maximum, intermediate: false, value };
@@ -14258,6 +14283,10 @@
     const cost = totalLiters != null && priceInput.valid && priceInput.present ? totalLiters * priceInput.value : null;
     return { distanceKm, consumption, tank, level, reserve, usable, rangeKm, totalLiters, deficit, cost, sufficient: rangeKm == null || totalLiters == null ? null : rangeKm >= distanceKm, invalidTankData, invalidPrice: priceInput.present && !priceInput.valid, completeTankData, fuelLevelMode: levelMode };
   }
+  var FUEL_VALUE_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l", "fuel_level_mode"];
+  function pickFuelValues(values2 = {}) {
+    return Object.fromEntries(FUEL_VALUE_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(values2, field)).map((field) => [field, values2[field]]));
+  }
   function routeRecordFromResult(result, state) {
     const routeId = globalThis.crypto?.randomUUID?.() || `route-${Date.now()}`;
     return {
@@ -14275,6 +14304,7 @@
       warnings: result.warnings,
       metadata: result.metadata,
       created_at: result.created_at,
+      fuel_values: pickFuelValues(state.fuelValues),
       route_options: result.route_options || result.metadata?.request_options || {}
     };
   }
@@ -31577,7 +31607,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.destination = validOrEmptyWaypoint(route.destination);
         this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : [];
         this._state.profileId = route.profile_id || this._state.profileId;
-        this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
+        this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) };
         this._state.routeOptions = { ...this._state.routeOptions, ...route.route_options || route.metadata?.request_options || {} };
         this._state.result = normalizeServiceResponse(route);
         this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
@@ -31671,16 +31701,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
       return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point));
     }
     providerLabel(provider, language, apiVersion = null) {
-      const key = provider === "mock" ? "providerName.mock" : provider === "nakordoni" || provider === "nakordoni_motorhome" || provider === "nakordoni_motorhome_v3" ? "providerName.nakordoni" : "providerName.unknown";
+      const normalizedProvider = normalizeProviderId(provider);
+      const key = normalizedProvider === "mock" ? "providerName.mock" : normalizedProvider === "nakordoni" ? "providerName.nakordoni" : "providerName.unknown";
       const base = t(language, key);
-      if ((provider === "nakordoni" || provider === "nakordoni_motorhome" || provider === "nakordoni_motorhome_v3") && (apiVersion === "v2" || apiVersion === "v3")) return `${base} \xB7 ${t(language, `providerApiVersion.${apiVersion}`)}`;
+      if (normalizedProvider === "nakordoni" && (apiVersion === "v2" || apiVersion === "v3")) return `${base} \xB7 ${t(language, `providerApiVersion.${apiVersion}`)}`;
       return base;
     }
     statusLine(profile, language) {
       const vehicle = profile?.name || t(language, "noProfiles");
       const configuredProvider = this._state.provider || this._state.result?.provider;
-      const configuredVersion = configuredProvider === "nakordoni_motorhome_v3" ? "v3" : configuredProvider === "nakordoni_motorhome" ? "v2" : null;
-      const provider = this.providerLabel(configuredProvider, language, this._state.result?.metadata?.api_version || configuredVersion);
+      const status = resolveProviderStatus(configuredProvider, this._state.result?.provider, this._state.result?.metadata?.api_version);
+      const provider = this.providerLabel(status.provider, language, status.apiVersion);
       return `${vehicle} \xB7 ${provider} \xB7 ${t(language, "manualOnly")}`;
     }
     handleCardToggle(details) {
