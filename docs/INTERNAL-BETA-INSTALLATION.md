@@ -1,7 +1,8 @@
-# Interne Beta `v0.1.2-beta.5` – Installationsplan für VM 104
+# Archivierter Installationsplan: Beta `v0.1.2-beta.5`
 
-**Status: NICHT AUSGEFÜHRT.** Dieser Ablauf ist nur für eine spätere,
-gesondert freigegebene Sitzung bestimmt.
+**Status: HISTORISCH, NICHT AUSGEFÜHRT.** Stable `v0.1.2` ist veröffentlicht;
+dieser Ablauf bleibt ausschließlich als unverbindlicher Beta-Testnachweis
+erhalten. Er ist keine Installationsanweisung für VM 104.
 
 1. HA-Version und freien Zustand read-only prüfen; bestehende Sicherungen nicht
    verändern und kein zusätzliches Backup ohne Auftrag erstellen.
