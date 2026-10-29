@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.2-beta.4";
+const bundleVersion = "0.1.2-beta.5";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
@@ -99,9 +99,27 @@ await desktop.locator('input[data-fuel-field="fuel_level_l"]').fill("40");
 assert.equal(await desktop.locator('input[data-fuel-field="reserve_l"]').count(), 0, "legacy reserve is not editable in the fuel section");
 const priceInput = desktop.locator('input[data-fuel-field="diesel_price_per_l"]');
 await priceInput.scrollIntoViewIfNeeded();
-await priceInput.fill("2,16");
+await priceInput.fill("");
+await priceInput.focus();
+await priceInput.evaluate((input) => { window.__fuelPriceInput = input; });
+for (const character of "2,16") {
+  await desktop.keyboard.type(character);
+  assert.equal(await priceInput.evaluate((input) => input === input.getRootNode().activeElement), true, `diesel price keeps focus after ${character}`);
+  assert.equal(await priceInput.evaluate((input) => input === window.__fuelPriceInput), true, `diesel price keeps its DOM node after ${character}`);
+}
+assert.equal(await priceInput.inputValue(), "2,16", "all diesel price characters are retained without a second click");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "fuel edits do not call the route service");
 assert.deepEqual(await desktop.evaluate(() => JSON.parse(localStorage.getItem("camper-route-planner:fuel:test-entry:test"))), { fuel_level_l: "40", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" }, "fuel edits persist in the vehicle-scoped local store");
+const coordinateInput = desktop.locator('input[data-point="origin"][data-field="latitude"]');
+await coordinateInput.fill("");
+await coordinateInput.focus();
+await coordinateInput.evaluate((input) => { window.__originLatitudeInput = input; });
+for (const character of "49") {
+  await desktop.keyboard.type(character);
+  assert.equal(await coordinateInput.evaluate((input) => input === input.getRootNode().activeElement), true, `coordinate keeps focus after ${character}`);
+  assert.equal(await coordinateInput.evaluate((input) => input === window.__originLatitudeInput), true, `coordinate keeps its DOM node after ${character}`);
+}
+assert.equal(await coordinateInput.inputValue(), "49", "coordinate input retains sequential keyboard input");
 await desktop.locator("select[data-fuel-mode]").selectOption("percent");
 assert.equal(await desktop.locator('input[data-fuel-field="fuel_level_pct"]').inputValue(), "40", "switching to percent converts the active value");
 await desktop.locator("select[data-fuel-mode]").selectOption("liters");
