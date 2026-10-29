@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -14,6 +14,11 @@ test("coordinates and waypoint ordering are validated deterministically", () => 
   assert.equal(points.length, 1);
   assert.deepEqual(moveWaypoint([{ id: 1 }, { id: 2 }], 1, -1), [{ id: 2 }, { id: 1 }]);
   assert.deepEqual(removeWaypoint([{ id: 1 }, { id: 2 }], 0), [{ id: 2 }]);
+});
+
+test("invalid saved coordinates are cleared instead of becoming route inputs", () => {
+  assert.deepEqual(validOrEmptyWaypoint({ latitude: 0, longitude: 0, label: "Gondifelos" }), { latitude: "", longitude: "", label: "Gondifelos" });
+  assert.deepEqual(validOrEmptyWaypoint({ latitude: 41.4, longitude: -8.6 }), { latitude: 41.4, longitude: -8.6 });
 });
 
 test("formatters and service response normalization handle mock data", () => {
@@ -118,6 +123,14 @@ test("fuel planning exposes additional demand without changing the formulas", ()
   assert.equal(portugal.invalidTankData, false);
   assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100, fuel_level_l: 10 }).deficit, 0);
   assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100 }).deficit, null);
+});
+
+test("fuel planning keeps profile values when local editor fields are still empty", () => {
+  const profile = { tank_capacity_l: 90, fuel_level_l: 90, consumption_l_per_100km: 10.5, diesel_price_per_l: 2.16 };
+  const localEditor = { fuel_level_l: "", fuel_level_pct: "", diesel_price_per_l: "", fuel_level_mode: "liters" };
+  const entered = Object.fromEntries(Object.entries(localEditor).filter(([, value]) => value !== "" && value != null));
+  const plan = calculateFuelPlan(2474700, { ...profile, ...entered });
+  assert.equal(Math.round(plan.cost * 100) / 100, 561.26);
 });
 
 test("German and English labels are available", () => {

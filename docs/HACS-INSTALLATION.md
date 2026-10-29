@@ -14,7 +14,7 @@ Beta-Releases bleiben als Entwicklungsnachweis bestehen und müssen nicht
 gelöscht werden. Die Dokumentations- und
 Issue-URLs im Manifest zeigen auf das Repository.
 
-Die Beta `v0.1.2-beta.2` ist ein separates Pre-Release und wird nicht
+Die Beta `v0.1.2-beta.3` ist ein separates Pre-Release und wird nicht
 automatisch für bestehende Stable-/v2-Config-Entries ausgewählt. Für den
 Beta-Test muss der Provider ausdrücklich auf `Nakordoni v3 (Beta)` gestellt
 werden; die Stable-Auswahl bleibt v2.

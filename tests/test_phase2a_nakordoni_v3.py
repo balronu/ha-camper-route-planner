@@ -139,6 +139,25 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
         self.assertIsNotNone(options["arrive_at"])
         self.assertIsNone(options["depart_at"])
 
+    def test_v3_normalizes_toll_total_and_infers_only_explicit_country_order(self):
+        body = payload()
+        body["data"]["route"].update({
+            "countries": ["DE", "FR", "ES", "PT"],
+            "tolls": {"total_eur": 42.5, "currency": "EUR", "complete": False, "by_country": [{"country": "DE", "amount": 0, "system": "none"}]},
+        })
+        result = NakordoniRouteAdapterV3().normalize_response(body, request=request())
+        self.assertEqual(result.metadata["tolls"]["total"], 42.5)
+        self.assertEqual(result.metadata["tolls"]["countries"][0]["total"], 0)
+        self.assertEqual([(item["from_country"], item["to_country"]) for item in result.metadata["border_crossings"]], [("DE", "FR"), ("FR", "ES"), ("ES", "PT")])
+        self.assertEqual(result.metadata["border_state"], "ordered_country_sequence")
+
+    def test_v3_distinguishes_missing_border_data_from_national_route(self):
+        body = payload()
+        body["data"]["route"]["countries"] = {"DE": {"km": 100}, "PT": {"km": 200}}
+        result = NakordoniRouteAdapterV3().normalize_response(body, request=request())
+        self.assertEqual(result.metadata["border_crossings"], [])
+        self.assertEqual(result.metadata["border_state"], "unordered_international")
+
     def test_motorhome_does_not_apply_truck_rest_plan(self):
         body = payload()
         body["data"]["rest_plan"] = [{"type": "daily_rest", "duration_min": 660}]
