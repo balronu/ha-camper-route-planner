@@ -1,4 +1,4 @@
-# Interne Beta – Installationsplan für VM 104
+# Interne Beta `v0.1.2-beta.1` – Installationsplan für VM 104
 
 **Status: NICHT AUSGEFÜHRT.** Dieser Ablauf ist nur für eine spätere,
 gesondert freigegebene Sitzung bestimmt.

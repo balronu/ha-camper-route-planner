@@ -13,7 +13,7 @@
     "error": { "invalid_profile": "The vehicle profile is invalid. Check its dimensions and mass.", "no_profiles_to_edit": "No vehicle profile exists to edit. Choose add or no vehicle changes.", "no_profiles_to_delete": "No vehicle profile exists to delete.", "delete_confirmation_required": "Confirm deletion of the selected vehicle.", "profile_has_routes": "This vehicle is referenced by saved routes. Explicitly enable deletion of those routes or cancel." }
   },
   "selector": {
-      "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni" } },
+    "provider": { "options": { "mock": "Mock (offline)", "nakordoni_motorhome": "Nakordoni v2 (beta baseline)", "nakordoni_motorhome_v3": "Nakordoni v3 (beta)" } },
     "vehicle_action": { "options": { "none": "No vehicle changes", "add": "Add new vehicle", "delete": "Delete a vehicle" } },
     "map_provider": { "options": { "none": "No map", "carto": "CARTO" } },
     "vehicle_kind": { "options": { "motorhome": "Motorhome", "truck": "Truck", "car": "Car" } },

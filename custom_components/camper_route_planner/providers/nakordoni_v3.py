@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
 from ..models import (
+    ProviderCapabilities,
     ProviderError,
     RouteGeometry,
     RouteRequest,
@@ -258,6 +259,14 @@ class NakordoniRouteAdapterV3:
     api_key: str | None = None
     transport: Transport | None = None
     endpoint: str = V3_ROUTE_ENDPOINT
+
+    @property
+    def name(self) -> str:
+        return PROVIDER_NAME
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(PROVIDER_NAME, True, True, True, True, "unverified")
 
     async def calculate(self, request: RouteRequest) -> RouteResult:
         parameters = build_v3_motorhome_parameters(request)

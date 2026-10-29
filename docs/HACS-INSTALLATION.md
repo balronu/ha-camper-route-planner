@@ -13,6 +13,11 @@ erkennt das reguläre Stable-Release `v0.1.1` über Tag und Manifest. Historisch
 Beta-Releases bleiben als Entwicklungsnachweis bestehen und müssen nicht
 gelöscht werden. Die Dokumentations- und
 Issue-URLs im Manifest zeigen auf das Repository.
+
+Die Beta `v0.1.2-beta.1` ist ein separates Pre-Release und wird nicht
+automatisch für bestehende Stable-/v2-Config-Entries ausgewählt. Für den
+Beta-Test muss der Provider ausdrücklich auf `Nakordoni v3 (Beta)` gestellt
+werden; die Stable-Auswahl bleibt v2.
 Die Integration liefert die Karte über einen HA-Static-Path und registriert
 die versionierte Extra-JS-URL idempotent. Bestehende Dashboards werden nicht
 verändert. Die isolierte HA-Fixture prüft HTTP 200, Bundle-Inhalt, Unload und

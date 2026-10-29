@@ -21,6 +21,25 @@ try:
             for entry in hass.config_entries.async_entries(DOMAIN)
         ]})
 
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/nakordoni_usage", vol.Required("entry_id"): str})
+    @websocket_api.async_response
+    async def ws_nakordoni_usage(hass, connection, msg) -> None:
+        """Run one admin-only, integration-owned, secret-free usage check."""
+        user = getattr(connection, "user", None)
+        if user is None or not bool(getattr(user, "is_admin", False)):
+            connection.send_error(msg["id"], "admin_required", "Administrator privileges are required")
+            return
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        if runtime is None:
+            connection.send_error(msg["id"], "not_found", "Config entry is not loaded")
+            return
+        try:
+            result = await runtime.async_nakordoni_usage()
+        except (OSError, TimeoutError, ValueError):
+            connection.send_error(msg["id"], "usage_unavailable", "Nakordoni account usage is unavailable")
+            return
+        connection.send_result(msg["id"], result)
+
     @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/list_profiles", vol.Required("entry_id"): str})
     @websocket_api.async_response
     async def ws_list_profiles(hass, connection, msg) -> None:
@@ -144,7 +163,7 @@ try:
         connection.send_result(msg["id"], {"route_id": route_id})
 
     def async_register(hass) -> None:
-        for command in (ws_list_entries, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
+        for command in (ws_list_entries, ws_nakordoni_usage, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
             websocket_api.async_register_command(hass, command)
 
 except ImportError:  # pragma: no cover - HA-only wrapper.

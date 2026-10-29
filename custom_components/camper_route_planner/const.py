@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "camper_route_planner"
 NAME: Final = "Camper Route Planner"
-VERSION: Final = "0.1.1"
+VERSION: Final = "0.1.2-beta.1"
 
 CONF_PROVIDER: Final = "provider"
 CONF_API_KEY: Final = "api_key"
@@ -24,6 +24,7 @@ CONF_VEHICLE_ACTION: Final = "vehicle_action"
 PROVIDER_MOCK: Final = "mock"
 PROVIDER_NAKORDONI: Final = "nakordoni"
 PROVIDER_NAKORDONI_MOTORHOME: Final = "nakordoni_motorhome"
+PROVIDER_NAKORDONI_MOTORHOME_V3: Final = "nakordoni_motorhome_v3"
 VEHICLE_ACTION_NONE: Final = "none"
 VEHICLE_ACTION_EDIT: Final = "edit"
 VEHICLE_ACTION_ADD: Final = "add"
