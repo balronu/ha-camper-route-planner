@@ -1,10 +1,11 @@
 import asyncio
 import unittest
 
-from custom_components.camper_route_planner.const import CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME
+from custom_components.camper_route_planner.const import CONF_PROVIDER, PROVIDER_MOCK, PROVIDER_NAKORDONI_MOTORHOME, PROVIDER_NAKORDONI_MOTORHOME_V3
 from custom_components.camper_route_planner.models import ProviderError, RouteRequest, RouteWaypoint, VehicleProfile
 from custom_components.camper_route_planner.providers.mock import MockRoutingProvider
-from custom_components.camper_route_planner.providers.nakordoni_motorhome import NakordoniMotorhomeProvider
+from custom_components.camper_route_planner.providers.nakordoni_motorhome import ROUTE_ENDPOINT, NakordoniMotorhomeProvider
+from custom_components.camper_route_planner.providers.nakordoni_v3 import NakordoniRouteAdapterV3
 from custom_components.camper_route_planner.runtime import build_routing_provider
 
 
@@ -30,6 +31,13 @@ class Phase4AProviderRuntimeTests(unittest.TestCase):
         provider = build_routing_provider({CONF_PROVIDER: PROVIDER_MOCK, "api_key": "K" * 24} | {CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME})
         self.assertIsInstance(provider, NakordoniMotorhomeProvider)
         self.assertNotIsInstance(provider, MockRoutingProvider)
+
+    def test_explicit_v2_and_v3_select_distinct_endpoints(self):
+        v2 = build_routing_provider({CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME, "api_key": "K" * 24})
+        v3 = build_routing_provider({CONF_PROVIDER: PROVIDER_NAKORDONI_MOTORHOME_V3, "api_key": "K" * 24})
+        self.assertEqual(ROUTE_ENDPOINT, "https://nakordoni.eu/api/v2/data/truck-route")
+        self.assertIsInstance(v3, NakordoniRouteAdapterV3)
+        self.assertEqual(v3.endpoint, "https://nakordoni.eu/api/v3/data/truck-route")
 
     def test_provider_change_and_immediate_route_use_new_adapter(self):
         old = build_routing_provider({CONF_PROVIDER: PROVIDER_MOCK})

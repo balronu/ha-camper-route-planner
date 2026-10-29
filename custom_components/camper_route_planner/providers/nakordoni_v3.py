@@ -1,8 +1,7 @@
 """Offline-only NaKordoni Truck Route API v3 adapter.
 
-This module is deliberately not registered in the Home Assistant runtime in
-phase 2A.  It has its own request and response contract so changing v3 cannot
-silently change the existing v2 provider.
+This module is explicitly selected by the beta provider option. It has its own
+request and response contract so changing v3 cannot silently change v2.
 """
 
 from __future__ import annotations
@@ -254,7 +253,7 @@ class NakordoniRouteAdapterV2:
 
 @dataclass(slots=True)
 class NakordoniRouteAdapterV3:
-    """Strict, injectable v3 adapter; never registered in Phase 2A runtime."""
+    """Strict v3 adapter selected only by the explicit beta provider option."""
 
     api_key: str | None = None
     transport: Transport | None = None

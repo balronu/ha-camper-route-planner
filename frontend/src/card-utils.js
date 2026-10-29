@@ -12,6 +12,42 @@ export function normalizeConfig(config = {}) {
   return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
 }
 
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/;
+const OFFSET_DATE_TIME = /(?:Z|[+-]\d{2}:\d{2})$/;
+const padDatePart = (value) => String(value).padStart(2, "0");
+
+/** Convert a datetime-local wall-clock value in the browser timezone to ISO-8601. */
+export function localDateTimeToIso(value, makeDate = (raw) => new Date(raw)) {
+  if (value == null || String(value).trim() === "") return "";
+  const raw = String(value).trim();
+  if (OFFSET_DATE_TIME.test(raw)) {
+    const explicit = new Date(raw);
+    return Number.isNaN(explicit.getTime()) ? null : raw;
+  }
+  const match = raw.match(LOCAL_DATE_TIME);
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  const date = makeDate(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  // Date normalizes nonexistent spring-forward times; reject that shift.
+  if (date.getFullYear() !== Number(year) || date.getMonth() + 1 !== Number(month) || date.getDate() !== Number(day) || date.getHours() !== Number(hour) || date.getMinutes() !== Number(minute) || date.getSeconds() !== Number(second)) return null;
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offset = `${sign}${padDatePart(Math.floor(absoluteOffset / 60))}:${padDatePart(absoluteOffset % 60)}`;
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+}
+
+/** Render an explicit-offset value back into the browser datetime-local input. */
+export function isoDateTimeToLocalInput(value) {
+  if (value == null || String(value).trim() === "") return "";
+  const raw = String(value).trim();
+  if (!OFFSET_DATE_TIME.test(raw)) return raw.slice(0, 16);
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+}
+
 export function selectConfigEntry(config = {}, entries = []) {
   const explicit = String(config.entry_id || "");
   const normalized = (Array.isArray(entries) ? entries : []).filter((entry) => entry && entry.entry_id).map((entry) => ({

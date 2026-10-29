@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, selectConfigEntry } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -22,6 +22,20 @@ test("formatters and service response normalization handle mock data", () => {
   const result = normalizeServiceResponse({ response: { provider: "mock", distance_m: 12000, duration_s: 3660, warnings: ["synthetic"], synthetic: true } });
   assert.equal(result.synthetic, true);
   assert.deepEqual(result.warnings, ["synthetic"]);
+});
+
+test("datetime-local values become explicit offsets without changing the selected wall clock", () => {
+  const normalized = localDateTimeToIso("2026-11-08T12:04");
+  assert.match(normalized, /^2026-11-08T12:04:00[+-]\d{2}:\d{2}$/);
+  assert.equal(localDateTimeToIso("2026-07-08T12:04:00+02:00"), "2026-07-08T12:04:00+02:00");
+  assert.equal(localDateTimeToIso(""), "");
+  assert.equal(localDateTimeToIso("2026-11-08 12:04"), null);
+});
+
+test("stored explicit-offset times render back in the browser input format", () => {
+  assert.match(isoDateTimeToLocalInput("2026-11-08T12:04:00+01:00"), /^2026-11-08T\d{2}:\d{2}$/);
+  assert.equal(isoDateTimeToLocalInput("2026-11-08T12:04"), "2026-11-08T12:04");
+  assert.equal(isoDateTimeToLocalInput(""), "");
 });
 
 test("fuel planning keeps total demand separate from optional tank calculations", () => {
