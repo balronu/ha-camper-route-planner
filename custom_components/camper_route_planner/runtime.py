@@ -11,7 +11,7 @@ from .models import ProviderError, RouteRequest, RouteWaypoint
 from .map_provider import build_map_config
 from .providers.mock import MockRoutingProvider
 from .providers.nakordoni import NakordoniRoutingProvider
-from .providers.nakordoni_motorhome import NakordoniMotorhomeProvider
+from .providers.nakordoni_motorhome import ROUTE_ENDPOINT, NakordoniMotorhomeProvider
 from .providers.nakordoni_v3 import NakordoniRouteAdapterV3, V3_ROUTE_ENDPOINT
 from .providers.usage import normalize_usage
 from .storage import ProfileRouteStore
@@ -144,4 +144,68 @@ class RuntimeData:
             "route_options": result.metadata.get("request_options", {}),
             "beta": result.metadata.get("beta", False), "attribution_url": result.metadata.get("attribution_url"),
             "created_at": result.created_at.isoformat() if result.created_at else None,
+        }
+
+    async def async_estimate_tolls_v2(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Explicitly calculate a separate v2 toll estimate for a v3 result."""
+        current = data.get("current_result") if isinstance(data.get("current_result"), dict) else {}
+        metadata = current.get("metadata") if isinstance(current.get("metadata"), dict) else {}
+        if self.config_values.get(CONF_PROVIDER) != PROVIDER_NAKORDONI_MOTORHOME_V3 or metadata.get("api_version") != "v3":
+            raise ValueError("v2 toll estimates require an executed v3 route")
+        tolls = metadata.get("tolls") if isinstance(metadata.get("tolls"), dict) else {}
+        if tolls.get("complete") is not False:
+            raise ValueError("a v2 estimate is only offered when v3 toll data is incomplete")
+        profiles = {profile.profile_id: profile for profile in self.store.profiles()}
+        profile = profiles.get(data.get("profile_id"))
+        if profile is None:
+            raise ValueError("unknown vehicle profile")
+
+        def _time(name: str):
+            raw = data.get(name)
+            if not raw:
+                return None
+            value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if value.tzinfo is None:
+                raise ValueError(f"{name} must include a timezone")
+            return value
+
+        avoid = data.get("avoid", [])
+        if isinstance(avoid, str):
+            avoid = [item.strip() for item in avoid.split(",") if item.strip()]
+        request = RouteRequest(
+            RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile,
+            tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])),
+            alternatives=int(data.get("alternatives", 0)), traffic=data.get("traffic", "off"),
+            depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
+            arrive_at=_time("arrive_at"),
+        )
+        configured = self.coordinator.provider
+        transport = getattr(configured, "transport", None)
+        if transport is None or not getattr(configured, "api_key", None):
+            raise ValueError("Nakordoni API key is not configured")
+        from dataclasses import replace
+        v2_transport = replace(transport, endpoint=ROUTE_ENDPOINT)
+        estimate = await NakordoniMotorhomeProvider(
+            api_key=configured.api_key, live_enabled=True, transport=v2_transport
+        ).calculate(request)
+        v2_tolls = estimate.metadata.get("tolls")
+        if not isinstance(v2_tolls, dict):
+            raise ValueError("v2 returned no toll data")
+        distance = current.get("distance_m")
+        duration = current.get("duration_s")
+        comparable = (
+            isinstance(distance, (int, float)) and isinstance(duration, (int, float))
+            and abs(float(distance) - estimate.distance_m) <= max(1000.0, float(distance) * 0.01)
+            and abs(float(duration) - estimate.duration_s) <= max(300.0, float(duration) * 0.05)
+        )
+        return {
+            "api_version": "v2",
+            "provider": estimate.provider,
+            "tolls": v2_tolls,
+            "route_distance_m": estimate.distance_m,
+            "route_duration_s": estimate.duration_s,
+            "comparable_route": comparable,
+            "note": "Separate v2 estimate; it is not merged into the v3 route result.",
+            "routing_source": estimate.metadata.get("routing_source"),
+            "transport": estimate.metadata.get("transport", {}),
         }

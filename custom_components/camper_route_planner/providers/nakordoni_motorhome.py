@@ -341,6 +341,8 @@ class NakordoniMotorhomeProvider:
                 "emission_class_returned": vehicle.get("emission_class"),
                 "tariff_basis_uncertain": not bool(vehicle.get("emission_class")),
                 "attribution": data.get("attribution", ["Data by nakordoni.eu"]),
+                "routing_source": (payload.get("headers") or {}).get("X-Route-Source") or (payload.get("headers") or {}).get("x-route-source"),
+                "transport": payload.get("transport", {}),
             }
             return RouteResult(PROVIDER_NAME, float(route["distance_m"]), int(route["duration_s"]), RouteGeometry(points), warnings, metadata, synthetic)
         except (KeyError, TypeError, ValueError, IndexError) as exc:
@@ -365,6 +367,9 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
         retryable = True
     else:
         retryable = False
-    reset_at = error.get("reset_at") or payload.get("headers", {}).get("X-Devapi-Reset") if isinstance(payload.get("headers"), dict) else error.get("reset_at")
-    suffix = f" Reset: {reset_at}." if reset_at else ""
+    headers = payload.get("headers") if isinstance(payload.get("headers"), dict) else {}
+    reset_at = error.get("reset_at") or headers.get("X-Devapi-Reset") or headers.get("x-devapi-reset")
+    retry_after = error.get("retry_after") or headers.get("Retry-After") or headers.get("retry-after")
+    suffix = f" Retry nach {retry_after} s." if retry_after else ""
+    suffix += f" Reset: {reset_at}." if reset_at else ""
     return ProviderError(messages.get(code, str(error.get("message", "Nakordoni request failed"))) + suffix, code=code, status=status, retryable=retryable)

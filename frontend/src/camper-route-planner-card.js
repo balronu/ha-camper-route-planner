@@ -1,6 +1,6 @@
 import { languageOf, t } from "./localization.js";
 import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeServiceResponse, pickFuelValues, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
-import { callWebsocket, calculateRoute, deliverGpxExport, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
+import { callWebsocket, calculateRoute, deliverGpxExport, estimateTollsV2, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "./toll-display.js";
@@ -75,7 +75,11 @@ function renderTollDetails(result, translate, language) {
   const tariffNotice = result?.metadata?.tariff_basis_uncertain ? `<p class="subtle">${translate("tariffBasisUncertain")}</p>` : "";
   const knownNotes = knownHints.length ? `<div class="toll-known-notes"><b>${translate("tollNotes")}</b><ul>${knownHints.map((hint) => `<li>${escapeHtml(hint.text)}${hint.original ? ` <span class="subtle">(${escapeHtml(hint.original)})</span>` : ""}</li>`).join("")}</ul></div>` : "";
   const technicalNotes = unknownTexts.length ? `<details class="provider-details"><summary>${translate("tollTechnicalInfo")}</summary><ul>${[...new Set(unknownTexts)].map((note) => `<li lang="en">${escapeHtml(note)}</li>`).join("")}</ul></details>` : "";
-  return `<section class="route-details toll-details"><h3>${translate("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>`;
+  const estimate = result?.metadata?.toll_estimate_v2;
+  const estimateTolls = estimate?.tolls;
+  const estimateTotal = estimateTolls?.total != null ? formatTollAmount(estimateTolls.total, estimateTolls.currency || "EUR", language) : translate("tollUnavailable");
+  const estimateSection = estimate ? `<section class="route-details toll-details"><h3>${translate("tollV2Estimate")}</h3><div class="toll-total">${escapeHtml(estimateTotal)} <span class="subtle">(${translate("tollEstimate")})</span></div><p class="subtle">${translate(estimate.comparable_route ? "tollV2Comparable" : "tollV2NotComparable")}</p><p class="subtle">${translate("tollV2Separate")}</p></section>` : "";
+  return `<section class="route-details toll-details"><h3>${translate("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>${estimateSection}`;
 }
 
 function renderRestrictions(result, translate) {
@@ -304,6 +308,22 @@ export class CamperRoutePlannerCard extends HTMLElement {
       this._state.resultStale = false;
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
     } catch (error) { this._state.error = error.message || t(language, "calculationFailed"); }
+    this._state.busy = false; this.render();
+  }
+
+  async estimateTollsV2() {
+    const result = this._state.result;
+    if (!result || this._state.busy || result.metadata?.api_version !== "v3" || result.metadata?.tolls?.complete !== false) return;
+    const language = languageOf(this._hass);
+    this._state.busy = true; this._state.error = ""; this.render();
+    try {
+      const response = await estimateTollsV2(this._hass, {
+        entry_id: this._config.entry_id, profile_id: this._state.profileId,
+        origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints,
+        current_result: result, ...this._state.routeOptions,
+      });
+      this._state.result.metadata = { ...this._state.result.metadata, toll_estimate_v2: response };
+    } catch (error) { this._state.error = error.message || t(language, "tollV2Unavailable"); }
     this._state.busy = false; this.render();
   }
 
@@ -709,6 +729,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
       const resultPanel = this.shadowRoot.querySelector(".result");
       resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
       resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate, language)}`);
+      if (result.metadata?.api_version === "v3" && result.metadata?.tolls?.complete === false && !result.metadata?.toll_estimate_v2) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.action = "estimate-tolls-v2";
+        button.disabled = this._state.busy;
+        button.textContent = translate("requestV2TollEstimate");
+        resultPanel?.querySelector(".toll-details")?.append(button);
+      }
     }
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") };
@@ -753,7 +781,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }));
     this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index), Number(button.dataset.slot ?? this._state.searchSlot))));
     this.shadowRoot.querySelector("input[data-field=routeName]")?.addEventListener("change", (event) => { this._state.routeName = event.target.value; });
-    this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => { const action = button.dataset.action; const index = Number(button.dataset.index); if (action === "calculate") this.calculate(); if (action === "calculate-force") this.calculate(true); if (action === "save") this.saveCurrent(); if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId)); if (action === "pdf") this.exportPdf(button.dataset.routeId ? this._state.routes.find((route) => route.route_id === button.dataset.routeId) : null); if (action === "navigation") this.openNavigation(); if (action === "add") { this._state.waypoints = addWaypoint(this._state.waypoints); this._fitMapOnNextRender = true; this.render(); } if (action === "remove") { this._state.waypoints = removeWaypoint(this._state.waypoints, index); this._fitMapOnNextRender = true; this.render(); } if (action === "up") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1); this._fitMapOnNextRender = true; this.render(); } if (action === "down") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1); this._fitMapOnNextRender = true; this.render(); } if (action === "load") this.loadRoute(button.dataset.routeId); if (action === "delete") this.deleteRoute(button.dataset.routeId); }));
+    this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => { const action = button.dataset.action; const index = Number(button.dataset.index); if (action === "calculate") this.calculate(); if (action === "calculate-force") this.calculate(true); if (action === "estimate-tolls-v2") this.estimateTollsV2(); if (action === "save") this.saveCurrent(); if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId)); if (action === "pdf") this.exportPdf(button.dataset.routeId ? this._state.routes.find((route) => route.route_id === button.dataset.routeId) : null); if (action === "navigation") this.openNavigation(); if (action === "add") { this._state.waypoints = addWaypoint(this._state.waypoints); this._fitMapOnNextRender = true; this.render(); } if (action === "remove") { this._state.waypoints = removeWaypoint(this._state.waypoints, index); this._fitMapOnNextRender = true; this.render(); } if (action === "up") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1); this._fitMapOnNextRender = true; this.render(); } if (action === "down") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1); this._fitMapOnNextRender = true; this.render(); } if (action === "load") this.loadRoute(button.dataset.routeId); if (action === "delete") this.deleteRoute(button.dataset.routeId); }));
   }
 }
 
