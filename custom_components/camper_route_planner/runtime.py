@@ -128,6 +128,10 @@ class RuntimeData:
         self._request_diagnostic_token = token
         return token
 
+    def disarm_request_diagnostics(self) -> None:
+        """Revoke an armed request diagnostic without retaining request data."""
+        self._request_diagnostic_token = None
+
     def _consume_request_diagnostics(self, token: Any) -> bool:
         """Consume the arm before any await so parallel calls cannot reuse it."""
         if not isinstance(token, str) or not secrets.compare_digest(token, self._request_diagnostic_token or ""):
