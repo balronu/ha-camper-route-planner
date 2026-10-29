@@ -1,5 +1,5 @@
 import { languageOf, t } from "./localization.js";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeServiceResponse, pickFuelValues, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
 import { armRequestDiagnostics, callWebsocket, calculateRoute, deliverGpxExport, estimateTollsV2, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
@@ -300,7 +300,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._state.busy = true; this._state.error = ""; this.render();
     try {
       if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
-      const routeOptions = { ...this._state.routeOptions };
+      const routeOptions = normalizeRouteOptions(this._state.routeOptions);
       for (const field of ["depart_at", "arrive_at"]) {
         if (routeOptions[field]) {
           const normalized = localDateTimeToIso(routeOptions[field]);
@@ -308,12 +308,13 @@ export class CamperRoutePlannerCard extends HTMLElement {
           routeOptions[field] = normalized;
         }
       }
-      const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...routeOptions });
+      const requestOptions = Object.fromEntries(Object.entries(routeOptions).filter(([field, value]) => !["depart_at", "arrive_at"].includes(field) || value));
+      const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...requestOptions });
       this._state.result = normalizeServiceResponse(payload);
       this._state.requestDiagnosticsArmed = false;
       this._state.resultStale = false;
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
-    } catch (error) { this._state.error = error.message || t(language, "calculationFailed"); }
+    } catch (error) { this._state.error = error.message || t(language, "calculationFailed"); this._state.resultStale = Boolean(this._state.result); }
     this._state.busy = false; this.render();
   }
 
@@ -526,7 +527,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   async loadRoute(routeId) {
-    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
       // A loaded route is authoritative for every coordinate. Prevent the
       // current DOM values from being captured as drafts by render() before
       // the newly loaded inputs are restored; this is especially important

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeProviderId, normalizeServiceResponse, pickFuelValues, providerApiVersion, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -19,6 +19,12 @@ test("coordinates and waypoint ordering are validated deterministically", () => 
 test("invalid saved coordinates are cleared instead of becoming route inputs", () => {
   assert.deepEqual(validOrEmptyWaypoint({ latitude: 0, longitude: 0, label: "Gondifelos" }), { latitude: "", longitude: "", label: "Gondifelos" });
   assert.deepEqual(validOrEmptyWaypoint({ latitude: 41.4, longitude: -8.6 }), { latitude: 41.4, longitude: -8.6 });
+});
+
+test("optional route times omit null values but preserve valid values", () => {
+  assert.deepEqual(normalizeRouteOptions({ depart_at: null, arrive_at: null }), { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" });
+  assert.equal(normalizeRouteOptions({ depart_at: "2026-10-29T08:00:00+02:00" }).depart_at, "2026-10-29T08:00:00+02:00");
+  assert.equal(normalizeServiceResponse({ route_options: { depart_at: null } }).route_options.depart_at, "");
 });
 
 test("formatters and service response normalization handle mock data", () => {
