@@ -15,6 +15,17 @@ historische Beta.5 muss in HACS ausdrücklich als Pre-release ausgewählt werden
 Dokumentations- und
 Issue-URLs im Manifest zeigen auf das Repository.
 
+Der offizielle HACS-Integrationskatalog enthält das Repository zum Prüfzeitpunkt
+noch nicht. Der Aufnahme-PR
+[#12938](https://github.com/hacs/default/pull/12938) ist offen und blockiert;
+seine sichtbaren Katalogprüfungen sind erfolgreich. Eine Aufnahme darf daher
+nicht als abgeschlossen behauptet werden. Bis zur Entscheidung des HACS-
+Maintainerteams wird die Installation als Custom Repository dokumentiert.
+
+Stable-Updates werden über den regulären Tag `v0.1.5` und spätere Stable-Tags
+erkannt. Pre-releases sind eine separate Auswahl und werden nicht automatisch
+als Stable installiert.
+
 v2 und v3 sind getrennte auswählbare NaKordoni-Pfade. v3 bleibt für
 Wohnmobile eine Beta-Schnittstelle; unvollständige Mautabdeckung wird mit
 `complete=false` und Providerhinweisen angezeigt. V2-Schätzwerte werden nicht

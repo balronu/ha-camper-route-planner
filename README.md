@@ -12,7 +12,8 @@ und GPX-Export.
 > automatische Fallbacks.
 >
 > `v0.1.5` enthält die Stable-Korrekturen und die optionale
-> Entwicklerdiagnose. Stable `v0.1.3` erweitert die Wohnmobil-Routenplanung,
+> Entwicklerdiagnose. Die vorherige Stable `v0.1.3` erweiterte die
+> Wohnmobil-Routenplanung,
 > Verkehrs- und Routenoptionen,
 > ECO-Routing, Alternativen, Zeitplanung, mobile Darstellung und die
 > fahrzeugbezogene Kraftstoffplanung. Stable bleibt mit `v0.1.1` und `v0.1.0`
@@ -165,7 +166,7 @@ Jeder Nutzer verwendet seinen eigenen Zugang und sein eigenes Routing-
 Kontingent. Die Surface-Registrierung im Nakordoni-Dashboard ist vorbereitet,
 aber nicht in einem fremden Account durchgeführt.
 
-Details: [Stable-Release](docs/releases/v0.1.3.md), [Beta-5-Notes](docs/releases/v0.1.4-beta.5.md), [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
+Details: [Stable-Release](docs/releases/v0.1.5.md), [Fehlerbehebung](docs/TROUBLESHOOTING.md), [Beta-5-Notes](docs/releases/v0.1.4-beta.5.md), [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
 [API-Audit](docs/NAKORDONI-API-AUDIT.md),
 [Phase-2F-bis-2I-Plan](docs/PHASE2F-2I-PLAN.md).
 

@@ -2,6 +2,13 @@
 
 Stand: 16.10.2026. Quellen: [Truck Route API](https://nakordoni.eu/en/developers/truck-route), [Referenz](https://nakordoni.eu/de/developers/docs/truck-route), [API-Dokumentation](https://nakordoni.eu/en/developers/docs), [Changelog](https://nakordoni.eu/en/developers/changelog), [Developer API Terms](https://nakordoni.eu/en/p/developer_api_terms).
 
+> **Historischer Planungsstand:** Dieser Audit hält die damalige API- und
+> Freigabesituation fest. Für das aktuelle Verhalten von Stable `v0.1.5` sind
+> die [Stable-Notes](releases/v0.1.5.md), die
+> [HACS-Anleitung](HACS-INSTALLATION.md) und der aktuelle Quellcode maßgeblich.
+> Die historischen Aussagen „docs-only“ und „noch nicht implementiert“ sind
+> nicht als aktuelle Produktbeschreibung zu lesen.
+
 ## Dokumentierte Fakten
 
 | Bereich | Ergebnis |

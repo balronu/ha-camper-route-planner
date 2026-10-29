@@ -10,7 +10,7 @@ profiles, an interactive map, saved routes, and GPX export.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 >
 > `v0.1.5` contains the Stable corrections and optional developer
-> diagnostics. Stable `v0.1.3` extends motorhome route planning, traffic and
+> diagnostics. Previous Stable `v0.1.3` extended motorhome route planning, traffic and
 > route options, ECO
 > routing, alternatives, time planning, mobile presentation, and vehicle-based
 > fuel planning. Stable remains compatible with `v0.1.1` and `v0.1.0`.
@@ -168,7 +168,7 @@ npm run build
 npm run test:e2e
 ```
 
-See the [Stable release notes](docs/releases/v0.1.5.md) and [Beta.5 notes](docs/releases/v0.1.4-beta.5.md) for installation and
+See the [Stable release notes](docs/releases/v0.1.5.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Beta.5 notes](docs/releases/v0.1.4-beta.5.md) for installation and
 test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is validated by GitHub
 Actions. Installation into productive HA systems remains an operator action.

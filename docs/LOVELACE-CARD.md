@@ -7,7 +7,7 @@ Das Bundle liegt im installierbaren Paket unter
 Die Integration liefert und lädt es über einen versionierten HA-Static-Path:
 
 ```yaml
-url: /camper_route_planner/camper-route-planner-card.js?v=0.1.1
+url: /camper_route_planner/camper-route-planner-card.js?v=0.1.5
 type: module
 ```
 
@@ -37,9 +37,37 @@ anderen Config Entry und keine produktive IP-/Entity-Hardcodierung.
 6. Mit **Route speichern** explizit persistieren; gespeicherte Routen können
    geladen oder nach Bestätigung gelöscht werden.
 
+Beim Laden einer gespeicherten Route werden Start, Ziel und alle
+Zwischenzielkoordinaten aus dem gespeicherten Datensatz übernommen. Alte
+Formularentwürfe überschreiben diese Werte nicht. `depart_at` und `arrive_at`
+sind optional: Ohne Zeitangabe werden sie nicht als `None` an das Backend
+gesendet; gespeicherte gültige Zeiten bleiben erhalten. Nach einem
+Berechnungsfehler wird ein vorhandenes Ergebnis als **veraltet** markiert und
+nicht als neue Berechnung dargestellt.
+
 Freitext-Orte und Reverse-Geocoding werden über den konfigurierten Geoapify-
 Provider und die Backend-WebSocket-Grenze angeboten. Ohne API-Key bleiben
 Koordinaten- und Karteneingabe verfügbar.
+
+## Optionale Entwicklerdiagnose
+
+Die Entwicklerdiagnose ist eine optionale Fehlersuchfunktion und keine normale
+Bedienfunktion. In den Karteneinstellungen ist **Entwicklerdiagnose anzeigen**
+standardmäßig deaktiviert. Nur ein Home-Assistant-Administrator kann sie für
+die jeweilige Karte aktivieren; die serverseitige Berechtigungsprüfung bleibt
+maßgeblich.
+
+Bei aktivierter Option kann ein Administrator genau einen Backend-
+Berechnungsversuch diagnostizieren. Die Diagnose wird nicht automatisch
+aktiviert und enthält weder API-Schlüssel noch Authentifizierungsdaten. Native
+Home-Assistant-Diagnostics geben keine Request-Koordinaten, Waypoints oder
+sonstigen sensiblen Requestdaten aus. Nach dem einmaligen Abruf werden die
+flüchtigen Diagnosedaten verworfen.
+
+**Diagnose kopieren** kopiert den bereinigten JSON-Bericht in die
+Zwischenablage. Wenn die Browser- oder Home-Assistant-App-Zwischenablage nicht
+verfügbar ist, wird ein manuell markierbarer Text-Fallback angeboten. Es gibt
+keinen automatischen Versand und keine zusätzliche Speicherung.
 ## Kartenanbieter
 
 Die Karte fragt die Kartenkonfiguration über den HA-WebSocket-Befehl
