@@ -147,7 +147,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = normalizeConfig();
-    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._cardExpanded = false;
     this._connection = null;
     this._reverseTimers = new Map();
@@ -309,12 +309,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
         }
       }
       const requestOptions = Object.fromEntries(Object.entries(routeOptions).filter(([field, value]) => !["depart_at", "arrive_at"].includes(field) || value));
-      const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...requestOptions });
+      const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...(this._state.diagnosticToken ? { diagnostic_token: this._state.diagnosticToken } : {}), ...requestOptions });
       this._state.result = normalizeServiceResponse(payload);
       this._state.requestDiagnosticsArmed = false;
+      this._state.diagnosticToken = "";
+      this._state.diagnosticCopyStatus = "";
       this._state.resultStale = false;
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
-    } catch (error) { this._state.error = error.message || t(language, "calculationFailed"); this._state.resultStale = Boolean(this._state.result); }
+    } catch (error) { this._state.requestDiagnosticsArmed = false; this._state.diagnosticToken = ""; this._state.error = error.message || t(language, "calculationFailed"); this._state.resultStale = Boolean(this._state.result); }
     this._state.busy = false; this.render();
   }
 
@@ -323,8 +325,28 @@ export class CamperRoutePlannerCard extends HTMLElement {
     try {
       const response = await armRequestDiagnostics(this._hass, { entry_id: this._config.entry_id });
       this._state.requestDiagnosticsArmed = response?.armed === true;
+      this._state.diagnosticToken = this._state.requestDiagnosticsArmed ? String(response?.diagnostic_token || "") : "";
       this._state.error = "";
     } catch (error) { this._state.error = error.message || "Request diagnostics unavailable"; }
+    this.render();
+  }
+
+  async copyRequestDiagnostic() {
+    const diagnostic = this._state.result?.request_diagnostic;
+    if (!diagnostic) return;
+    const text = JSON.stringify(diagnostic, null, 2);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard_unavailable");
+      await navigator.clipboard.writeText(text);
+      this._state.diagnosticCopyStatus = t(languageOf(this._hass), "requestDiagnosticsCopied");
+    } catch (_error) {
+      this._state.diagnosticCopyStatus = t(languageOf(this._hass), "requestDiagnosticsManualCopy");
+      this.render();
+      const field = this.shadowRoot?.querySelector("textarea[data-diagnostic-copy]");
+      field?.focus({ preventScroll: true });
+      field?.select();
+      return;
+    }
     this.render();
   }
 
@@ -717,7 +739,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const optionAnchor = this.shadowRoot.querySelector(".map-section");
     optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate("routeOptions")}</h3></summary><div class="option-grid"><label>${translate("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate("trafficMode.off")}</option><option value="live">${translate("trafficMode.live")}</option><option value="forecast">${translate("trafficMode.forecast")}</option></select></label><label>${translate("routeType")}<select data-route-option="route_type"><option value="fastest">${translate("fastest")}</option><option value="eco">${translate("eco")}</option></select></label><label>${translate("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate("avoidTunnels")}</span></label></div></details>`);
     optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate("requestDiagnosticsArmed")}</span>` : ""}</div>`);
-    if (result?.request_diagnostic) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate("requestDiagnosticsResult")}</summary><p class="subtle">${translate("requestDiagnosticsPrivacy")}</p><pre>${escapeHtml(JSON.stringify(result.request_diagnostic, null, 2))}</pre></details>`);
+    if (result?.request_diagnostic) { const diagnosticText = JSON.stringify(result.request_diagnostic, null, 2); this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate("requestDiagnosticsResult")}</summary><p class="subtle">${translate("requestDiagnosticsPrivacy")}</p><button type="button" data-action="copy-diagnostics">${translate("requestDiagnosticsCopy")}</button>${this._state.diagnosticCopyStatus ? `<p class="subtle" role="status">${escapeHtml(this._state.diagnosticCopyStatus)}</p>` : ""}<textarea data-diagnostic-copy readonly rows="10" aria-label="${translate("requestDiagnosticsResult")}">${escapeHtml(diagnosticText)}</textarea></details>`); }
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => { const key = input.dataset.routeOption; if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value); else input.value = key === "depart_at" || key === "arrive_at" ? isoDateTimeToLocalInput(this._state.routeOptions[key]) : this._state.routeOptions[key] ?? ""; });
     const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
     fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result ? renderRestrictions(result, translate) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate, language)}`);
@@ -808,7 +830,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelectorAll("button[data-action=select-search]").forEach((button) => button.addEventListener("click", () => this.selectSearchResult(button.dataset.target, Number(button.dataset.index), Number(button.dataset.slot ?? this._state.searchSlot))));
     this.shadowRoot.querySelector("input[data-field=routeName]")?.addEventListener("change", (event) => { this._state.routeName = event.target.value; });
     this.shadowRoot.querySelectorAll("button[data-action=arm-diagnostics]").forEach((button) => button.addEventListener("click", () => this.armRequestDiagnostics()));
-    this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => { const action = button.dataset.action; const index = Number(button.dataset.index); if (action === "calculate") this.calculate(); if (action === "calculate-force") this.calculate(true); if (action === "estimate-tolls-v2") this.estimateTollsV2(); if (action === "save") this.saveCurrent(); if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId)); if (action === "pdf") this.exportPdf(button.dataset.routeId ? this._state.routes.find((route) => route.route_id === button.dataset.routeId) : null); if (action === "navigation") this.openNavigation(); if (action === "add") { this._state.waypoints = addWaypoint(this._state.waypoints); this._fitMapOnNextRender = true; this.render(); } if (action === "remove") { this._state.waypoints = removeWaypoint(this._state.waypoints, index); this._fitMapOnNextRender = true; this.render(); } if (action === "up") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1); this._fitMapOnNextRender = true; this.render(); } if (action === "down") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1); this._fitMapOnNextRender = true; this.render(); } if (action === "load") this.loadRoute(button.dataset.routeId); if (action === "delete") this.deleteRoute(button.dataset.routeId); }));
+    this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => { const action = button.dataset.action; const index = Number(button.dataset.index); if (action === "calculate") this.calculate(); if (action === "calculate-force") this.calculate(true); if (action === "estimate-tolls-v2") this.estimateTollsV2(); if (action === "copy-diagnostics") this.copyRequestDiagnostic(); if (action === "save") this.saveCurrent(); if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId)); if (action === "pdf") this.exportPdf(button.dataset.routeId ? this._state.routes.find((route) => route.route_id === button.dataset.routeId) : null); if (action === "navigation") this.openNavigation(); if (action === "add") { this._state.waypoints = addWaypoint(this._state.waypoints); this._fitMapOnNextRender = true; this.render(); } if (action === "remove") { this._state.waypoints = removeWaypoint(this._state.waypoints, index); this._fitMapOnNextRender = true; this.render(); } if (action === "up") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, -1); this._fitMapOnNextRender = true; this.render(); } if (action === "down") { this._state.waypoints = moveWaypoint(this._state.waypoints, index, 1); this._fitMapOnNextRender = true; this.render(); } if (action === "load") this.loadRoute(button.dataset.routeId); if (action === "delete") this.deleteRoute(button.dataset.routeId); }));
   }
 }
 

@@ -53,8 +53,8 @@ try:
         if runtime is None:
             connection.send_error(msg["id"], "not_found", "Config entry is not loaded")
             return
-        runtime.arm_request_diagnostics()
-        connection.send_result(msg["id"], {"armed": True, "scope": "next_route_calculation"})
+        token = runtime.arm_request_diagnostics()
+        connection.send_result(msg["id"], {"armed": True, "scope": "next_route_calculation", "diagnostic_token": token})
 
     @websocket_api.websocket_command({
         vol.Required("type"): "camper_route_planner/estimate_tolls_v2",

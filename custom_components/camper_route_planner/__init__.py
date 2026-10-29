@@ -34,6 +34,7 @@ try:
         vol.Optional("route_type", default="fastest"): vol.In({"fastest", "eco"}),
         vol.Optional("depart_at"): cv.string,
         vol.Optional("arrive_at"): cv.string,
+        vol.Optional("diagnostic_token"): cv.string,
     })
 
     async def _async_register_frontend(hass: HomeAssistant) -> None:

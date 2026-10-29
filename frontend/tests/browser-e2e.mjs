@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.4-beta.3";
+const bundleVersion = "0.1.4-beta.4";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
@@ -66,12 +66,13 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
         if (message.type.endsWith("/tracker_position")) return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } };
         if (message.type.endsWith("/geocode")) { if (shouldFailGeocode) throw new Error("mock geocoding unavailable"); await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: true, results: [{ label: "Fixture address", latitude: 48.137, longitude: 11.575 }, { label: "Second fixture address", latitude: 48.138, longitude: 11.576 }] }; }
         if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: false, address: "" }; }
+        if (message.type.endsWith("/arm_request_diagnostics")) return { armed: true, diagnostic_token: "fixture-diagnostic-token" };
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
           lastServiceData = message.service_data;
           if (fixture.failCalculation) throw new Error("mock route failed");
-          return { response: { provider: "mock", synthetic: true, distance_m: fixture.distance_m ?? 1234, duration_s: 3600, warnings: [], geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] } } };
+          return { response: { provider: "mock", synthetic: true, distance_m: fixture.distance_m ?? 1234, duration_s: 3600, warnings: [], geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, ...(fixture.requestDiagnostic ? { request_diagnostic: fixture.requestDiagnostic } : {}) } };
         }
         return {};
       }
@@ -98,6 +99,17 @@ async function calculate(page) {
 const desktop = await preparePage({ width: 1280, height: 900 });
 assert.equal(await desktop.locator(".result .metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
+
+const diagnosticPage = await preparePage({ width: 900, height: 800 }, "light", null, false, false, { requestDiagnostic: { request: { coordinates: { origin: { latitude: 49, longitude: 7 } } }, response: { distance_m: 1234 } } });
+await diagnosticPage.getByRole("button", { name: /Diagnose der nächsten Anfrage|Request diagnostics/ }).click();
+await diagnosticPage.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card._state.origin = { ...card._state.origin, latitude: 49, longitude: 7 }; card._state.destination = { ...card._state.destination, latitude: 50, longitude: 8 }; return card.calculate(); });
+await diagnosticPage.locator("textarea[data-diagnostic-copy]").waitFor();
+assert.equal(await diagnosticPage.locator("button[data-action=copy-diagnostics]").count(), 1, "diagnostic copy action is rendered");
+assert.match(await diagnosticPage.locator("textarea[data-diagnostic-copy]").inputValue(), /coordinates/);
+await diagnosticPage.locator("button[data-action=copy-diagnostics]").click();
+assert.match(await diagnosticPage.locator("[role=status]").textContent(), /Clipboard unavailable|Zwischenablage nicht verfügbar|copied|kopiert/i, "copy action gives a success or safe manual-copy status");
+assert.equal((await diagnosticPage.evaluate(() => globalThis.__crp.lastServiceData.diagnostic_token)), "fixture-diagnostic-token", "diagnostic token is bound to the single calculation request");
+await diagnosticPage.close();
 await desktop.locator('input[data-fuel-field="fuel_level_l"]').fill("40");
 assert.equal(await desktop.locator('input[data-fuel-field="reserve_l"]').count(), 0, "legacy reserve is not editable in the fuel section");
 const priceInput = desktop.locator('input[data-fuel-field="diesel_price_per_l"]');
