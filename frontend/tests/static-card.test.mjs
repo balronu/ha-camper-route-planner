@@ -100,6 +100,16 @@ test("card renders route-provided border crossings and toll details without brow
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest\(/);
 });
 
+test("border crossings localize ISO directions and omit empty metadata", () => {
+  assert.match(source, /map\(\(country\) => tollCountryName\(country, language\)\)/);
+  assert.match(source, /borderConfirmed/);
+  assert.match(source, /borderDetected/);
+  assert.match(source, /const detailFields = \[/);
+  assert.match(source, /crossing\.wait_at \?/);
+  assert.match(source, /source \? `\$\{translate\("borderSource"\)\}/);
+  assert.doesNotMatch(source, /borderDataAt\).*crossing\.wait_at \|\| "—"/);
+});
+
 test("fuel inputs are local, vehicle-scoped, and do not trigger routing", () => {
   assert.match(source, /camper-route-planner:fuel:/);
   assert.match(source, /profile\.profile_id/);

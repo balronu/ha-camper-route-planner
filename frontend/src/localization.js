@@ -45,6 +45,10 @@ TRANSLATIONS.en.providerNetworkAverage = "Average network price; the actual sect
 TRANSLATIONS.en.tollSourceApiV2 = "Source: NaKordoni API v2 – separate toll estimate, not binding.";
 TRANSLATIONS.en.tollSourceApiV3 = "Source: NaKordoni API v3";
 TRANSLATIONS.en.tollV3IncompleteNote = "The route was calculated with API v3; its toll data is incomplete. An optional v2 estimate remains separate and may differ.";
+TRANSLATIONS.de.borderConfirmed = "Konkreter Grenzübergang erkannt";
+TRANSLATIONS.de.borderDetected = "Grenzübertritt erkannt";
+TRANSLATIONS.en.borderConfirmed = "Specific border crossing identified";
+TRANSLATIONS.en.borderDetected = "Border crossing detected";
 
 export function languageOf(hass) {
   const language = hass?.locale?.language || hass?.language || "en";
