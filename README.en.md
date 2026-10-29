@@ -14,6 +14,10 @@ profiles, an interactive map, saved routes, and GPX export.
 > fuel planning. Stable remains compatible with `v0.1.1` and `v0.1.0`.
 >
 > Stable `v0.1.2` contains the verified Beta.3–Beta.5 corrections.
+>
+> **In development:** `v0.1.3-beta.1` adds an explicitly requested separate
+> API v2 toll estimate for incomplete v3 toll data and safe routing
+> diagnostics. Stable remains the production recommendation.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 

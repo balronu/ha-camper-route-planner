@@ -360,6 +360,8 @@ class NakordoniRouteAdapterV3:
                     "arrive_at": request.arrive_at.isoformat() if request.arrive_at else None,
                 },
                 **_eta_metadata(data, route),
+                "routing_source": (payload.get("headers") or {}).get("X-Route-Source") or (payload.get("headers") or {}).get("x-route-source"),
+                "transport": payload.get("transport", {}),
             }
             return RouteResult(PROVIDER_NAME, distance, int(duration), geometry, tuple(warnings), metadata, synthetic)
         except ProviderError:

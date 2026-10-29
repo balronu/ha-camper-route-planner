@@ -9,6 +9,10 @@ export async function calculateRoute(hass, data) {
   return response?.response || response || {};
 }
 
+export function estimateTollsV2(hass, data) {
+  return callWebsocket(hass, { type: "camper_route_planner/estimate_tolls_v2", ...data });
+}
+
 export async function exportGpx(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/export_gpx", ...data });
 }

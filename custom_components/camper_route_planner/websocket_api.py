@@ -11,6 +11,7 @@ try:
     from .const import DEFAULT_ZOE_TRACKER, DOMAIN
     from .gpx import GpxExportError, export_gpx, filename_for_route
     from .geocoding import GeocodingError
+    from .models import ProviderError
 
     @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/list_entries"})
     @websocket_api.async_response
@@ -37,6 +38,34 @@ try:
             result = await runtime.async_nakordoni_usage()
         except (OSError, TimeoutError, ValueError):
             connection.send_error(msg["id"], "usage_unavailable", "Nakordoni account usage is unavailable")
+            return
+        connection.send_result(msg["id"], result)
+
+    @websocket_api.websocket_command({
+        vol.Required("type"): "camper_route_planner/estimate_tolls_v2",
+        vol.Required("entry_id"): str,
+        vol.Required("profile_id"): str,
+        vol.Required("origin"): dict,
+        vol.Required("destination"): dict,
+        vol.Required("current_result"): dict,
+        vol.Optional("via", default=[]): list,
+        vol.Optional("traffic", default="off"): vol.In({"off", "live", "forecast"}),
+        vol.Optional("alternatives", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
+        vol.Optional("avoid", default=[]): list,
+        vol.Optional("route_type", default="fastest"): vol.In({"fastest", "eco"}),
+        vol.Optional("depart_at"): str,
+        vol.Optional("arrive_at"): str,
+    })
+    @websocket_api.async_response
+    async def ws_estimate_tolls_v2(hass, connection, msg) -> None:
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        if runtime is None:
+            connection.send_error(msg["id"], "not_found", "Config entry is not loaded")
+            return
+        try:
+            result = await runtime.async_estimate_tolls_v2(msg)
+        except (ValueError, ProviderError) as exc:
+            connection.send_error(msg["id"], "estimate_unavailable", str(exc))
             return
         connection.send_result(msg["id"], result)
 
@@ -163,7 +192,7 @@ try:
         connection.send_result(msg["id"], {"route_id": route_id})
 
     def async_register(hass) -> None:
-        for command in (ws_list_entries, ws_nakordoni_usage, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
+        for command in (ws_list_entries, ws_nakordoni_usage, ws_estimate_tolls_v2, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
             websocket_api.async_register_command(hass, command)
 
 except ImportError:  # pragma: no cover - HA-only wrapper.

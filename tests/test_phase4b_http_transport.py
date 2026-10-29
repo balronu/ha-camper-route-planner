@@ -50,6 +50,29 @@ class Phase4BHttpTransportTests(unittest.TestCase):
         self.assertEqual(kwargs["params"]["via"], "47,11")
         self.assertEqual(payload["headers"], {"X-Devapi-Limit": "10", "X-Devapi-Remaining": "9"})
 
+    def test_route_source_is_safe_and_busy_retry_is_bounded(self):
+        class BusyResponse(FakeResponse):
+            status = 503
+            headers = {"X-Route-Source": "fallback", "Retry-After": "0"}
+
+            async def json(self, *, content_type=None):
+                del content_type
+                return {"ok": False, "error": {"code": "busy", "retry_after": 0}}
+
+        class SuccessResponse(FakeResponse):
+            headers = {"X-Route-Source": "primary"}
+
+        class BusyThenSuccess(FakeSession):
+            def get(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+                return BusyResponse() if len(self.calls) == 1 else SuccessResponse()
+
+        session = BusyThenSuccess()
+        payload = asyncio.run(NakordoniHttpTransport(session, "SECRET-KEY", min_interval_s=0, max_busy_retries=1)({}))
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(payload["headers"], {"X-Route-Source": "primary"})
+        self.assertEqual(payload["transport"]["attempts"], 2)
+
     def test_missing_key_is_rejected_before_transport(self):
         with self.assertRaises(ValueError):
             asyncio.run(NakordoniHttpTransport(FakeSession(), "")({}))

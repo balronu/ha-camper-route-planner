@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.2-beta.5; reproducible local bundle */
+/* Camper Route Planner Card v0.1.3-beta.1; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13905,6 +13905,12 @@
       providerOriginal: "Originaltext des Anbieters",
       providerUnavailable: "Provider nicht verf\xFCgbar",
       invalidCoordinates: "Ung\xFCltige Koordinaten",
+      requestV2TollEstimate: "Separate v2-Mautsch\xE4tzung anfordern",
+      tollV2Estimate: "Separate v2-Mautsch\xE4tzung",
+      tollV2Comparable: "Routenwerte sind innerhalb der Vergleichstoleranz.",
+      tollV2NotComparable: "Routenwerte unterscheiden sich; keine gemeinsame Summe ableiten.",
+      tollV2Separate: "Quelle: NaKordoni API v2 \u2013 gesch\xE4tzter Betrag, nicht verbindlich.",
+      tollV2Unavailable: "v2-Mautsch\xE4tzung nicht verf\xFCgbar",
       calculationFailed: "Berechnung fehlgeschlagen",
       invalidDateTime: "Bitte eine g\xFCltige lokale Zeit ausw\xE4hlen; Sommer-/Winterzeit wird automatisch ber\xFCcksichtigt.",
       addWaypoint: "Zwischenziel hinzuf\xFCgen",
@@ -14061,6 +14067,12 @@
       providerOriginal: "Original provider text",
       providerUnavailable: "Provider unavailable",
       invalidCoordinates: "Invalid coordinates",
+      requestV2TollEstimate: "Request separate v2 toll estimate",
+      tollV2Estimate: "Separate v2 toll estimate",
+      tollV2Comparable: "Route values are within the comparison tolerance.",
+      tollV2NotComparable: "Route values differ; no combined total is derived.",
+      tollV2Separate: "Source: NaKordoni API v2 \u2013 estimated amount, not binding.",
+      tollV2Unavailable: "v2 toll estimate unavailable",
       calculationFailed: "Calculation failed",
       invalidDateTime: "Choose a valid local time; daylight-saving changes are handled automatically.",
       addWaypoint: "Add waypoint",
@@ -14347,6 +14359,9 @@
     if (!hass?.callWS) throw new Error("Home Assistant WebSocket API unavailable");
     const response = await hass.callWS({ type: "call_service", domain: "camper_route_planner", service: "calculate_route", service_data: data, target: {}, return_response: true });
     return response?.response || response || {};
+  }
+  function estimateTollsV2(hass, data) {
+    return callWebsocket(hass, { type: "camper_route_planner/estimate_tolls_v2", ...data });
   }
   async function exportGpx(hass, data) {
     return callWebsocket(hass, { type: "camper_route_planner/export_gpx", ...data });
@@ -31185,7 +31200,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const tariffNotice = result?.metadata?.tariff_basis_uncertain ? `<p class="subtle">${translate2("tariffBasisUncertain")}</p>` : "";
     const knownNotes = knownHints.length ? `<div class="toll-known-notes"><b>${translate2("tollNotes")}</b><ul>${knownHints.map((hint) => `<li>${escapeHtml(hint.text)}${hint.original ? ` <span class="subtle">(${escapeHtml(hint.original)})</span>` : ""}</li>`).join("")}</ul></div>` : "";
     const technicalNotes = unknownTexts.length ? `<details class="provider-details"><summary>${translate2("tollTechnicalInfo")}</summary><ul>${[...new Set(unknownTexts)].map((note) => `<li lang="en">${escapeHtml(note)}</li>`).join("")}</ul></details>` : "";
-    return `<section class="route-details toll-details"><h3>${translate2("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate2("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate2("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>`;
+    const estimate = result?.metadata?.toll_estimate_v2;
+    const estimateTolls = estimate?.tolls;
+    const estimateTotal = estimateTolls?.total != null ? formatTollAmount(estimateTolls.total, estimateTolls.currency || "EUR", language) : translate2("tollUnavailable");
+    const estimateSection = estimate ? `<section class="route-details toll-details"><h3>${translate2("tollV2Estimate")}</h3><div class="toll-total">${escapeHtml(estimateTotal)} <span class="subtle">(${translate2("tollEstimate")})</span></div><p class="subtle">${translate2(estimate.comparable_route ? "tollV2Comparable" : "tollV2NotComparable")}</p><p class="subtle">${translate2("tollV2Separate")}</p></section>` : "";
+    return `<section class="route-details toll-details"><h3>${translate2("tollSummary")}</h3><div class="toll-total">${escapeHtml(total)}${tolls.estimate ? ` <span class="subtle">(${translate2("tollEstimate")})</span>` : ""}</div>${countries ? `<div class="toll-countries">${countries}</div>` : ""}${objects ? `<div class="toll-objects"><b>${translate2("tollReference")}</b><ul>${objects}</ul></div>` : ""}${knownNotes}${technicalNotes}${tariffNotice}</section>${estimateSection}`;
   }
   function renderRestrictions(result, translate2) {
     const metadata = result?.metadata || {};
@@ -31446,6 +31465,30 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
       } catch (error2) {
         this._state.error = error2.message || t(language, "calculationFailed");
+      }
+      this._state.busy = false;
+      this.render();
+    }
+    async estimateTollsV2() {
+      const result = this._state.result;
+      if (!result || this._state.busy || result.metadata?.api_version !== "v3" || result.metadata?.tolls?.complete !== false) return;
+      const language = languageOf(this._hass);
+      this._state.busy = true;
+      this._state.error = "";
+      this.render();
+      try {
+        const response = await estimateTollsV2(this._hass, {
+          entry_id: this._config.entry_id,
+          profile_id: this._state.profileId,
+          origin: this._state.origin,
+          destination: this._state.destination,
+          via: this._state.waypoints,
+          current_result: result,
+          ...this._state.routeOptions
+        });
+        this._state.result.metadata = { ...this._state.result.metadata, toll_estimate_v2: response };
+      } catch (error2) {
+        this._state.error = error2.message || t(language, "tollV2Unavailable");
       }
       this._state.busy = false;
       this.render();
@@ -31905,6 +31948,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
         const resultPanel = this.shadowRoot.querySelector(".result");
         resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate2("motorhomeBeta")}</b><br>${translate2("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate2("dataByNakordoni")}</a></div>`);
         resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate2)}${renderTollDetails(result, translate2, language)}`);
+        if (result.metadata?.api_version === "v3" && result.metadata?.tolls?.complete === false && !result.metadata?.toll_estimate_v2) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.action = "estimate-tolls-v2";
+          button.disabled = this._state.busy;
+          button.textContent = translate2("requestV2TollEstimate");
+          resultPanel?.querySelector(".toll-details")?.append(button);
+        }
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate2("geocodingAttribution")}</a>`);
       const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") };
@@ -31967,6 +32018,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         const index = Number(button.dataset.index);
         if (action === "calculate") this.calculate();
         if (action === "calculate-force") this.calculate(true);
+        if (action === "estimate-tolls-v2") this.estimateTollsV2();
         if (action === "save") this.saveCurrent();
         if (action === "export") this.exportRoute(button.dataset.mode, this._state.routes.find((route) => route.route_id === button.dataset.routeId));
         if (action === "pdf") this.exportPdf(button.dataset.routeId ? this._state.routes.find((route) => route.route_id === button.dataset.routeId) : null);
