@@ -8,6 +8,10 @@ export function isValidWaypoint(point) {
   return point && point.latitude !== "" && point.longitude !== "" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 && isValidCoordinate(longitude) && !(latitude === 0 && longitude === 0);
 }
 
+export function validOrEmptyWaypoint(point) {
+  return isValidWaypoint(point) ? { ...point } : { latitude: "", longitude: "", label: point?.label || "" };
+}
+
 export function normalizeConfig(config = {}) {
   return { entry_id: String(config.entry_id || ""), title: String(config.title || "Camper Route Planner") };
 }

@@ -23,6 +23,7 @@ from ..models import (
 )
 from .nakordoni_motorhome import (
     NakordoniMotorhomeProvider,
+    _fallback_border_data,
     build_motorhome_parameters as build_v2_motorhome_parameters,
 )
 
@@ -182,6 +183,32 @@ def _border_crossings(raw: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _toll_summary(raw: Any) -> dict[str, Any] | None:
+    """Normalize the v3 toll envelope to the card's stable display shape."""
+    if not isinstance(raw, dict):
+        return None
+    result: dict[str, Any] = {
+        "priced": raw.get("priced") if isinstance(raw.get("priced"), bool) else None,
+        "complete": raw.get("complete") if isinstance(raw.get("complete"), bool) else None,
+        "estimate": raw.get("estimate") if isinstance(raw.get("estimate"), bool) else None,
+        "coverage_note": str(raw["coverage_note"]) if raw.get("coverage_note") is not None else None,
+        "currency": str(raw["currency"]) if raw.get("currency") else None,
+        "vat": str(raw["vat"]) if raw.get("vat") else None,
+    }
+    total = raw.get("total_eur", raw.get("total"))
+    result["total"] = float(total) if isinstance(total, (int, float)) and not isinstance(total, bool) else None
+    countries = raw.get("countries", raw.get("by_country", []))
+    if isinstance(countries, dict):
+        countries = [{"country": country, **value} for country, value in countries.items() if isinstance(value, dict)]
+    result["countries"] = [item for item in countries if isinstance(item, dict)] if isinstance(countries, list) else []
+    for country in result["countries"]:
+        if "amount" in country and "total" not in country:
+            country["total"] = country["amount"]
+    objects = raw.get("objects", [])
+    result["objects"] = [item for item in objects if isinstance(item, dict)] if isinstance(objects, list) else []
+    return result
+
+
 def _require_motorhome_confirmation(version: Any, data: dict[str, Any], route: dict[str, Any], request: RouteRequest) -> dict[str, Any]:
     if version != V3_API_VERSION:
         raise ProviderError("NaKordoni v3 response lacks explicit v3 confirmation", code="safety_unconfirmed")
@@ -299,6 +326,11 @@ class NakordoniRouteAdapterV3:
             rest_plan = data.get("rest_plan")
             if rest_plan:
                 warnings.append(RouteWarning("motorhome_rest_ignored", "Truck rest-plan data is not applied to a private motorhome."))
+            concrete_crossings = _border_crossings(route.get("border_crossings", []))
+            if concrete_crossings:
+                border_crossings, border_state = concrete_crossings, "confirmed"
+            else:
+                border_crossings, border_state = _fallback_border_data(route)
             metadata = {
                 "api_version": payload.get("api_version", data.get("api_version")),
                 "provider_mode": PROVIDER_NAME,
@@ -309,10 +341,12 @@ class NakordoniRouteAdapterV3:
                 "restriction_hits": list(route["restriction_hits"]),
                 "countries": route.get("countries", []),
                 "country_split": route.get("country_split", []),
-                "tolls": route.get("tolls", data.get("tolls")),
+                "tolls": _toll_summary(route.get("tolls", data.get("tolls"))),
                 "traffic": data.get("traffic_forecast", route.get("traffic")),
                 "alternatives": data.get("alternatives", []),
-                "border_crossings": _border_crossings(route.get("border_crossings", [])),
+                "border_crossings": border_crossings,
+                "border_state": border_state,
+                "border_data_source": "route.border_crossings" if border_state == "confirmed" else border_state,
                 "waits": data.get("waits", []),
                 "rest_plan": None,
                 "provider_rest_plan_ignored": rest_plan,
