@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.4-beta.1";
+const bundleVersion = "0.1.4-beta.2";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
@@ -449,7 +449,7 @@ assert.equal(await tablet.locator(".grid").evaluate((node) => getComputedStyle(n
 assert.equal(await tablet.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches), true, "dark mode is available to the browser");
 await tablet.close();
 
-const fuelRegression = await preparePage({ width: 1280, height: 900 }, "light", null, false, false, { language: "de", distance_m: 2474700, profile: { tank_capacity_l: 90, consumption_l_per_100km: 10.5 }, savedRoute: { route_id: "saved", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 3600, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, profile_id: "test", origin: { latitude: 49, longitude: 7 }, destination: { latitude: 50, longitude: 8 }, waypoints: [], warnings: [], metadata: {}, fuel_values: { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" } } });
+const fuelRegression = await preparePage({ width: 1280, height: 900 }, "light", null, false, false, { language: "de", distance_m: 2474700, profile: { tank_capacity_l: 90, consumption_l_per_100km: 10.5 }, savedRoute: { route_id: "saved", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 3600, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, profile_id: "test", origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" }, destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" }, waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }], warnings: [], metadata: {}, fuel_values: { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" } } });
 await fuelRegression.locator('input[data-fuel-field="fuel_level_l"]').fill("90");
 await fuelRegression.locator('input[data-fuel-field="diesel_price_per_l"]').fill("2,16");
 await calculate(fuelRegression);
@@ -459,6 +459,15 @@ assert.match(fuelText, /561,26\s*€/);
 assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "price entry does not trigger a second routing request");
 await fuelRegression.evaluate(() => { localStorage.clear(); return document.querySelector("camper-route-planner-card").loadRoute("saved"); });
 await fuelRegression.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.result?.distance_m === 2474700);
+assert.deepEqual(await fuelRegression.evaluate(() => {
+  const card = document.querySelector("camper-route-planner-card");
+  return { origin: card._state.origin, destination: card._state.destination, waypoints: card._state.waypoints, inputs: [...card.shadowRoot.querySelectorAll("input[data-point]")].map((input) => input.value) };
+}), {
+  origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" },
+  destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" },
+  waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }],
+  inputs: ["49.294307", "7.051867", "41.3619", "-8.6718", "38.878187", "-6.970111", "41.313533", "-8.722957"]
+}, "loading a saved route replaces stale coordinate drafts for origin, destination, and ordered waypoints");
 assert.equal(await fuelRegression.locator('input[data-fuel-field="diesel_price_per_l"]').inputValue(), "2,16", "saved route restores the manual decimal price");
 assert.match(await fuelRegression.locator(".fuel-range").textContent(), /561,26\s*€/);
 assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "loading a saved route does not call the routing service");
