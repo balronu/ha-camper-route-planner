@@ -109,7 +109,19 @@ export function normalizeServiceResponse(response) {
     origin: payload.origin || null,
     destination: payload.destination || null,
     waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
-    ,route_options: payload.route_options || payload.metadata?.request_options || {}, request_diagnostic: payload.request_diagnostic || null
+    ,route_options: normalizeRouteOptions(payload.route_options || payload.metadata?.request_options || {}), request_diagnostic: payload.request_diagnostic || null
+  };
+}
+
+export function normalizeRouteOptions(options = {}) {
+  const source = options && typeof options === "object" ? options : {};
+  return {
+    traffic: source.traffic || "off",
+    avoid: Array.isArray(source.avoid) ? source.avoid : [],
+    route_type: source.route_type || "fastest",
+    alternatives: Number.isFinite(Number(source.alternatives)) ? Number(source.alternatives) : 0,
+    depart_at: source.depart_at || "",
+    arrive_at: source.arrive_at || "",
   };
 }
 
@@ -212,7 +224,7 @@ export function routeRecordFromResult(result, state) {
     metadata: result.metadata,
     created_at: result.created_at,
     fuel_values: pickFuelValues(state.fuelValues)
-    ,route_options: result.route_options || result.metadata?.request_options || {}
+    ,route_options: normalizeRouteOptions(result.route_options || result.metadata?.request_options || {})
   };
 }
 

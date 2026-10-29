@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.4-beta.2; reproducible local bundle */
+/* Camper Route Planner Card v0.1.4-beta.3; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -14253,8 +14253,19 @@
       origin: payload.origin || null,
       destination: payload.destination || null,
       waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : [],
-      route_options: payload.route_options || payload.metadata?.request_options || {},
+      route_options: normalizeRouteOptions(payload.route_options || payload.metadata?.request_options || {}),
       request_diagnostic: payload.request_diagnostic || null
+    };
+  }
+  function normalizeRouteOptions(options = {}) {
+    const source = options && typeof options === "object" ? options : {};
+    return {
+      traffic: source.traffic || "off",
+      avoid: Array.isArray(source.avoid) ? source.avoid : [],
+      route_type: source.route_type || "fastest",
+      alternatives: Number.isFinite(Number(source.alternatives)) ? Number(source.alternatives) : 0,
+      depart_at: source.depart_at || "",
+      arrive_at: source.arrive_at || ""
     };
   }
   var PROVIDER_ALIASES = {
@@ -14338,7 +14349,7 @@
       metadata: result.metadata,
       created_at: result.created_at,
       fuel_values: pickFuelValues(state.fuelValues),
-      route_options: result.route_options || result.metadata?.request_options || {}
+      route_options: normalizeRouteOptions(result.route_options || result.metadata?.request_options || {})
     };
   }
   function hasTrackGeometry(route) {
@@ -31504,7 +31515,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.render();
       try {
         if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
-        const routeOptions = { ...this._state.routeOptions };
+        const routeOptions = normalizeRouteOptions(this._state.routeOptions);
         for (const field of ["depart_at", "arrive_at"]) {
           if (routeOptions[field]) {
             const normalized = localDateTimeToIso(routeOptions[field]);
@@ -31512,13 +31523,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
             routeOptions[field] = normalized;
           }
         }
-        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...routeOptions });
+        const requestOptions = Object.fromEntries(Object.entries(routeOptions).filter(([field, value]) => !["depart_at", "arrive_at"].includes(field) || value));
+        const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...requestOptions });
         this._state.result = normalizeServiceResponse(payload);
         this._state.requestDiagnosticsArmed = false;
         this._state.resultStale = false;
         this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
       } catch (error2) {
         this._state.error = error2.message || t(language, "calculationFailed");
+        this._state.resultStale = Boolean(this._state.result);
       }
       this._state.busy = false;
       this.render();
@@ -31749,7 +31762,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : [];
         this._state.profileId = route.profile_id || this._state.profileId;
         this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) };
-        this._state.routeOptions = { ...this._state.routeOptions, ...route.route_options || route.metadata?.request_options || {} };
+        this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) };
         this._state.result = normalizeServiceResponse(route);
         this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
         for (const key of this._inputDrafts.keys()) if (key.startsWith("point:")) this._inputDrafts.delete(key);

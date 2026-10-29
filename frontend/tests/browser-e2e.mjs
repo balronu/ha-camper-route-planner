@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.4-beta.2";
+const bundleVersion = "0.1.4-beta.3";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
@@ -53,6 +53,7 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
     const card = document.querySelector("camper-route-planner-card");
     card.setConfig({ type: "custom:camper-route-planner-card", entry_id: "test-entry" });
     let calculateCalls = 0;
+    let lastServiceData = null;
     let reverseCalls = 0;
     card.hass = {
       language: fixture.language || "en",
@@ -68,12 +69,14 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
+          lastServiceData = message.service_data;
+          if (fixture.failCalculation) throw new Error("mock route failed");
           return { response: { provider: "mock", synthetic: true, distance_m: fixture.distance_m ?? 1234, duration_s: 3600, warnings: [], geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] } } };
         }
         return {};
       }
     };
-    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; } };
+    globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; }, get lastServiceData() { return lastServiceData; } };
   }, { shouldFailGeocode: geocodeError, fixture });
   await page.locator("details.route-planner-shell").waitFor();
   assert.equal(await page.locator("details.route-planner-shell").getAttribute("open"), null, "card starts collapsed");
@@ -449,7 +452,7 @@ assert.equal(await tablet.locator(".grid").evaluate((node) => getComputedStyle(n
 assert.equal(await tablet.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches), true, "dark mode is available to the browser");
 await tablet.close();
 
-const fuelRegression = await preparePage({ width: 1280, height: 900 }, "light", null, false, false, { language: "de", distance_m: 2474700, profile: { tank_capacity_l: 90, consumption_l_per_100km: 10.5 }, savedRoute: { route_id: "saved", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 3600, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, profile_id: "test", origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" }, destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" }, waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }], warnings: [], metadata: {}, fuel_values: { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" } } });
+const fuelRegression = await preparePage({ width: 1280, height: 900 }, "light", null, false, false, { language: "de", distance_m: 2474700, profile: { tank_capacity_l: 90, consumption_l_per_100km: 10.5 }, savedRoute: { route_id: "saved", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 3600, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, profile_id: "test", origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" }, destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" }, waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }], route_options: { depart_at: null, arrive_at: null }, warnings: [], metadata: {}, fuel_values: { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" } } });
 await fuelRegression.locator('input[data-fuel-field="fuel_level_l"]').fill("90");
 await fuelRegression.locator('input[data-fuel-field="diesel_price_per_l"]').fill("2,16");
 await calculate(fuelRegression);
@@ -471,6 +474,10 @@ assert.deepEqual(await fuelRegression.evaluate(() => {
 assert.equal(await fuelRegression.locator('input[data-fuel-field="diesel_price_per_l"]').inputValue(), "2,16", "saved route restores the manual decimal price");
 assert.match(await fuelRegression.locator(".fuel-range").textContent(), /561,26\s*€/);
 assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "loading a saved route does not call the routing service");
+await fuelRegression.evaluate(() => document.querySelector("camper-route-planner-card").calculate());
+await fuelRegression.waitForFunction(() => globalThis.__crp.calculateCalls === 2);
+assert.equal(await fuelRegression.evaluate(() => Object.hasOwn(globalThis.__crp.lastServiceData, "depart_at")), false, "unset depart_at is omitted from the service payload");
+assert.equal(await fuelRegression.evaluate(() => Object.hasOwn(globalThis.__crp.lastServiceData, "arrive_at")), false, "unset arrive_at is omitted from the service payload");
 await fuelRegression.evaluate(() => {
   const card = document.querySelector("camper-route-planner-card");
   card._state.provider = "nakordoni_motorhome_v3";
@@ -486,8 +493,17 @@ await fuelRegression.evaluate(() => {
   card.render();
 });
 assert.match(await fuelRegression.locator(".status-line").textContent(), /Nakordoni · API v2/, "v2 status uses the executed API version");
-assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "status changes do not call the routing service");
+assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 2, "status changes do not call the routing service");
 await fuelRegression.close();
+
+const failedRecalculation = await preparePage({ width: 390, height: 844 }, "light", null, false, false, { failCalculation: true, savedRoute: { route_id: "stale", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 95820, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 41, longitude: -8 }] }, profile_id: "test", origin: { latitude: 49, longitude: 7 }, destination: { latitude: 41, longitude: -8 }, waypoints: [], route_options: { depart_at: null, arrive_at: null }, warnings: [], metadata: {} } });
+await failedRecalculation.evaluate(() => document.querySelector("camper-route-planner-card").loadRoute("stale"));
+await failedRecalculation.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.result?.distance_m === 2474700);
+await failedRecalculation.evaluate(() => document.querySelector("camper-route-planner-card").calculate());
+await failedRecalculation.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.busy === false);
+assert.equal(await failedRecalculation.evaluate(() => document.querySelector("camper-route-planner-card")._state.resultStale), true, "a failed recalculation marks the previous result stale");
+assert.match(await failedRecalculation.locator(".result").textContent(), /2\.474|2,474/);
+await failedRecalculation.close();
 
 for (const width of [320, 375, 400, 600, 900]) {
   await desktop.evaluate((containerWidth) => { const card = document.querySelector("camper-route-planner-card"); card.style.width = `${containerWidth}px`; card.updateResponsiveClass(); }, width);
