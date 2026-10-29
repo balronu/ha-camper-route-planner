@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.2-beta.3";
+const bundleVersion = "0.1.2-beta.4";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
@@ -41,7 +41,7 @@ assert.equal(editorResult.catalogEntry.preview, true, "catalog metadata enables 
 assert.deepEqual({ tag: editorResult.tag, hasSelect: editorResult.hasSelect }, { tag: "camper-route-planner-card-editor", hasSelect: true }, "visual editor is created by the card contract");
 await resourcePage.close();
 
-async function preparePage(viewport, colorScheme = "light", tileHandler = null, hasTouch = false, geocodeError = false) {
+async function preparePage(viewport, colorScheme = "light", tileHandler = null, hasTouch = false, geocodeError = false, fixture = {}) {
   const page = await browser.newPage({ viewport, colorScheme, hasTouch });
   let tileRequests = 0;
   page.on("request", (request) => { if (request.url().startsWith("https://tiles.test/")) tileRequests += 1; });
@@ -49,34 +49,35 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
   await page.route("https://tiles.test/**", tileHandler || (async (route) => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") })));
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.addScriptTag({ content: bundle });
-  await page.evaluate((shouldFailGeocode) => {
+  await page.evaluate(({ shouldFailGeocode, fixture }) => {
     const card = document.querySelector("camper-route-planner-card");
     card.setConfig({ type: "custom:camper-route-planner-card", entry_id: "test-entry" });
     let calculateCalls = 0;
     let reverseCalls = 0;
     card.hass = {
-      language: "en",
+      language: fixture.language || "en",
       connection: {},
       callWS: async (message) => {
-        if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 100, consumption_l_per_100km: 10 }, { profile_id: "second", name: "Second motorhome", height_m: 3.1, width_m: 2.3, length_m: 7, gross_weight_kg: 4200, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 200, consumption_l_per_100km: 12 }] };
+        if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.34, length_m: 7.65, gross_weight_kg: 4800, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: fixture.profile?.tank_capacity_l ?? 100, consumption_l_per_100km: fixture.profile?.consumption_l_per_100km ?? 10 }, { profile_id: "second", name: "Second motorhome", height_m: 3.1, width_m: 2.3, length_m: 7, gross_weight_kg: 4200, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 200, consumption_l_per_100km: 12 }] };
         if (message.type.endsWith("/list_routes")) return { routes: [] };
         if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: "https://tiles.test/{z}/{x}/{y}.png?key=browser-safe", tile_attribution: "Mock attribution", browser_safe: true };
+        if (message.type.endsWith("/load_route") && fixture.savedRoute) return { route: fixture.savedRoute };
         if (message.type.endsWith("/tracker_position")) return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } };
         if (message.type.endsWith("/geocode")) { if (shouldFailGeocode) throw new Error("mock geocoding unavailable"); await new Promise((resolve) => setTimeout(resolve, 20)); return { configured: true, results: [{ label: "Fixture address", latitude: 48.137, longitude: 11.575 }, { label: "Second fixture address", latitude: 48.138, longitude: 11.576 }] }; }
         if (message.type.endsWith("/reverse_geocode")) { reverseCalls += 1; return { configured: false, address: "" }; }
         if (message.type.endsWith("/export_gpx")) return { filename: "camper-route-2026-10-16.gpx", mime_type: "application/gpx+xml", content: '<?xml version="1.0"?><gpx version="1.1" />' };
         if (message.type === "call_service") {
           calculateCalls += 1;
-          return { response: { provider: "mock", synthetic: true, distance_m: 1234, duration_s: 3600, warnings: [], geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] } } };
+          return { response: { provider: "mock", synthetic: true, distance_m: fixture.distance_m ?? 1234, duration_s: 3600, warnings: [], geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] } } };
         }
         return {};
       }
     };
     globalThis.__crp = { card, get calculateCalls() { return calculateCalls; }, get reverseCalls() { return reverseCalls; } };
-  }, geocodeError);
+  }, { shouldFailGeocode: geocodeError, fixture });
   await page.locator("details.route-planner-shell").waitFor();
   assert.equal(await page.locator("details.route-planner-shell").getAttribute("open"), null, "card starts collapsed");
-  assert.match(await page.locator(".status-line").textContent(), /Test motorhome · Mock \(offline\) · Calculation only after click/, "collapsed header shows the selected vehicle, provider and manual-only status");
+  assert.match(await page.locator(".status-line").textContent(), /Test motorhome · Mock \(offline\) · (Calculation only after click|Berechnung nur nach Klick)/, "collapsed header shows the selected vehicle, provider and manual-only status");
   await page.locator("summary.route-planner-summary").click();
   await page.locator(".panel").first().waitFor();
   return page;
@@ -429,6 +430,37 @@ await calculate(tablet);
 assert.equal(await tablet.locator(".grid").evaluate((node) => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length), 2, "tablet layout uses two columns");
 assert.equal(await tablet.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches), true, "dark mode is available to the browser");
 await tablet.close();
+
+const fuelRegression = await preparePage({ width: 1280, height: 900 }, "light", null, false, false, { language: "de", distance_m: 2474700, profile: { tank_capacity_l: 90, consumption_l_per_100km: 10.5 }, savedRoute: { route_id: "saved", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 3600, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, profile_id: "test", origin: { latitude: 49, longitude: 7 }, destination: { latitude: 50, longitude: 8 }, waypoints: [], warnings: [], metadata: {}, fuel_values: { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" } } });
+await fuelRegression.locator('input[data-fuel-field="fuel_level_l"]').fill("90");
+await fuelRegression.locator('input[data-fuel-field="diesel_price_per_l"]').fill("2,16");
+await calculate(fuelRegression);
+const fuelText = await fuelRegression.locator(".fuel-range").textContent();
+assert.doesNotMatch(fuelText, /Nicht berechenbar/);
+assert.match(fuelText, /561,26\s*€/);
+assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "price entry does not trigger a second routing request");
+await fuelRegression.evaluate(() => { localStorage.clear(); return document.querySelector("camper-route-planner-card").loadRoute("saved"); });
+await fuelRegression.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.result?.distance_m === 2474700);
+assert.equal(await fuelRegression.locator('input[data-fuel-field="diesel_price_per_l"]').inputValue(), "2,16", "saved route restores the manual decimal price");
+assert.match(await fuelRegression.locator(".fuel-range").textContent(), /561,26\s*€/);
+assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "loading a saved route does not call the routing service");
+await fuelRegression.evaluate(() => {
+  const card = document.querySelector("camper-route-planner-card");
+  card._state.provider = "nakordoni_motorhome_v3";
+  card._state.result = { provider: "nakordoni_motorhome", distance_m: 2474700, duration_s: 101400, geometry: null, warnings: [], metadata: { api_version: "v3" } };
+  card.render();
+});
+assert.match(await fuelRegression.locator(".status-line").textContent(), /Zoe|Test motorhome/);
+assert.match(await fuelRegression.locator(".status-line").textContent(), /Nakordoni · API v3 \(Beta\)/, "v3 status uses the executed API version");
+await fuelRegression.evaluate(() => {
+  const card = document.querySelector("camper-route-planner-card");
+  card._state.provider = "nakordoni_motorhome";
+  card._state.result = { provider: "nakordoni_motorhome", distance_m: 2474700, duration_s: 101400, geometry: null, warnings: [], metadata: { api_version: "v2" } };
+  card.render();
+});
+assert.match(await fuelRegression.locator(".status-line").textContent(), /Nakordoni · API v2/, "v2 status uses the executed API version");
+assert.equal(await fuelRegression.evaluate(() => globalThis.__crp.calculateCalls), 1, "status changes do not call the routing service");
+await fuelRegression.close();
 
 for (const width of [320, 375, 400, 600, 900]) {
   await desktop.evaluate((containerWidth) => { const card = document.querySelector("camper-route-planner-card"); card.style.width = `${containerWidth}px`; card.updateResponsiveClass(); }, width);

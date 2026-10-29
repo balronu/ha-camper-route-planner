@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeServiceResponse, removeWaypoint, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeDecimalInput, normalizeProviderId, normalizeServiceResponse, pickFuelValues, providerApiVersion, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -131,6 +131,22 @@ test("fuel planning keeps profile values when local editor fields are still empt
   const entered = Object.fromEntries(Object.entries(localEditor).filter(([, value]) => value !== "" && value != null));
   const plan = calculateFuelPlan(2474700, { ...profile, ...entered });
   assert.equal(Math.round(plan.cost * 100) / 100, 561.26);
+});
+
+test("saved routes retain manual fuel values without changing profile data", () => {
+  const record = routeRecordFromResult({ provider: "mock", distance_m: 2474700, duration_s: 1, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, warnings: [], metadata: {}, created_at: "2026-10-29T00:00:00Z" }, {
+    routeName: "Portugal", profileId: "zoe", origin: { latitude: 49, longitude: 7 }, destination: { latitude: 50, longitude: 8 }, waypoints: [], fuelValues: { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters", ignored: "must not persist" }
+  });
+  assert.deepEqual(record.fuel_values, { fuel_level_l: "90", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" });
+  assert.deepEqual(pickFuelValues({ diesel_price_per_l: "2.16", secret: "ignored" }), { diesel_price_per_l: "2.16" });
+});
+
+test("provider status separates configured provider from executed v2/v3 API", () => {
+  assert.equal(normalizeProviderId("nakordoni_motorhome_v3"), "nakordoni");
+  assert.equal(providerApiVersion("nakordoni_motorhome_v3"), "v3");
+  assert.deepEqual(resolveProviderStatus("nakordoni_motorhome_v3", "nakordoni_motorhome", "v3"), { configuredProvider: "nakordoni", provider: "nakordoni", apiVersion: "v3" });
+  assert.deepEqual(resolveProviderStatus("nakordoni_motorhome", "nakordoni_motorhome", "v2"), { configuredProvider: "nakordoni", provider: "nakordoni", apiVersion: "v2" });
+  assert.deepEqual(resolveProviderStatus("mock", "nakordoni_v3", null), { configuredProvider: "mock", provider: "nakordoni", apiVersion: "v3" });
 });
 
 test("German and English labels are available", () => {
