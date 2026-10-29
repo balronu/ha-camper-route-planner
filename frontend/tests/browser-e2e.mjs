@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
-const bundleVersion = "0.1.4-beta.5";
+const bundleVersion = "0.1.5";
 const html = "<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card></body></html>";
 const resourceHtml = `<!doctype html><html><body><camper-route-planner-card></camper-route-planner-card><script>window.customCards = [];</script><script type="module" src="/camper_route_planner/camper-route-planner-card.js?v=${bundleVersion}"></script></body></html>`;
 const server = createServer((request, response) => {
