@@ -5,17 +5,15 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.1` Stable. The Lovelace card is validated with an isolated
+> **Status:** `v0.1.2` Stable. The Lovelace card is validated with an isolated
 > HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 >
-> `v0.1.1` extends motorhome route planning, traffic and route options, ECO
+> `v0.1.2` extends motorhome route planning, traffic and route options, ECO
 > routing, alternatives, time planning, mobile presentation, and vehicle-based
-> fuel planning. Stable remains compatible with `v0.1.0`.
+> fuel planning. Stable remains compatible with `v0.1.1` and `v0.1.0`.
 >
-> **Active beta:** `v0.1.2-beta.5` is available as a published pre-release for
-> testing. For normal installations, `v0.1.1` remains the recommended Stable
-> version.
+> Stable `v0.1.2` contains the verified Beta.3–Beta.5 corrections.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -120,8 +118,8 @@ See the [planning update](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
   valid for private motorhomes
 - There is no automatic station search, automatic diesel-price lookup, or
   automatic refuelling-stop optimization.
-- Live Nakordoni/toll data and some export paths were not fully accepted in the
-  final user practical test.
+- v3 toll coverage may be incomplete; response quality is shown through
+  `complete`, country values, and provider notes.
 
 ## Development and tests
 
@@ -135,14 +133,14 @@ npm run build
 npm run test:e2e
 ```
 
-See the [Stable release notes](docs/releases/v0.1.1.md) for the installation and
+See the [Stable release notes](docs/releases/v0.1.2.md) for the installation and
 test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is validated by GitHub
 Actions. Installation into productive HA systems remains an operator action.
 
 ## Roadmap
 
-1. Stable `v0.1.1` is published; `v0.1.0` remains an independent fallback basis.
+1. Stable `v0.1.2` is published; `v0.1.1` and `v0.1.0` remain independent fallback bases.
 2. Further features require a separate change request.
 3. Migration to the discontinued SmartCamper Suite is outside this release;
    the Suite remains only as a historical, discontinued repository.
