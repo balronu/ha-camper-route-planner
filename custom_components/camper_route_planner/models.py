@@ -31,6 +31,8 @@ class RouteWaypoint:
             raise ValidationError("latitude must be between -90 and 90")
         if not -180 <= self.longitude <= 180:
             raise ValidationError("longitude must be between -180 and 180")
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValidationError("latitude and longitude must not both be zero")
         if self.label is not None and not self.label.strip():
             raise ValidationError("waypoint label must not be empty")
 

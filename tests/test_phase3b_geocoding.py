@@ -58,6 +58,15 @@ class Phase3BGeocodingTests(unittest.TestCase):
         self.assertEqual(result, [])
         self.assertEqual(session.calls, [])
 
+    def test_search_discards_zero_zero_result(self):
+        class ZeroResultSession(Session):
+            def get(self, url):
+                self.calls.append(url)
+                return type("ZeroResponse", (Response,), {"json": lambda _self: asyncio.sleep(0, result={"results": [{"formatted": "Gondifelos", "lat": 0, "lon": 0}, {"formatted": "Valid", "lat": 41.0, "lon": -8.0}]})})()
+
+        result = asyncio.run(GeoapifyGeocoder("key", session=ZeroResultSession()).async_search("Gondifelos"))
+        self.assertEqual(result, [{"label": "Valid", "latitude": 41.0, "longitude": -8.0}])
+
     def test_rate_limit_is_safe_error(self):
         with self.assertRaises(GeocodingError) as error:
             asyncio.run(GeoapifyGeocoder("key", session=RateLimitedSession()).async_search("Berlin"))

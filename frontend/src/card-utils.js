@@ -109,7 +109,7 @@ export function normalizeServiceResponse(response) {
     origin: payload.origin || null,
     destination: payload.destination || null,
     waypoints: Array.isArray(payload.waypoints) ? payload.waypoints : []
-    ,route_options: payload.route_options || payload.metadata?.request_options || {}
+    ,route_options: payload.route_options || payload.metadata?.request_options || {}, request_diagnostic: payload.request_diagnostic || null
   };
 }
 

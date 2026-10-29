@@ -13,6 +13,10 @@ export function estimateTollsV2(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/estimate_tolls_v2", ...data });
 }
 
+export function armRequestDiagnostics(hass, data) {
+  return callWebsocket(hass, { type: "camper_route_planner/arm_request_diagnostics", ...data });
+}
+
 export async function exportGpx(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/export_gpx", ...data });
 }
