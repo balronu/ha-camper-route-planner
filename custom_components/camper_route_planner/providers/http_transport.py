@@ -82,6 +82,7 @@ class NakordoniHttpTransport:
                         result["transport"] = {
                             "attempts": attempts,
                             "elapsed_s": round(time.monotonic() - started, 3),
+                            "status": int(response.status),
                             "route_source": result["headers"].get("X-Route-Source") or result["headers"].get("x-route-source"),
                         }
                         if response.status >= 400 and result.get("ok") is True:
