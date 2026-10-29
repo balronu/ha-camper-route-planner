@@ -31,19 +31,20 @@ function writeFuelValues(entryId, profileId, values) {
 }
 
 
-function renderBorderCrossings(result, translate) {
+function renderBorderCrossings(result, translate, language = "en") {
   const crossings = result?.metadata?.border_crossings;
   if (!Array.isArray(crossings)) return "";
   if (!crossings.length && result?.metadata?.border_state === "unordered_international") return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3><p class="subtle">${translate("borderInternationalAmbiguous")}</p></section>`;
   const rows = crossings.length ? crossings.map((crossing) => {
-    const direction = [crossing.from_country, crossing.to_country].filter(Boolean).join(" → ") || "—";
+    const direction = [crossing.from_country, crossing.to_country].filter(Boolean).map((country) => tollCountryName(country, language)).join(" → ") || translate("unknown");
     const wait = crossing.wait_min == null ? translate("borderNoWait") : `${Math.round(Number(crossing.wait_min))} min`;
     const side = Array.isArray(crossing.wait_sides) ? crossing.wait_sides[0] : null;
     const basis = side?.basis === "forecast" ? translate("borderForecast") : side?.basis === "live" ? translate("borderLive") : null;
-    const source = crossing.source_url ? `<a href="${escapeHtml(crossing.source_url)}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a>` : translate("dataByNakordoni");
-    const quality = side?.data_quality === "low" ? translate("borderEstimate") : (side?.data_quality || basis || "—");
-    const inferred = crossing.inferred ? `<small>${translate("borderInferred")}</small>` : "";
-    return `<article class="border-crossing"><b>${escapeHtml(direction)}</b>${crossing.name ? `<div>${translate("borderName")}: ${escapeHtml(crossing.name)}</div>` : ""}<div><span>${translate("borderWait")}: ${escapeHtml(wait)}</span>${basis ? ` · ${escapeHtml(basis)}` : ""}</div><small>${translate("borderDataAt")}: ${escapeHtml(crossing.wait_at || "—")} · ${translate("borderQuality")}: ${escapeHtml(quality)} · ${translate("borderSource")}: ${source}</small>${crossing.wait_notes?.length ? `<small>${escapeHtml(crossing.wait_notes.join(" "))}</small>` : ""}${inferred}</article>`;
+    const source = crossing.source_url ? `<a href="${escapeHtml(crossing.source_url)}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a>` : "";
+    const quality = side?.data_quality === "low" ? translate("borderEstimate") : (side?.data_quality || basis || "");
+    const status = crossing.inferred || crossing.status === "country_sequence" ? translate("borderInferred") : crossing.name || crossing.status === "confirmed" ? translate("borderConfirmed") : translate("borderDetected");
+    const detailFields = [crossing.wait_at ? `${translate("borderDataAt")}: ${escapeHtml(crossing.wait_at)}` : "", quality ? `${translate("borderQuality")}: ${escapeHtml(quality)}` : "", source ? `${translate("borderSource")}: ${source}` : ""].filter(Boolean);
+    return `<article class="border-crossing"><b>${escapeHtml(direction)}</b><small>${escapeHtml(status)}</small>${crossing.name ? `<div>${translate("borderName")}: ${escapeHtml(crossing.name)}</div>` : ""}<div><span>${translate("borderWait")}: ${escapeHtml(wait)}</span>${basis ? ` · ${escapeHtml(basis)}` : ""}</div>${detailFields.length ? `<small>${detailFields.join(" · ")}</small>` : ""}${crossing.wait_notes?.length ? `<small>${escapeHtml(crossing.wait_notes.join(" "))}</small>` : ""}</article>`;
   }).join("") : `<p class="subtle">${translate(result?.metadata?.border_state === "unordered_international" ? "borderInternationalAmbiguous" : "noBorderCrossings")}</p>`;
   return `<section class="route-details border-crossings"><h3>${translate("borderCrossings")}</h3>${rows}</section>`;
 }
@@ -732,7 +733,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     if (result?.provider === "nakordoni_motorhome") {
       const resultPanel = this.shadowRoot.querySelector(".result");
       resultPanel?.insertAdjacentHTML("afterbegin", `<div class="notice beta-notice"><b>${translate("motorhomeBeta")}</b><br>${translate("motorhomeWarning")}<br><a href="${escapeHtml(result.attribution_url || "https://nakordoni.eu")}" target="_blank" rel="noreferrer">${translate("dataByNakordoni")}</a></div>`);
-      resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate)}${renderTollDetails(result, translate, language)}`);
+      resultPanel?.insertAdjacentHTML("beforeend", `${renderBorderCrossings(result, translate, language)}${renderTollDetails(result, translate, language)}`);
       if (result.metadata?.api_version === "v3" && result.metadata?.tolls?.complete === false && !result.metadata?.toll_estimate_v2) {
         const button = document.createElement("button");
         button.type = "button";

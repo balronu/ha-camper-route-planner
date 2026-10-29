@@ -18,7 +18,9 @@ und GPX-Export.
 >
 > Die stabile `v0.1.2` enthält die geprüften Beta.3–Beta.5-Korrekturen.
 >
-> **Entwicklung:** `v0.1.3-beta.3` ergänzt eine flüchtige, native HA-Diagnose
+> **Entwicklung:** `v0.1.3-beta.4` ergänzt lokalisierte Grenzübergänge,
+> eine klarere Unterscheidung zwischen erkanntem Grenzübertritt und konkretem
+> Übergang sowie eine flüchtige, native HA-Diagnose
 > für die tatsächlich ausgeführten Routingantworten. `v0.1.3-beta.2` ergänzt
 > eine eindeutig gekennzeichnete,
 > getrennte API-v2-Mautschätzung für unvollständige v3-Mautdaten sowie sichere
