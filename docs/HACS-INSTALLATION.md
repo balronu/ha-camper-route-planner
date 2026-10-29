@@ -1,6 +1,6 @@
 # HACS- und manuelle Installationsstruktur
 
-Die Struktur ist für die Stable-HACS-Custom-Integration `v0.1.2` geprüft:
+Die Struktur ist für die Stable-HACS-Custom-Integration `v0.1.3` geprüft:
 
 - `custom_components/camper_route_planner/` enthält die Integration;
 - Manifest, Config Flow, Übersetzungen und `services.yaml` sind vorhanden;
@@ -9,7 +9,7 @@ Die Struktur ist für die Stable-HACS-Custom-Integration `v0.1.2` geprüft:
   `custom_components/camper_route_planner/frontend/` übernommen;
 
 Das Repository kann in HACS als Custom repository hinzugefügt werden; HACS
-erkennt das reguläre Stable-Release `v0.1.2` über Tag und Manifest. Die
+erkennt das reguläre Stable-Release `v0.1.3` über Tag und Manifest. Die
 Dokumentations- und
 Issue-URLs im Manifest zeigen auf das Repository.
 
