@@ -12,6 +12,10 @@ profiles, an interactive map, saved routes, and GPX export.
 > `v0.1.1` extends motorhome route planning, traffic and route options, ECO
 > routing, alternatives, time planning, mobile presentation, and vehicle-based
 > fuel planning. Stable remains compatible with `v0.1.0`.
+>
+> **Active beta:** `v0.1.2-beta.3` is available as a published pre-release for
+> testing. For normal installations, `v0.1.1` remains the recommended Stable
+> version.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
