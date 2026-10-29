@@ -2,228 +2,117 @@
 
 ![Camper Route Planner](assets/logo.svg)
 
-Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
-Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
-und GPX-Export.
+Plane deine Wohnmobilreisen direkt in Home Assistant – mit deinem eigenen
+Fahrzeugprofil, individuellen Zwischenzielen und Routen, die auf die
+Abmessungen und das Gewicht deines Fahrzeugs abgestimmt werden können.
 
-> **Status:** `v0.1.5` Stable; `v0.1.4-beta.5` bleibt als historische Pre-release erhalten. Die Lovelace-Karte ist für eine isolierte
-> HA-2026.10.1-Fixture, Chromium und den praktischen iPhone-Navigationstest
-> geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
-> automatische Fallbacks.
->
-> `v0.1.5` enthält die Stable-Korrekturen und die optionale
-> Entwicklerdiagnose. Die vorherige Stable `v0.1.3` erweiterte die
-> Wohnmobil-Routenplanung,
-> Verkehrs- und Routenoptionen,
-> ECO-Routing, Alternativen, Zeitplanung, mobile Darstellung und die
-> fahrzeugbezogene Kraftstoffplanung. Stable bleibt mit `v0.1.1` und `v0.1.0`
-> kompatibel.
->
-> Die Stable-Linie enthält die geprüften Beta.1–Beta.5-Korrekturen.
-> Die getestete Portugal-Route lieferte unter API v3 vollständige Mautdaten vom
-> Primary-Server. Die ETA bleibt derzeit konservativ (etwa 90 km/h) und wird
-> nicht künstlich korrigiert.
->
-> Die Beta-Linie ergänzt lokalisierte Grenzübergänge,
-> eine klarere Unterscheidung zwischen erkanntem Grenzübertritt und konkretem
-> Übergang sowie eine flüchtige, native HA-Diagnose
-> für die tatsächlich ausgeführten Routingantworten. `v0.1.3-beta.2` ergänzt
-> eine eindeutig gekennzeichnete,
-> getrennte API-v2-Mautschätzung für unvollständige v3-Mautdaten sowie sichere
-> Routingdiagnostik, eine einmalige administrative Request-Diagnose,
-> „Diagnose kopieren“ und die abschaltbare Entwicklerdiagnose.
-> Stable `v0.1.5` ist die empfohlene Produktivversion. `v0.1.3` bleibt als
-> Rollback-Version erhalten; der historische Tag `v0.1.4` wird nicht verändert.
+Camper Route Planner verbindet eine übersichtliche Lovelace-Karte mit der
+Routing-Technologie von [NaKordoni](https://nakordoni.eu). So bleiben
+Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 
-[English version](README.en.md) · [Dokumentation](docs/)
+> **v0.1.5 Stable** ist veröffentlicht. Die Stable-Version wurde automatisiert
+> und mit einer echten NaKordoni-v3-Routenberechnung erfolgreich überprüft.
+> Die Integration ist ein Planungswerkzeug und ersetzt kein spezialisiertes
+> Wohnmobil-Navigationsgerät.
+
+[English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
 ![Desktop](assets/screenshots/desktop.png)
 ![Mobil](assets/screenshots/mobile.png)
 
-## Bereits implementiert
+## Für deine Reiseplanung
 
-- Fahrzeugprofile mit Höhe, Breite, Länge, Gewicht und Fahrzeugart
-- Start, Ziel und Zwischenziele
-- manuelle Berechnung ausschließlich nach Benutzeraktion
-- CARTO-Kartenintegration mit SVG-Fallback
-- deterministisches Mock-Routing für Offline-Tests
-- Nakordoni-Motorhome-Routing mit konfigurierten Fahrzeugparametern
-- Speicherung und Laden berechneter Routen
-- GPX-Export als Route, Track oder kombiniert
-- Navigationsübergabe an iOS-/Android-Karten-Apps und Desktop-Fallback; GPX-Export bleibt erhalten
-- deutsche und englische UI-Texte
-- dauerhaft sichtbare Leaflet-Karte mit Marker-Drag und Kartenauswahl
-- GPS-Startpunkt je Fahrzeugprofil; Zoe nutzt standardmäßig `device_tracker.wohnmobil_zoe`
-- Geoapify-Adresssuche und Reverse-Geocoding über den HA-Options-Flow (Backend-only, mockbar)
-- Verkehrs- und Routenoptionen, Vermeidungen, ECO-Routing und alternative Routen
-- Abfahrts- und Ankunftszeiten sowie verbesserte Karten- und Mobile-Darstellung
-- Fahrzeugbezogene Kraftstoffplanung mit Liter-/Prozentfüllstand, Reichweite,
-  manueller Kostenschätzung und neutralem Hinweis auf erforderliche Tankstopps
-- Verbesserte PDF-/GPX-Funktionen und deutsche/englische Übersetzungen
+- **Wohnmobilgerechte Fahrzeugprofile:** Hinterlege Fahrzeugtyp, Länge,
+  Breite, Höhe, Gewicht, Achszahl und optionale Kraftstoffdaten.
+- **Flexible Routen:** Plane Start, Ziel und Zwischenziele und wähle passende
+  Routenoptionen, Vermeidungen, Routentypen und optionale Abfahrts- oder
+  Ankunftszeiten.
+- **NaKordoni-Routing:** Nutze den sichtbaren NaKordoni-Provider mit deinen
+  eigenen Zugangsdaten oder den Offline-Mock für Tests.
+- **Karte und Reiseübersicht:** Sieh Route, Entfernung, Fahrzeit, Hinweise,
+  Grenzübergänge und verfügbare Mautinformationen direkt in Home Assistant.
+- **Gespeicherte Routen:** Speichere Planungen, lade sie später wieder und
+  berechne sie mit den gespeicherten Eingaben neu. Wenn sich Eingaben ändern
+  oder eine Neuberechnung fehlschlägt, wird ein vorhandenes Ergebnis als
+  veraltet gekennzeichnet.
+- **Reiseunterlagen:** Exportiere Route, Track oder beides als GPX und erzeuge
+  einen PDF-Reiseplan. Eine Route kann außerdem an Apple Maps, Google Maps
+  oder OpenStreetMap übergeben werden.
+- **Kraftstoffplanung:** Berechne auf Basis deiner Fahrzeugdaten Reichweite,
+  Verbrauch, Kosten und möglichen zusätzlichen Kraftstoffbedarf.
+- **Smartphone und Tablet:** Die Lovelace-Karte ist für Desktop- und mobile
+  Home-Assistant-Dashboards ausgelegt.
 
-## Projektbeschreibung und Datenqualität
+## Zusammenarbeit mit NaKordoni
 
-Camper Route Planner ist eine Home-Assistant-Integration für
-wohnmobilspezifische Routenplanung. Sie richtet sich an Reisende, die
-Fahrzeugabmessungen, Gewicht, Zwischenziele und lokale Kraftstoffdaten in
-Home Assistant verwalten möchten. Fahrzeugprofile sind nicht auf das
-Beispielprofil Carthago beschränkt.
+Camper Route Planner nutzt die Routing-API von NaKordoni und berücksichtigt die
+für die Routenanfrage hinterlegten Fahrzeugdaten. Technischer Austausch mit dem
+NaKordoni-Team hat geholfen, die Wohnmobilunterstützung praxisnäher zu machen.
+Das ist keine Aussage über eine formelle Partnerschaft oder Empfehlung durch
+NaKordoni.
 
-Die Karte unterstützt parallel NaKordoni API v2 und API v3 über getrennte
-Adapter. Provider und tatsächlich ausgeführte API-Version werden getrennt
-ausgewiesen. Entfernung, Fahrzeit, verfügbare Verkehrsinformationen,
-Grenzübergänge und Restriktionshinweise stammen aus der jeweiligen Antwort.
-Verbrauch, Füllstand und manueller Dieselpreis werden lokal zu Reichweite,
-Gesamtverbrauchskosten und zusätzlichem Kraftstoffbedarf berechnet. Routen
-können gespeichert sowie als GPX oder PDF exportiert werden.
+NaKordoni API v2 und v3 werden als getrennte Pfade behandelt. Mautdaten können
+je nach Route und API-Version vollständig, geschätzt oder unvollständig sein;
+die Oberfläche kennzeichnet diese Unterschiede. Persönliche API-Zugangsdaten
+werden über den Home-Assistant-Config-/Options-Flow verwaltet und nicht an den
+Browser, Screenshots, GPX-Dateien oder Logs weitergegeben.
 
-Die v2-Mautantwort kann Schätzwerte liefern. v3 verarbeitet seine eigenen
-`total_eur`- und `by_country`-Felder; bei unvollständiger Abdeckung bleibt
-`complete=false` sichtbar. V2-Werte und ungeprüfte Lkw-Tarife werden nicht als
-v3-Wohnmobilwerte übernommen.
+## Bedienung und Datenschutz
 
-## Unterstützte Grenzen
+Die Routenberechnung startet nur nach einer ausdrücklichen Benutzeraktion.
+Optionale Abfahrts- und Ankunftszeiten werden nur übertragen, wenn sie gesetzt
+sind. Die Entwicklerdiagnose ist standardmäßig ausgeblendet, nur für
+Home-Assistant-Administratoren verfügbar und kann pro Karte aktiviert werden.
+Eine Request-Diagnose gilt nur für einen einzelnen Backend-Versuch; der
+bereinigte Bericht kann anschließend kopiert werden. Standortdaten,
+Zwischenziele und Zugangsdaten sind sensible Informationen und sollten nur über
+vertrauenswürdige Supportkanäle geteilt werden.
 
-- Die Routenberechnung wird ausschließlich durch eine Benutzeraktion gestartet.
-- Externe Navigations-Apps können Strecken neu berechnen und Fahrzeugparameter
-  ignorieren; für komplexe Wohnmobilrouten bleibt GPX der zuverlässige Exportweg.
+## Bekannte Einschränkungen
 
-Truck-Routing darf bis zur Verfügbarkeit und Prüfung des echten Motorhome-
-Profils nicht als sichere Wohnmobilnavigation dargestellt werden. Ein
-stiller Fallback von Motorhome auf Truck ist ausgeschlossen.
+- Eine berechnete Route ist keine rechtliche Freigabe. Durchfahrtshöhen,
+  Gewichtsgrenzen, Verkehrszeichen, Umweltzonen, Maut- und Fahrvorschriften
+  müssen vor und während der Fahrt selbst geprüft werden.
+- Externe Navigations-Apps können die Route neu berechnen oder Fahrzeugdaten
+  und Zwischenziele nur teilweise übernehmen. Für komplexe Wohnmobilrouten ist
+  GPX der zuverlässigere Übergabeweg.
+- Maut-, Grenz- und Verkehrsdaten hängen von der Providerantwort ab. Fehlende
+  oder geschätzte Werte werden nicht als verbindliche Angaben dargestellt.
+- Der NaKordoni-Wohnmobilpfad kann beim Anbieter weiterhin als Beta-Profil
+  geführt werden. Es gibt keinen stillen Wechsel auf Truck-Routing und keinen
+  automatischen Mock-Fallback bei Providerfehlern.
+- Die Kraftstoffplanung ist eine lokale Rechenhilfe. Tankstopps werden nicht
+  automatisch gebucht oder als verbindliche Reiseanweisung ausgegeben.
 
-## Installation und Konfiguration
+## Installation
 
-Die Stable-Version kann als HACS-Custom-Repository oder manuell nach
-`custom_components/camper_route_planner/` installiert werden. Anschließend wird sie
-über **Einstellungen → Geräte & Dienste** eingerichtet. Im Options Flow stehen
-`Nakordoni` (intern `nakordoni_motorhome`) und `Mock (offline)` zur Auswahl.
-Fahrzeugänderungen sind standardmäßig deaktiviert; Provider-/Key-Änderungen
-verändern vorhandene Profile, IDs und Tracker-Zuordnungen nicht.
+Bis zur Aufnahme in den offiziellen HACS-Katalog installierst du Camper Route
+Planner als **Custom Repository**:
 
-### Karten
+1. In HACS **Integrationen → ⋮ → Benutzerdefinierte Repositories** öffnen.
+2. `balronu/ha-camper-route-planner` als Repository vom Typ **Integration**
+   hinzufügen.
+3. Die reguläre Stable-Version `v0.1.5` installieren und Home Assistant bei
+   Aufforderung neu starten.
+4. Unter **Einstellungen → Geräte & Dienste** die Integration einrichten und
+   anschließend die Lovelace-Karte in dein Dashboard aufnehmen.
 
-Die Karte kann mit einer browsergeeigneten CARTO-Konfiguration betrieben
-werden. Zugangsdaten gehören nicht in das Frontend, in Screenshots, Logs,
-GPX-Dateien oder Git. Wenn keine Kartenkacheln verfügbar sind, zeigt die
-Karte den integrierten SVG-Fallback.
+Alternativ kann das Release-ZIP manuell nach
+`custom_components/camper_route_planner/` entpackt werden. Die vollständige
+[HACS-/Installationsanleitung](docs/HACS-INSTALLATION.md), Konfiguration und
+Rollback-Hinweise bleiben in der technischen Dokumentation erhalten. Der
+offizielle HACS-Katalogstatus ist in der [HACS-Dokumentation](docs/HACS-INSTALLATION.md)
+nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 
-### Routen und GPX
+## Weiterführende Dokumentation
 
-Die Berechnung wird ausschließlich über die Schaltfläche bzw. die explizite
-Service-Grenze ausgelöst. GPS-Änderungen, HA-Start, Reload oder das Öffnen der
-Karte starten keine Berechnung. Der GPX-Export arbeitet auf der gespeicherten
-normalisierten Route und enthält keine Zugangsdaten.
-
-### Geoapify-Adresssuche und Datenschutz
-
-Die Phase-3B-Kandidatenimplementierung nutzt Geoapify Address Autocomplete über
-eine Backend-WebSocket-Grenze. Der Geoapify-Key wird ausschließlich im
-Home-Assistant-Options-Flow gespeichert und niemals an Lovelace, Browser,
-Logs, Diagnoseexporte oder GitHub übertragen. Suchtexte werden an Geoapify
-übermittelt, wenn die Funktion aktiviert ist; die Oberfläche zeigt deshalb
-einen Datenschutzhinweis und Geoapify/OpenStreetMap-Attribution. Debounce,
-Ergebnislimit, lokales Rate-Limiting und Cache reduzieren unnötige Abfragen.
-Reverse-Geocoding löst GPS-, Karten- und verschobene Marker nach einer kurzen
-Verzögerung in eine lesbare Adresse auf; identische Koordinaten werden aus dem
-Cache bedient. Ohne Treffer oder Key bleiben Koordinaten als maßgebliche Daten
-sichtbar und Karte, GPS und manuelle Koordinaten aktiv.
-
-Die Stable-Version enthält die korrigierte Navigationsübergabe für iOS und
-Android anhand des bewährten direkten HTTPS-Anchor-Musters aus Mobile Fuel
-Stations, vollständige Fahrzeugverwaltungs-Übersetzungen, bereinigte Provider-
-Auswahl, Mehrfahrzeugverwaltung, GPX-Route/Track/kombinierten Export und den
-nicht-destruktiven Options Flow. Die Live-Routenprüfung und der iPhone-Test
-wurden vom Nutzer erfolgreich durchgeführt; automatisierte Tests verwenden
-weiterhin ausschließlich Mock-Daten und isolierte Fixtures.
-
-## Nakordoni-Status
-
-Jede Installation verwendet ausschließlich den persönlichen Nakordoni-
-Developer-API-Key des Benutzers. Der Key wird im Home-Assistant
-Config-/Options-Flow als Passwortfeld eingegeben und lokal in der Config Entry
-gespeichert; er wird nie an Lovelace, Browser-Local-Storage, GPX oder Logs
-übertragen. Erneuerung und explizites Entfernen sind über den Options Flow
-möglich. Siehe [API-Key-Anbindung](docs/NAKORDONI-API-KEY.md).
-
-Laut Support-Ticket #230 ist `GET /api/v2/data/truck-route` mit dem
-vorhandenen Zugang zugänglich. Das Projekt hat dafür keinen Live-Aufruf
-ausgeführt. Das Truck-Routing besitzt ein separates Tageskontingent (Explorer
-10, Starter 300 Routen/Tag; Zusatzkontingente möglich).
-
-`vehicle_type=motorhome` ist als Beta dokumentiert und wird nur über den
-explizit sichtbaren Provider `Nakordoni` verwendet. Das Profil verwendet
-7,65 m × 2,34 m × 3,20 m, 4,8 t und zwei Achsen; Lkw-Lenk- und Ruhezeitfelder
-werden nicht übertragen. Der kontrollierte Laufzeitpfad verwendet den
-persönlichen Key über den HA-Transport; Mock ist kein automatischer Fallback.
-Das isolierte Werkzeug startet standardmäßig im Dry-Run; der
-[Live-Testplan](docs/PHASE2I-LIVE-TEST-PLAN.md) begrenzt den ersten Tag auf
-acht Abfragen.
-
-OAuth/PKCE bleibt als spätere optionale Alternative vorbereitet. Der Client von
-Mobile Fuel Stations wird nicht übernommen.
-Jeder Nutzer verwendet seinen eigenen Zugang und sein eigenes Routing-
-Kontingent. Die Surface-Registrierung im Nakordoni-Dashboard ist vorbereitet,
-aber nicht in einem fremden Account durchgeführt.
-
-Details: [Stable-Release](docs/releases/v0.1.5.md), [Fehlerbehebung](docs/TROUBLESHOOTING.md), [Beta-5-Notes](docs/releases/v0.1.4-beta.5.md), [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
-[API-Audit](docs/NAKORDONI-API-AUDIT.md),
-[Phase-2F-bis-2I-Plan](docs/PHASE2F-2I-PLAN.md).
-
-## Sicherheit und Einschränkungen
-
-- keine produktiven Secrets oder Tokens im Repository
-- keine direkten Browser-Aufrufe zu Nakordoni
-- keine automatische Routenberechnung oder Mock-Fallbacks bei Providerfehlern
-- keine automatische Routenberechnung
-- unbekannte Restriktionen werden nicht als freie Strecke interpretiert
-- Truck-Maut, Truck-Fahrverbote und Ruheplanung sind nicht automatisch auf
-  private Wohnmobile übertragbar
-- Es gibt keine automatische Tankstellensuche, keine automatischen
-  Dieselpreisabfragen und keine automatische Tankstopp-Optimierung.
-- Die v3-Mautabdeckung kann unvollständig sein; die Antwortqualität wird über
-  `complete`, Länderwerte und Providerhinweise transparent dargestellt.
-
-## Entwicklung und Tests
-
-```bash
-PYTHONPATH=src:. python3 -m unittest discover -s tests -v
-python3 -m compileall -q src tests custom_components
-cd frontend
-npm ci
-npm test
-npm run build
-npm run test:e2e
-```
-
-Der Stable-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.5.md](docs/releases/v0.1.5.md). Beta-Tests und
-GitHub-seitige Validierung werden über
-GitHub-seitige Validierung werden über
-`.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
-durch GitHub Actions validiert. Die Installation in produktiven HA-Systemen
-erfolgt weiterhin manuell durch den jeweiligen Betreiber.
-
-## Roadmap
-
-1. Stable `v0.1.5` ist veröffentlicht; `v0.1.3` bleibt als Rollback-Version
-   erhalten. `v0.1.4-beta.5` bleibt als historische Pre-release verfügbar.
-   `v0.1.2`, `v0.1.1` und `v0.1.0` bleiben als eigenständige
-   Rückfallbasis erhalten.
-2. Weitere Funktionen werden erst nach einem separaten Änderungsauftrag
-   entwickelt.
-3. Eine Migration zur inzwischen eingestellten SmartCamper Suite ist nicht
-   Bestandteil dieses Releases; die Suite bleibt nur als historisches,
-   stillgelegtes Repository erhalten.
-
-## Nakordoni Motorhome (Anbieterstatus)
-
-Der Provider `nakordoni_motorhome` ist der interne Laufzeitpfad hinter der sichtbaren Bezeichnung `Nakordoni`. Der Anbieterstatus des Motorhome-Profils kann weiterhin Beta sein; Verkehrszeichen und geltende Vorschriften haben Vorrang. Es gibt keine automatische Umschaltung vom Mock-Provider.
-
-OAuth/PKCE bleibt als spätere optionale Alternative vorbereitet. Der
-OAuth-Client von Mobile Fuel Stations wird nicht verwendet.
-
-Routendaten werden mit [Data by nakordoni.eu](https://nakordoni.eu) attribuiert. Die Routing-API ist offiziell unter `nakordoni.eu` dokumentiert; OAuth und Account Usage unter `api.nakordoni.dev`. Details: [Phase 2H](docs/PHASE2H-IMPLEMENTATION.md), [API-Hosts](docs/NAKORDONI-API-HOSTS.md), [OAuth](docs/NAKORDONI-OAUTH.md), [Kontingente](docs/NAKORDONI-QUOTAS.md), [Maut](docs/NAKORDONI-TOLLS.md).
+- [Fahrzeugprofile](docs/VEHICLE-PROFILES.md)
+- [Lovelace-Karte](docs/LOVELACE-CARD.md)
+- [GPX- und PDF-Export](docs/GPX-EXPORT.md)
+- [NaKordoni API und Mautdaten](docs/NAKORDONI-API-AUDIT.md)
+- [Sicherheit und Datenschutz](docs/SECURITY-AND-PRIVACY.md)
+- [Technische Architektur](docs/ARCHITECTURE.md)
+- [v0.1.5 Release Notes](docs/releases/v0.1.5.md)
 
 ## Lizenz
 
