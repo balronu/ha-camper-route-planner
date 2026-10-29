@@ -5,25 +5,26 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.3` Stable. The Lovelace card is validated with an isolated
+> **Status:** `v0.1.4` Stable. The Lovelace card is validated with an isolated
 > HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 >
-> `v0.1.3` extends motorhome route planning, traffic and route options, ECO
+> `v0.1.4` extends motorhome route planning, traffic and route options, ECO
 > routing, alternatives, time planning, mobile presentation, and vehicle-based
 > fuel planning. Stable remains compatible with `v0.1.1` and `v0.1.0`.
 >
-> Stable `v0.1.3` contains the verified Beta.1–Beta.4 corrections.
+> Stable `v0.1.4` contains the verified Beta.1–Beta.4 corrections.
 > The tested Portugal route returned complete API v3 toll data from the primary
 > server. ETA remains conservative (around 90 km/h) and is not artificially
 > corrected.
 >
-> `v0.1.3` adds localized border crossings,
+> `v0.1.4` adds localized border crossings,
 > a clear distinction between detected country transitions and identified
 > crossings, and volatile native HA diagnostics for
 > the actually executed routing responses. `v0.1.3-beta.2` adds an explicitly labelled separate
 > API v2 toll estimate for incomplete v3 toll data and safe routing
-> diagnostics. `v0.1.3` is the recommended production release.
+> diagnostics, one-shot administrator request diagnostics, and “Copy diagnostics”.
+> `v0.1.4` is the recommended production release.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -163,14 +164,14 @@ npm run build
 npm run test:e2e
 ```
 
-See the [Stable release notes](docs/releases/v0.1.3.md) for the installation and
+See the [Stable release notes](docs/releases/v0.1.4.md) for the installation and
 test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is validated by GitHub
 Actions. Installation into productive HA systems remains an operator action.
 
 ## Roadmap
 
-1. Stable `v0.1.3` is published; `v0.1.2`, `v0.1.1` and `v0.1.0` remain independent fallback bases.
+1. Stable `v0.1.4` is published; `v0.1.3`, `v0.1.2`, `v0.1.1` and `v0.1.0` remain independent fallback bases.
 2. Further features require a separate change request.
 3. Migration to the discontinued SmartCamper Suite is outside this release;
    the Suite remains only as a historical, discontinued repository.

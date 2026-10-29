@@ -6,28 +6,29 @@ Deutschsprachige Home-Assistant-Custom-Integration zur manuellen
 Routenplanung mit Fahrzeugprofilen, interaktiver Karte, gespeicherten Routen
 und GPX-Export.
 
-> **Status:** `v0.1.3` Stable. Die Lovelace-Karte ist für eine isolierte
+> **Status:** `v0.1.4` Stable. Die Lovelace-Karte ist für eine isolierte
 > HA-2026.10.1-Fixture, Chromium und den praktischen iPhone-Navigationstest
 > geprüft. Nakordoni-Motorhome-Routing bleibt ausdrücklich manuell, ohne
 > automatische Fallbacks.
 >
-> `v0.1.3` erweitert die Wohnmobil-Routenplanung, Verkehrs- und Routenoptionen,
+> `v0.1.4` erweitert die Wohnmobil-Routenplanung, Verkehrs- und Routenoptionen,
 > ECO-Routing, Alternativen, Zeitplanung, mobile Darstellung und die
 > fahrzeugbezogene Kraftstoffplanung. Stable bleibt mit `v0.1.1` und `v0.1.0`
 > kompatibel.
 >
-> Die stabile `v0.1.3` enthält die geprüften Beta.1–Beta.4-Korrekturen.
+> Die stabile `v0.1.4` enthält die geprüften Beta.1–Beta.4-Korrekturen.
 > Die getestete Portugal-Route lieferte unter API v3 vollständige Mautdaten vom
 > Primary-Server. Die ETA bleibt derzeit konservativ (etwa 90 km/h) und wird
 > nicht künstlich korrigiert.
 >
-> `v0.1.3` ergänzt lokalisierte Grenzübergänge,
+> `v0.1.4` ergänzt lokalisierte Grenzübergänge,
 > eine klarere Unterscheidung zwischen erkanntem Grenzübertritt und konkretem
 > Übergang sowie eine flüchtige, native HA-Diagnose
 > für die tatsächlich ausgeführten Routingantworten. `v0.1.3-beta.2` ergänzt
 > eine eindeutig gekennzeichnete,
 > getrennte API-v2-Mautschätzung für unvollständige v3-Mautdaten sowie sichere
-> Routingdiagnostik. `v0.1.3` ist die empfohlene Produktivversion.
+> Routingdiagnostik, eine einmalige administrative Request-Diagnose und
+> „Diagnose kopieren“. `v0.1.4` ist die empfohlene Produktivversion.
 
 [English version](README.en.md) · [Dokumentation](docs/)
 
@@ -160,7 +161,7 @@ Jeder Nutzer verwendet seinen eigenen Zugang und sein eigenes Routing-
 Kontingent. Die Surface-Registrierung im Nakordoni-Dashboard ist vorbereitet,
 aber nicht in einem fremden Account durchgeführt.
 
-Details: [Stable-Release](docs/releases/v0.1.3.md), [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
+Details: [Stable-Release](docs/releases/v0.1.4.md), [Nakordoni-Planungsupdate](docs/NAKORDONI-PLANUNGSUPDATE-2026-10-16.md),
 [API-Audit](docs/NAKORDONI-API-AUDIT.md),
 [Phase-2F-bis-2I-Plan](docs/PHASE2F-2I-PLAN.md).
 
@@ -191,7 +192,7 @@ npm run test:e2e
 ```
 
 Der Stable-Installations- und Testnachweis steht in
-    [docs/releases/v0.1.3.md](docs/releases/v0.1.3.md). Hassfest und
+    [docs/releases/v0.1.4.md](docs/releases/v0.1.4.md). Hassfest und
 GitHub-seitige Validierung werden über
 `.github/workflows/validate.yml` geprüft; der öffentliche Repository-Stand wird
 durch GitHub Actions validiert. Die Installation in produktiven HA-Systemen
@@ -199,7 +200,7 @@ erfolgt weiterhin manuell durch den jeweiligen Betreiber.
 
 ## Roadmap
 
-1. Stable `v0.1.3` ist veröffentlicht; `v0.1.2`, `v0.1.1` und `v0.1.0` bleiben als eigenständige
+1. Stable `v0.1.4` ist veröffentlicht; `v0.1.3`, `v0.1.2`, `v0.1.1` und `v0.1.0` bleiben als eigenständige
    Rückfallbasis erhalten.
 2. Weitere Funktionen werden erst nach einem separaten Änderungsauftrag
    entwickelt.
