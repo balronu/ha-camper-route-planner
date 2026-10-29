@@ -5,17 +5,17 @@
 Home Assistant custom integration for manual route planning with vehicle
 profiles, an interactive map, saved routes, and GPX export.
 
-> **Status:** `v0.1.4-beta.5` Pre-release; Stable remains `v0.1.3`. The Lovelace card is validated with an isolated
+> **Status:** `v0.1.5` Stable; `v0.1.4-beta.5` remains as a historical pre-release. The Lovelace card is validated with an isolated
 > HA 2026.10.1 fixture, Chromium, and the practical iPhone navigation test.
 > Nakordoni motorhome routing remains explicitly manual with no automatic fallback.
 >
-> `v0.1.4-beta.5` contains the Stable corrections and optional developer
+> `v0.1.5` contains the Stable corrections and optional developer
 > diagnostics. Stable `v0.1.3` extends motorhome route planning, traffic and
 > route options, ECO
 > routing, alternatives, time planning, mobile presentation, and vehicle-based
 > fuel planning. Stable remains compatible with `v0.1.1` and `v0.1.0`.
 >
-> The beta line contains the verified Beta.1–Beta.4 corrections.
+> The Stable line contains the verified Beta.1–Beta.5 corrections.
 > The tested Portugal route returned complete API v3 toll data from the primary
 > server. ETA remains conservative (around 90 km/h) and is not artificially
 > corrected.
@@ -26,8 +26,9 @@ profiles, an interactive map, saved routes, and GPX export.
 > the actually executed routing responses. `v0.1.3-beta.2` adds an explicitly labelled separate
 > API v2 toll estimate for incomplete v3 toll data and safe routing
 > diagnostics, one-shot administrator request diagnostics, “Copy diagnostics”,
-> and the opt-in developer-diagnostics setting. Stable `v0.1.3` remains the
-> recommended production release.
+> and the opt-in developer-diagnostics setting. Stable `v0.1.5` is the
+> recommended production release. `v0.1.3` remains available as the rollback
+> version; the historical `v0.1.4` tag is not changed.
 
 [Deutsche Version](README.md) · [Documentation](docs/)
 
@@ -167,14 +168,15 @@ npm run build
 npm run test:e2e
 ```
 
-See the [Stable release notes](docs/releases/v0.1.3.md) and [Beta.5 notes](docs/releases/v0.1.4-beta.5.md) for installation and
+See the [Stable release notes](docs/releases/v0.1.5.md) and [Beta.5 notes](docs/releases/v0.1.4-beta.5.md) for installation and
 test evidence. Hassfest and GitHub-side validation run through
 `.github/workflows/validate.yml`; the public repository is validated by GitHub
 Actions. Installation into productive HA systems remains an operator action.
 
 ## Roadmap
 
-1. Stable `v0.1.3` remains published; `v0.1.4-beta.5` is the current pre-release.
+1. Stable `v0.1.5` is published; `v0.1.3` remains available as the rollback
+   version. `v0.1.4-beta.5` remains available as a historical pre-release.
    `v0.1.2`, `v0.1.1` and `v0.1.0` remain independent fallback bases.
 2. Further features require a separate change request.
 3. Migration to the discontinued SmartCamper Suite is outside this release;
