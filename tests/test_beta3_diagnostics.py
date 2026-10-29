@@ -95,6 +95,28 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertNotIn("48.1", str(diagnostic))
         self.assertNotIn("K" * 24, str(diagnostic))
 
+    def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
+        runtime = self.runtime(route_payload())
+        runtime.arm_request_diagnostics()
+        result = asyncio.run(runtime.async_calculate_service({**self.request_data(), "via": [{"latitude": 40.0, "longitude": -3.0}]}))
+        snapshot = result["request_diagnostic"]
+        self.assertEqual(snapshot["request"]["api_version"], "v3")
+        self.assertEqual(snapshot["request"]["parameters"]["via"], "40.0,-3.0")
+        self.assertEqual(snapshot["response"]["distance_m"], 100000)
+        self.assertEqual(snapshot["response"]["duration_s"], 3600)
+        self.assertNotIn("Authorization", str(snapshot))
+        self.assertNotIn("KKKK", str(snapshot))
+        self.assertNotIn("request_diagnostic", runtime.diagnostics()["last_operation"])
+
+    def test_request_diagnostic_arm_is_consumed_on_failed_call(self):
+        runtime = self.runtime({"ok": False, "status": 503, "error": {"code": "busy", "message": "busy"}, "transport": {"attempts": 1, "status": 503}})
+        runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service(self.request_data()))
+        runtime.coordinator.provider.transport.response = route_payload()
+        result = asyncio.run(runtime.async_calculate_service(self.request_data()))
+        self.assertNotIn("request_diagnostic", result)
+
     def test_native_diagnostics_selects_the_matching_runtime(self):
         first = self.runtime(route_payload(total=1.0))
         second = self.runtime(route_payload(total=2.0))

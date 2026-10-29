@@ -79,6 +79,7 @@ class RuntimeData:
         self.usage_transport = None
         self._diagnostic_counts = {"v2": 0, "v3": 0}
         self._last_diagnostic: dict[str, Any] | None = None
+        self._request_diagnostics_armed = False
 
     @classmethod
     def from_config_entry(cls, hass: Any, entry: Any) -> "RuntimeData":
@@ -148,6 +149,69 @@ class RuntimeData:
             "status": "available" if self._last_diagnostic is not None else "no_route_calculation",
         }
 
+    def arm_request_diagnostics(self) -> None:
+        """Arm one volatile, user-requested snapshot for the next route call."""
+        self._request_diagnostics_armed = True
+
+    def _request_snapshot(self, request: RouteRequest) -> dict[str, Any]:
+        """Return the provider-bound request without credentials or headers."""
+        provider = self.coordinator.provider
+        parameters: dict[str, Any] = {}
+        endpoint = None
+        api_version = "v2"
+        if isinstance(provider, NakordoniRouteAdapterV3):
+            from .providers.nakordoni_v3 import build_v3_motorhome_parameters
+            parameters = build_v3_motorhome_parameters(request)
+            endpoint = provider.endpoint
+            api_version = "v3"
+        return {
+            "api_version": api_version,
+            "endpoint": endpoint,
+            "parameters": parameters,
+            "coordinates": {
+                "origin": request.origin.as_dict(),
+                "destination": request.destination.as_dict(),
+                "waypoints": [point.as_dict() for point in request.waypoints],
+            },
+            "vehicle": {
+                "profile_id": request.vehicle.profile_id,
+                "vehicle_kind": request.vehicle.vehicle_kind,
+                "height_m": request.vehicle.height_m,
+                "width_m": request.vehicle.width_m,
+                "length_m": request.vehicle.length_m,
+                "gross_weight_kg": request.vehicle.gross_weight_kg,
+                "axles": request.vehicle.axles,
+                "axle_load_kg": request.vehicle.axle_load_kg,
+                "emission_class": request.vehicle.emission_class,
+            },
+            "units": {"coordinates": "decimal_degrees", "distance": "m", "duration": "s", "vehicle_dimensions": "m", "vehicle_weight": "kg"},
+            "routing_options": {
+                "traffic": request.traffic,
+                "alternatives": request.alternatives,
+                "geometry": request.geometry_format,
+                "avoid": list(request.avoid),
+                "route_type": request.route_type,
+                "depart_at": request.depart_at.isoformat() if request.depart_at else None,
+                "arrive_at": request.arrive_at.isoformat() if request.arrive_at else None,
+            },
+        }
+
+    @staticmethod
+    def _request_diagnostic(snapshot: dict[str, Any], result: Any) -> dict[str, Any]:
+        transport = result.metadata.get("transport") if isinstance(result.metadata.get("transport"), dict) else {}
+        return {
+            "request": snapshot,
+            "response": {
+                "http_status": transport.get("status"),
+                "routing_source": transport.get("route_source") or result.metadata.get("routing_source"),
+                "cache_hit": bool(result.metadata.get("cache_hit", False)),
+                "retry_count": max(int(transport.get("attempts", 1)) - 1, 0),
+                "distance_m": result.distance_m,
+                "duration_s": result.duration_s,
+                "response_fields": {"distance": "distance_m", "duration": "duration_s"},
+            },
+        }
+
     def _record_diagnostic(
         self,
         *,
@@ -200,6 +264,8 @@ class RuntimeData:
             depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
             arrive_at=_time("arrive_at"),
         )
+        diagnostic_snapshot = self._request_snapshot(request) if self._request_diagnostics_armed else None
+        self._request_diagnostics_armed = False
         try:
             result = await self.coordinator.async_calculate_manual(
                 request, force_refresh=bool(data.get("force_refresh", False))
@@ -219,6 +285,7 @@ class RuntimeData:
             "route_options": result.metadata.get("request_options", {}),
             "beta": result.metadata.get("beta", False), "attribution_url": result.metadata.get("attribution_url"),
             "created_at": result.created_at.isoformat() if result.created_at else None,
+            **({"request_diagnostic": self._request_diagnostic(diagnostic_snapshot, result)} if diagnostic_snapshot else {}),
         }
 
     async def async_estimate_tolls_v2(self, data: dict[str, Any]) -> dict[str, Any]:

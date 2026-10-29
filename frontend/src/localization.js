@@ -38,10 +38,18 @@ const TRANSLATIONS = {
 };
 
 TRANSLATIONS.de.providerNetworkAverage = "Durchschnittlicher Netzpreis; die tatsächliche Abschnittsgebühr kann abweichen.";
+TRANSLATIONS.de.requestDiagnostics = "Nächste Anfrage diagnostizieren";
+TRANSLATIONS.de.requestDiagnosticsArmed = "Für die nächste Berechnung aktiviert";
+TRANSLATIONS.de.requestDiagnosticsResult = "Ausgeführte Anfrage (temporär)";
+TRANSLATIONS.de.requestDiagnosticsPrivacy = "Nur nach bewusster Aktivierung angezeigt; keine Zugangsdaten oder Header enthalten.";
 TRANSLATIONS.de.tollSourceApiV2 = "Quelle: NaKordoni API v2 – separate Mautschätzung, nicht verbindlich.";
 TRANSLATIONS.de.tollSourceApiV3 = "Quelle: NaKordoni API v3";
 TRANSLATIONS.de.tollV3IncompleteNote = "Die Route wurde mit API v3 berechnet; deren Mautdaten sind unvollständig. Eine optionale v2-Schätzung bleibt getrennt und kann abweichen.";
 TRANSLATIONS.en.providerNetworkAverage = "Average network price; the actual section charge may differ.";
+TRANSLATIONS.en.requestDiagnostics = "Diagnose der nächsten Anfrage";
+TRANSLATIONS.en.requestDiagnosticsArmed = "Armed for the next calculation";
+TRANSLATIONS.en.requestDiagnosticsResult = "Executed request (temporary)";
+TRANSLATIONS.en.requestDiagnosticsPrivacy = "Shown only after deliberate activation; credentials and headers are excluded.";
 TRANSLATIONS.en.tollSourceApiV2 = "Source: NaKordoni API v2 – separate toll estimate, not binding.";
 TRANSLATIONS.en.tollSourceApiV3 = "Source: NaKordoni API v3";
 TRANSLATIONS.en.tollV3IncompleteNote = "The route was calculated with API v3; its toll data is incomplete. An optional v2 estimate remains separate and may differ.";

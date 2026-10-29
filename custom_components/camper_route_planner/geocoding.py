@@ -57,7 +57,7 @@ class GeoapifyGeocoder:
                 lat, lon = float(item["lat"]), float(item["lon"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if -90 <= lat <= 90 and -180 <= lon <= 180:
+            if -90 <= lat <= 90 and -180 <= lon <= 180 and not (lat == 0 and lon == 0):
                 results.append({"label": str(item.get("formatted") or item.get("address_line1") or query), "latitude": lat, "longitude": lon})
         self._cache[cache_key] = results
         return [dict(item) for item in results]

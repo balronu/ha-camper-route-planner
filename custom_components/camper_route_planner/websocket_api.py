@@ -41,6 +41,21 @@ try:
             return
         connection.send_result(msg["id"], result)
 
+    @websocket_api.websocket_command({vol.Required("type"): "camper_route_planner/arm_request_diagnostics", vol.Required("entry_id"): str})
+    @websocket_api.async_response
+    async def ws_arm_request_diagnostics(hass, connection, msg) -> None:
+        """Prepare one in-memory request snapshot after an explicit admin action."""
+        user = getattr(connection, "user", None)
+        if user is None or not bool(getattr(user, "is_admin", False)):
+            connection.send_error(msg["id"], "admin_required", "Administrator privileges are required")
+            return
+        runtime = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+        if runtime is None:
+            connection.send_error(msg["id"], "not_found", "Config entry is not loaded")
+            return
+        runtime.arm_request_diagnostics()
+        connection.send_result(msg["id"], {"armed": True, "scope": "next_route_calculation"})
+
     @websocket_api.websocket_command({
         vol.Required("type"): "camper_route_planner/estimate_tolls_v2",
         vol.Required("entry_id"): str,
@@ -192,7 +207,7 @@ try:
         connection.send_result(msg["id"], {"route_id": route_id})
 
     def async_register(hass) -> None:
-        for command in (ws_list_entries, ws_nakordoni_usage, ws_estimate_tolls_v2, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
+        for command in (ws_list_entries, ws_nakordoni_usage, ws_arm_request_diagnostics, ws_estimate_tolls_v2, ws_list_profiles, ws_list_routes, ws_map_config, ws_geocode, ws_reverse_geocode, ws_tracker_position, ws_export_gpx, ws_load_route, ws_delete_route, ws_save_route):
             websocket_api.async_register_command(hass, command)
 
 except ImportError:  # pragma: no cover - HA-only wrapper.
