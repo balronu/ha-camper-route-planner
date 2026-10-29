@@ -1,4 +1,10 @@
-# Stable-Readiness nach Phase 2J
+# Stable-Readiness nach Phase 2J (historisch)
+
+> **Archivhinweis:** Dieses Dokument beschreibt den früheren Planungsstand vor
+> Stable. Die aktuelle Stable ist `v0.1.5`; die maßgebliche Dokumentation steht
+> in [docs/releases/v0.1.5.md](releases/v0.1.5.md) und
+> [HACS-INSTALLATION.md](HACS-INSTALLATION.md). Die folgenden No-Go-Gates sind
+> keine aktuelle Release-Sperre.
 
 ## Fortschritt
 
@@ -7,7 +13,7 @@ und das isolierte Beta-Installationspaket sind vorbereitet. Der Key bleibt
 lokal in Home Assistant; OAuth/PKCE ist optional. Das Motorhome-Produkt bleibt
 Beta und wird nicht automatisch oder beim Dashboard-Aufruf abgefragt.
 
-## Verbleibende Gates für v0.1.0 Stable
+## Historische verbleibende Gates für v0.1.0 Stable
 
 - kontrollierter HA-Installations- und Praxistest nach gesonderter Freigabe
 - CI-/Fixture-Nachweis des neuen Static-Path-/Extra-JS-Lifecycle-Codes
