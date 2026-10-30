@@ -33,7 +33,12 @@ for (const viewport of [{ width: 1280, height: 900, label: "Windows/Chromium" },
       if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3, width_m: 2, length_m: 7, gross_weight_kg: 3500, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
       if (message.type.endsWith("/list_routes")) return { routes: [] };
       if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: tileUrl, tile_attribution: "Fixture" };
-      if (message.type === "call_service") { calls += 1; lastRequest = message.service_data; return { response: { ...globalThis.__poiRoute, route_options: message.service_data.poi_parking ? { poi_parking: true, poi_fuel: true, poi_fuel_type: "diesel" } : {} } }; }
+      if (message.type === "call_service") {
+        calls += 1;
+        lastRequest = message.service_data;
+        const includePois = Boolean(message.service_data.poi_parking || message.service_data.poi_fuel);
+        return { response: { ...globalThis.__poiRoute, metadata: includePois ? globalThis.__poiRoute.metadata : {}, route_options: includePois ? { poi_parking: Boolean(message.service_data.poi_parking), poi_fuel: Boolean(message.service_data.poi_fuel), poi_fuel_type: "diesel" } : {} } };
+      }
       return {};
     } };
     globalThis.__poiCard = card;
@@ -50,20 +55,32 @@ for (const viewport of [{ width: 1280, height: 900, label: "Windows/Chromium" },
     card.setStations([{ latitude: 49, longitude: 7, address: "Start" }, { latitude: 55, longitude: 14, address: "Destination" }]);
     card.render();
   });
+  await page.evaluate(() => globalThis.__poiCard.calculate());
+  await page.locator(".crp-route-line").waitFor();
+  assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel })), { calls: 1, parking: undefined, fuel: undefined }, `route calculation without POIs omits disabled POI fields on ${viewport.label}`);
+  await page.evaluate(() => { globalThis.__poiMapBefore = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .crp-map"); });
   await page.locator('input[data-route-option="poi_parking"]').check();
-  await page.locator('input[data-route-option="poi_fuel"]').check();
+  assert.deepEqual(await page.evaluate(() => ({ sameMap: document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .crp-map") === globalThis.__poiMapBefore, routeVisible: Boolean(document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".crp-route-line")), stale: document.querySelector("camper-route-planner-card")._state.resultStale })), { sameMap: true, routeVisible: true, stale: false }, `POI toggle preserves the existing map and route on ${viewport.label}`);
   await page.evaluate(() => globalThis.__poiCard.calculate());
   await page.locator(".route-pois").waitFor();
+  assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel })), { calls: 2, parking: true, fuel: undefined }, `parking-only request is accepted on ${viewport.label}`);
+  await page.locator('input[data-route-option="poi_fuel"]').check();
+  await page.evaluate(() => globalThis.__poiCard.calculate());
   await page.locator(".map-section .crp-marker-poi").first().waitFor();
-  assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel, fuelType: globalThis.__poiState.request.poi_fuel_type })), { calls: 1, parking: true, fuel: true, fuelType: "diesel" }, `POI options are sent with the deliberate route request on ${viewport.label}`);
+  await page.locator(".route-pois").waitFor();
+  await page.locator(".map-section .crp-marker-poi").first().waitFor();
+  assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel, fuelType: globalThis.__poiState.request.poi_fuel_type })), { calls: 3, parking: true, fuel: true, fuelType: "diesel" }, `both POI categories are sent with the deliberate route request on ${viewport.label}`);
   assert.equal(await page.locator(".route-poi").count(), 2, `POI list is rendered on ${viewport.label}`);
   assert.equal(await page.locator(".map-section .crp-marker-poi").count(), 2, `normal map renders both POI categories on ${viewport.label}`);
   await page.locator('button[data-action="open-map-popup"]').click();
   await page.locator(".map-popup").waitFor();
   await page.waitForTimeout(120);
   assert.equal(await page.locator(".map-popup .crp-marker-poi").count(), 2, `popup reuses the current POIs on ${viewport.label}`);
-  assert.equal(await page.evaluate(() => globalThis.__poiState.calls), 1, `popup opening does not request routing on ${viewport.label}`);
+  assert.equal(await page.evaluate(() => globalThis.__poiState.calls), 3, `popup opening does not request routing on ${viewport.label}`);
   await page.locator(".map-popup-close").click();
+  await page.locator('input[data-route-option="poi_parking"]').uncheck();
+  await page.evaluate(() => globalThis.__poiCard.calculate());
+  assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel })), { calls: 4, parking: undefined, fuel: true }, `fuel-only request omits disabled parking on ${viewport.label}`);
   await page.evaluate(() => { const card = globalThis.__poiCard; card.updatePoint("origin", 0, "latitude", 49.1); card.render(); });
   assert.equal(await page.locator(".route-pois").count(), 0, `stale route hides POI list after station change on ${viewport.label}`);
   assert.equal(await page.locator(".map-section .crp-marker-poi").count(), 0, `stale route removes POI markers after station change on ${viewport.label}`);

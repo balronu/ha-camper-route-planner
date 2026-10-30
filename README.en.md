@@ -15,11 +15,11 @@ travel documents together.
 > This integration is a planning tool, not a replacement for a dedicated
 > motorhome navigation device.
 >
-> **v0.1.6-beta.9** is available as an optional preview release. It adds
-> opt-in parking and diesel fuel stations to a deliberately recalculated
-> route. Saved routes remain backward compatible and POIs are scoped to the
-> current route result. The beta 8 fixes for tracker labels, empty
-> destinations, saved-route map fitting, and the popup remain intact.
+> **v0.1.6-beta.10** is available as an optional preview release. It fixes
+> the beta 9 regressions in service-schema validation and map focus:
+> disabled POI fields are omitted from requests, and changing POI options
+> does not alter an existing route or map viewport. The beta 9 POI features
+> remain available.
 > v0.1.5 remains the current Stable version for production use.
 
 [Deutsche Version](README.md) · [Documentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
@@ -94,7 +94,7 @@ Route Planner as a **Custom Repository**:
 1. In HACS, open **Integrations → ⋮ → Custom repositories**.
 2. Add `balronu/ha-camper-route-planner` with category **Integration**.
 3. For production use, install the regular Stable version `v0.1.5`.
-   `v0.1.6-beta.9` is intended for testing through pre-releases or the release
+   `v0.1.6-beta.10` is intended for testing through pre-releases or the release
    ZIP. Restart Home Assistant when prompted.
 4. Set up the integration under **Settings → Devices & services**, then add
    the Lovelace card to your dashboard.
@@ -124,6 +124,7 @@ catalog inclusion is not assumed.
 - [v0.1.6-beta.7 release notes](docs/releases/v0.1.6-beta.7.md)
 - [v0.1.6-beta.8 release notes](docs/releases/v0.1.6-beta.8.md)
 - [v0.1.6-beta.9 release notes](docs/releases/v0.1.6-beta.9.md)
+- [v0.1.6-beta.10 release notes](docs/releases/v0.1.6-beta.10.md)
 - [NaKordoni POI concept](docs/NAKORDONI-POI-CONCEPT.md)
 
 ## License

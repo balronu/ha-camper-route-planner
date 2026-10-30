@@ -34,6 +34,9 @@ try:
         vol.Optional("route_type", default="fastest"): vol.In({"fastest", "eco"}),
         vol.Optional("depart_at"): cv.string,
         vol.Optional("arrive_at"): cv.string,
+        vol.Optional("poi_parking", default=False): cv.boolean,
+        vol.Optional("poi_fuel", default=False): cv.boolean,
+        vol.Optional("poi_fuel_type", default="diesel"): vol.In({"diesel"}),
         vol.Optional("diagnostic_token"): cv.string,
     })
 
