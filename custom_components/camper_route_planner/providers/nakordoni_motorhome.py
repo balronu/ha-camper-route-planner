@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import re
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
@@ -32,6 +33,15 @@ AUTHORIZE_ENDPOINT = "https://api.nakordoni.dev/oauth/authorize"
 TOKEN_ENDPOINT = "https://api.nakordoni.dev/oauth/token"
 REDIRECT_URI = "https://my.home-assistant.io/redirect/oauth"
 ATTRIBUTION_URL = "https://nakordoni.eu"
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def safe_request_id(value: Any) -> str | None:
+    """Keep only a bounded opaque request ID for administrator diagnostics."""
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    return candidate if _REQUEST_ID_PATTERN.fullmatch(candidate) else None
 
 FORBIDDEN_TRUCK_TIME_FIELDS = frozenset(
     {"crew", "last_weekly_rest_end", "reduced_weekly_rest", "extended_daily_rest"}
@@ -354,10 +364,12 @@ class NakordoniMotorhomeProvider:
 
 def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
     error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
-    code = str(error.get("code", payload.get("code", "provider_error")))
+    code = str(error.get("reason") or error.get("code") or payload.get("code", "provider_error"))
     status = payload.get("status")
     status = int(status) if isinstance(status, int) else None
     messages = {
+        "point_not_routable": "Der Routingdienst kann einen Wegpunkt nicht routen. Prüfe diesen Punkt und seine Koordinaten.",
+        "route_timeout": "Der Routingdienst hat die Routenberechnung wegen eines Zeitlimits beendet. Bitte versuche es später erneut.",
         "quota_exceeded": "Das Nakordoni-Routingkontingent ist ausgeschöpft.",
         "market_not_allowed": "Der Zielmarkt ist für diesen Nakordoni-Zugang nicht freigeschaltet.",
         "integration_product_not_allowed": "Der Nakordoni-Tarif erlaubt dieses Routingprodukt nicht.",
@@ -368,7 +380,9 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
     }
     if status == 429:
         code = code if code != "provider_error" else "quota_exceeded"
-    if status in {408, 500, 502, 503, 504}:
+    if code == "route_timeout":
+        retryable = True
+    elif status in {408, 500, 502, 503, 504}:
         retryable = True
     else:
         retryable = False
@@ -377,7 +391,11 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
     retry_after = error.get("retry_after") or headers.get("Retry-After") or headers.get("retry-after")
     suffix = f" Retry nach {retry_after} s." if retry_after else ""
     suffix += f" Reset: {reset_at}." if reset_at else ""
-    if status == 400:
+    if code == "point_not_routable":
+        message = messages[code]
+    elif code == "route_timeout":
+        message = messages[code]
+    elif status == 400:
         message = "Der Routingdienst hat die Anfrage abgelehnt."
     elif status == 401:
         message = "Der Routingdienst hat die Zugangsdaten abgelehnt."
@@ -397,4 +415,26 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
         for key in ("status", "content_type", "response_type", "response_length", "elapsed_s", "attempts")
         if key in transport
     }
-    return ProviderError(message + suffix, code=code, status=status, retryable=retryable, details={"provider_error_code": code, "retry_after": retry_after, "reset_at": reset_at, "transport": safe_transport})
+    details: dict[str, Any] = {
+        "provider_error_code": code,
+        "retry_after": retry_after,
+        "reset_at": reset_at,
+        "transport": safe_transport,
+    }
+    request_id = safe_request_id(payload.get("request_id") or headers.get("X-Request-Id") or headers.get("x-request-id"))
+    if request_id:
+        details["request_id"] = request_id
+    if code == "point_not_routable":
+        waypoint_index = error.get("waypoint_index", error.get("via_index"))
+        if isinstance(waypoint_index, int) and not isinstance(waypoint_index, bool) and 0 <= waypoint_index <= 100:
+            details["waypoint_index"] = waypoint_index
+        coordinates = error.get("coordinates") or error.get("point")
+        if isinstance(coordinates, dict):
+            latitude, longitude = coordinates.get("latitude"), coordinates.get("longitude")
+        elif isinstance(coordinates, (list, tuple)) and len(coordinates) == 2:
+            latitude, longitude = coordinates[0], coordinates[1]
+        else:
+            latitude = longitude = None
+        if isinstance(latitude, (int, float)) and not isinstance(latitude, bool) and -90 <= latitude <= 90 and isinstance(longitude, (int, float)) and not isinstance(longitude, bool) and -180 <= longitude <= 180:
+            details["coordinates"] = {"latitude": float(latitude), "longitude": float(longitude)}
+    return ProviderError(message + suffix, code=code, status=status, retryable=retryable, details=details)

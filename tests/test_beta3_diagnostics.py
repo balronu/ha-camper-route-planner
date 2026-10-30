@@ -110,6 +110,16 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertIsNone(runtime.get_request_diagnostic())
         self.assertIsNone(runtime.diagnostics()["last_request_error"])
 
+    def test_armed_provider_error_diagnostic_contains_safe_request_id(self):
+        response = {"ok": False, "status": 504, "request_id": "req-2026.10.30:abc", "error": {"reason": "route_timeout"}, "transport": {"status": 504, "response_type": "json", "attempts": 1}}
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        report = runtime.get_request_diagnostic()
+        self.assertEqual(report["response"]["request_id"], "req-2026.10.30:abc")
+        self.assertEqual(report["response"]["error_code"], "route_timeout")
+
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
         token = runtime.arm_request_diagnostics()

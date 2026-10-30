@@ -39,6 +39,7 @@ const TRANSLATIONS = {
 
 TRANSLATIONS.de.providerNetworkAverage = "Durchschnittlicher Netzpreis; die tatsächliche Abschnittsgebühr kann abweichen.";
 TRANSLATIONS.de.requestDiagnostics = "Nächste Anfrage diagnostizieren";
+TRANSLATIONS.de.requestId = "Request-ID";
 TRANSLATIONS.de.showDeveloperDiagnostics = "Entwicklerdiagnose anzeigen";
 TRANSLATIONS.de.requestDiagnosticsArmed = "Für die nächste Berechnung aktiviert";
 TRANSLATIONS.de.requestDiagnosticsResult = "Ausgeführte Anfrage (temporär)";
@@ -51,6 +52,7 @@ TRANSLATIONS.de.tollSourceApiV3 = "Quelle: NaKordoni API v3";
 TRANSLATIONS.de.tollV3IncompleteNote = "Die Route wurde mit API v3 berechnet; deren Mautdaten sind unvollständig. Eine optionale v2-Schätzung bleibt getrennt und kann abweichen.";
 TRANSLATIONS.en.providerNetworkAverage = "Average network price; the actual section charge may differ.";
 TRANSLATIONS.en.requestDiagnostics = "Diagnose der nächsten Anfrage";
+TRANSLATIONS.en.requestId = "Request ID";
 TRANSLATIONS.en.showDeveloperDiagnostics = "Show developer diagnostics";
 TRANSLATIONS.en.requestDiagnosticsArmed = "Armed for the next calculation";
 TRANSLATIONS.en.requestDiagnosticsResult = "Executed request (temporary)";
