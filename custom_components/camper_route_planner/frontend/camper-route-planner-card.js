@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.7; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.8; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13812,6 +13812,8 @@
       searchPlaceholder: "Ort, Stra\xDFe oder Adresse",
       useVehicleLocation: "Fahrzeugstandort \xFCbernehmen",
       trackerUnavailable: "Fahrzeugstandort nicht verf\xFCgbar",
+      trackerLocation: "Aktueller Standort Wohnmobil",
+      destinationNotSet: "Ziel noch nicht festgelegt",
       geocodingNotConfigured: "Adresssuche nicht konfiguriert; Koordinaten oder Karte verwenden",
       geocodingPrivacy: "Adresssuche \xFCbermittelt die Eingabe an Geoapify.",
       geocodingAttribution: "Geoapify / OpenStreetMap",
@@ -13983,6 +13985,8 @@
       searchPlaceholder: "Place, street or address",
       useVehicleLocation: "Use vehicle location",
       trackerUnavailable: "Vehicle location unavailable",
+      trackerLocation: "Current motorhome location",
+      destinationNotSet: "Destination not set yet",
       geocodingNotConfigured: "Address search is not configured; use coordinates or the map",
       geocodingPrivacy: "Address searches send the query to Geoapify.",
       geocodingAttribution: "Geoapify / OpenStreetMap",
@@ -31453,6 +31457,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._preserveInputDraftKeys = /* @__PURE__ */ new Set();
       this._searchRequestIds = /* @__PURE__ */ new Map();
       this._fitMapOnNextRender = false;
+      this._dashboardFitPending = false;
       this._pendingViewState = null;
       this._viewScrollTracking = /* @__PURE__ */ new Map();
       this._viewScrollListeners = /* @__PURE__ */ new Map();
@@ -31636,6 +31641,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._state.stations = [];
       this._state.result = null;
       this._state.resultStale = false;
+      this._dashboardFitPending = false;
       this._state.originManual = false;
       this._state.error = "";
       this._state.trackerError = "";
@@ -32151,9 +32157,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) };
         this._state.result = normalizeServiceResponse(route);
         this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
+        this._fitMapOnNextRender = !this._state.resultStale;
+        this._dashboardFitPending = !this._state.resultStale;
         for (const key of this._inputDrafts.keys()) if (key.startsWith("point:")) this._inputDrafts.delete(key);
         this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => this._preserveInputDraftKeys.add(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`));
         this.render();
+        if (!this._state.resultStale) this.scheduleDashboardRouteFit();
       } catch (error2) {
         this._state.error = error2.message || t(languageOf(this._hass), "calculationFailed");
         this.render();
@@ -32291,7 +32300,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._cardExpanded = Boolean(details.open);
       details.querySelector("summary")?.setAttribute("aria-expanded", String(this._cardExpanded));
       if (!this._cardExpanded) return;
-      requestAnimationFrame(() => invalidateMapSize(this.shadowRoot?.querySelector(".crp-map")));
+      requestAnimationFrame(() => {
+        invalidateMapSize(this.shadowRoot?.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"));
+        if (this._dashboardFitPending) this.scheduleDashboardRouteFit();
+      });
+    }
+    scheduleDashboardRouteFit() {
+      const fit = () => {
+        if (!this._dashboardFitPending || !this.currentMapRoute()) return;
+        const map = this.shadowRoot?.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map");
+        const bounds = map?.getBoundingClientRect();
+        if (!map || !bounds?.width || !bounds?.height) return;
+        invalidateMapSize(map);
+        if (fitMapToRoute(map, this.mapPoints(), this.currentMapRoute(), true)) this._dashboardFitPending = false;
+      };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(fit));
+      else fit();
     }
     wrapCardContent(profile, language) {
       const card = this.shadowRoot?.querySelector("ha-card");
@@ -32502,8 +32526,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
     renderStation(station, index, translate2, total) {
       const role = index === 0 ? translate2("start") : index === total - 1 ? translate2("destination") : translate2("waypoint");
-      const address = station.address || station.label || translate2("addressUnavailable");
-      const coordinateText = isValidWaypoint(station) ? `${formatCoordinate(station.latitude)}, ${formatCoordinate(station.longitude)}` : translate2("stationIncomplete");
+      const valid = isValidWaypoint(station);
+      const technicalLabel = (value) => /^device_tracker\.[a-z0-9_]+$/i.test(String(value || "").trim());
+      const rawAddress = [station.address, station.label].find((value) => value && !technicalLabel(value)) || "";
+      const address = rawAddress || (!valid && index === total - 1 ? translate2("destinationNotSet") : !valid ? translate2("stationIncomplete") : index === 0 && (technicalLabel(station.address) || technicalLabel(station.label)) ? translate2("trackerLocation") : translate2("addressUnavailable"));
+      const coordinateText = valid ? `${formatCoordinate(station.latitude)}, ${formatCoordinate(station.longitude)}` : translate2("stationIncomplete");
       const editing = this._editStationId === station.id;
       return `<article class="station-row" data-station-id="${escapeHtml(station.id)}"><div class="station-position">${index + 1}</div><div class="station-copy"><b>${escapeHtml(address)}</b><small>${escapeHtml(coordinateText)}</small><span class="station-role">${escapeHtml(role)}</span></div><div class="station-actions"><button type="button" data-action="edit-station" data-index="${index}">${translate2("edit")}</button><button type="button" data-action="up-station" data-index="${index}" aria-label="${translate2("moveUp")}" ${index <= 0 ? "disabled" : ""}>\u2191</button><button type="button" data-action="down-station" data-index="${index}" aria-label="${translate2("moveDown")}" ${index >= total - 1 ? "disabled" : ""}>\u2193</button>${index > 0 && index < total - 1 ? `<button type="button" data-action="remove-station" data-index="${index}">${translate2("remove")}</button>` : ""}</div>${editing ? this.renderStationEditor(station, index, translate2) : ""}</article>`;
     }
