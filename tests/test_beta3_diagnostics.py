@@ -2,6 +2,7 @@ import asyncio
 import unittest
 from dataclasses import dataclass
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from custom_components.camper_route_planner.const import CONF_PROVIDER, PROVIDER_NAKORDONI_MOTORHOME_V3
 from custom_components.camper_route_planner.coordinator import RouteCoordinator
@@ -11,6 +12,8 @@ from custom_components.camper_route_planner.providers.nakordoni_v3 import Nakord
 from custom_components.camper_route_planner.runtime import RuntimeData
 from custom_components.camper_route_planner.storage import MemoryStore, ProfileRouteStore
 from custom_components.camper_route_planner.diagnostics import async_get_config_entry_diagnostics
+
+_MISSING = object()
 
 
 def route_payload(version="v3", *, complete=False, source="primary", total=12.5, status=200, attempts=1):
@@ -140,10 +143,83 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertEqual(report["response"]["content_type"], "application/json")
         self.assertEqual(report["response"]["response_length"], 812)
         self.assertEqual(report["response"]["request_id"], "req-parser-2026.10.30")
-        self.assertEqual(report["response"]["response_shape"]["parser_exception"], "ValueError")
+        self.assertEqual(report["response"]["response_shape"]["parser_exception"]["type"], "ValueError")
+        self.assertEqual(report["response"]["response_shape"]["parser_exception"]["location"]["function"], "normalize_response")
         self.assertNotIn("100000", str(report))
         self.assertNotIn("48.1", str(last_error))
         self.assertNotIn("K" * 24, str(report))
+
+    def test_armed_parser_error_reports_nested_geojson_shape_and_location(self):
+        response = route_payload()
+        response["data"]["route"]["geometry"] = {"type": "LineString", "coordinates": None}
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        report = runtime.get_request_diagnostic()
+        shape = report["response"]["response_shape"]
+        self.assertEqual(shape["geometry_shape"]["type"], "object")
+        self.assertTrue(shape["geometry_shape"]["coordinates_present"])
+        self.assertEqual(shape["geometry_shape"]["coordinates_type"], "null")
+        self.assertEqual(shape["parser_exception"]["type"], "TypeError")
+        self.assertEqual(shape["parser_exception"]["location"]["function"], "_geometry")
+        self.assertNotIn("coordinates", str(shape["parser_exception"]["message"]))
+
+    def assert_geojson_shape_failure(self, coordinates_marker, expected_coordinates_type, *, expected_length=None, expected_first_type=None):
+        response = route_payload()
+        geometry = {"type": "LineString"}
+        if coordinates_marker is not _MISSING:
+            geometry["coordinates"] = coordinates_marker
+        response["data"]["route"]["geometry"] = geometry
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        report = runtime.get_request_diagnostic()
+        shape = report["response"]["response_shape"]
+        geo = shape["geometry_shape"]
+        self.assertEqual(geo["coordinates_present"], coordinates_marker is not _MISSING)
+        self.assertEqual(geo["coordinates_type"], expected_coordinates_type)
+        if expected_length is not None:
+            self.assertEqual(geo["coordinates_length"], expected_length)
+        if expected_first_type is not None:
+            self.assertEqual(geo["first_point_type"], expected_first_type)
+        self.assertEqual(shape["parser_exception"]["location"]["function"], "_geometry")
+        self.assertNotIn("coordinates", str(shape["parser_exception"]["message"]))
+        self.assertNotIn("48.1", str(shape))
+
+    def test_geojson_missing_coordinates_is_diagnosed_without_values(self):
+        self.assert_geojson_shape_failure(_MISSING, "null")
+
+    def test_geojson_empty_coordinates_is_diagnosed_with_length(self):
+        self.assert_geojson_shape_failure([], "array", expected_length=0, expected_first_type="null")
+
+    def test_geojson_wrong_nesting_reports_first_point_type(self):
+        self.assert_geojson_shape_failure([1, 2], "array", expected_length=2, expected_first_type="number")
+
+    def test_geojson_unexpected_point_object_reports_only_keys(self):
+        response = route_payload()
+        response["data"]["route"]["geometry"] = {"type": "LineString", "coordinates": [{"lat": 48.1, "lon": 11.5}]}
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        shape = runtime.get_request_diagnostic()["response"]["response_shape"]
+        self.assertEqual(shape["geometry_shape"]["first_point_type"], "object")
+        self.assertEqual(shape["geometry_shape"]["first_point_keys"], ["lat", "lon"])
+        self.assertNotIn("48.1", str(shape))
+
+    def test_parser_error_outside_geometry_reports_actual_parser_frame(self):
+        runtime = self.runtime(route_payload())
+        token = runtime.arm_request_diagnostics()
+        with patch("custom_components.camper_route_planner.providers.nakordoni_v3._warnings", side_effect=TypeError("internal warning failure")):
+            with self.assertRaises(ProviderError):
+                asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        shape = runtime.get_request_diagnostic()["response"]["response_shape"]
+        self.assertEqual(shape["parser_exception"]["type"], "TypeError")
+        self.assertEqual(shape["parser_exception"]["location"]["function"], "normalize_response")
+        self.assertEqual(shape["parser_exception"]["location"]["file"], "nakordoni_v3.py")
+        self.assertEqual(shape["parser_exception"]["message"], "internal warning failure")
 
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
