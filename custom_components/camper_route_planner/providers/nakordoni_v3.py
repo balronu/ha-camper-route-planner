@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import re
+import traceback
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
@@ -185,6 +186,20 @@ def _response_shape_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
     }
     for field in ("type", "height_m", "width_m", "length_m", "weight_t", "axles"):
         expected[f"data.vehicle.{field}"] = vehicle.get(field) if isinstance(vehicle, dict) else None
+    geometry = route.get("geometry") if isinstance(route, dict) else None
+    geometry_shape: dict[str, Any] = {"type": _safe_field_type(geometry)}
+    if isinstance(geometry, dict):
+        coordinates = geometry.get("coordinates")
+        geometry_shape["keys"] = sorted(str(key) for key in geometry.keys())[:20]
+        geometry_shape["coordinates_type"] = _safe_field_type(coordinates)
+        if isinstance(coordinates, list):
+            geometry_shape["coordinates_length"] = len(coordinates)
+            first = coordinates[0] if coordinates else None
+            geometry_shape["first_point_type"] = _safe_field_type(first)
+            if isinstance(first, (list, tuple)):
+                geometry_shape["first_point_item_types"] = [_safe_field_type(value) for value in first[:4]]
+            elif isinstance(first, dict):
+                geometry_shape["first_point_keys"] = sorted(str(key) for key in first.keys())[:20]
     invalid_fields: list[str] = []
     if expected["api_version"] != V3_API_VERSION:
         invalid_fields.append("api_version")
@@ -212,9 +227,28 @@ def _response_shape_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
             invalid_fields.append("data.route.restriction_hits")
     return {
         "field_types": {field: _safe_field_type(value) for field, value in expected.items()},
+        "geometry_shape": geometry_shape,
         "missing_fields": [field for field, value in expected.items() if value is None],
         "invalid_fields": list(dict.fromkeys(invalid_fields)),
         "parser_exception": None,
+    }
+
+
+def _parser_exception_diagnostic(exc: Exception) -> dict[str, Any]:
+    """Return bounded exception metadata without source lines or response values."""
+    frames = traceback.extract_tb(exc.__traceback__)
+    frame = frames[-1] if frames else None
+    message = str(exc).strip()
+    if len(message) > 160 or _COORDINATE_LIKE.search(message) or re.search(r"(?i)(bearer|authorization|api[_-]?key)", message):
+        message = "redacted"
+    return {
+        "type": type(exc).__name__,
+        "message": message,
+        "location": {
+            "file": "nakordoni_v3.py" if frame else None,
+            "function": frame.name if frame else None,
+            "line": frame.lineno if frame else None,
+        },
     }
 
 
@@ -498,7 +532,7 @@ class NakordoniRouteAdapterV3:
             raise
         except (KeyError, TypeError, ValueError, IndexError, ValidationError) as exc:
             diagnostic = _response_shape_diagnostic(payload)
-            diagnostic["parser_exception"] = type(exc).__name__
+            diagnostic["parser_exception"] = _parser_exception_diagnostic(exc)
             raise ProviderError(
                 "Invalid or incomplete NaKordoni v3 response",
                 code="invalid_response",

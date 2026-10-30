@@ -140,10 +140,26 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertEqual(report["response"]["content_type"], "application/json")
         self.assertEqual(report["response"]["response_length"], 812)
         self.assertEqual(report["response"]["request_id"], "req-parser-2026.10.30")
-        self.assertEqual(report["response"]["response_shape"]["parser_exception"], "ValueError")
+        self.assertEqual(report["response"]["response_shape"]["parser_exception"]["type"], "ValueError")
+        self.assertEqual(report["response"]["response_shape"]["parser_exception"]["location"]["function"], "normalize_response")
         self.assertNotIn("100000", str(report))
         self.assertNotIn("48.1", str(last_error))
         self.assertNotIn("K" * 24, str(report))
+
+    def test_armed_parser_error_reports_nested_geojson_shape_and_location(self):
+        response = route_payload()
+        response["data"]["route"]["geometry"] = {"type": "LineString", "coordinates": None}
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        report = runtime.get_request_diagnostic()
+        shape = report["response"]["response_shape"]
+        self.assertEqual(shape["geometry_shape"]["type"], "object")
+        self.assertEqual(shape["geometry_shape"]["coordinates_type"], "null")
+        self.assertEqual(shape["parser_exception"]["type"], "TypeError")
+        self.assertEqual(shape["parser_exception"]["location"]["function"], "_geometry")
+        self.assertNotIn("coordinates", str(shape["parser_exception"]["message"]))
 
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
