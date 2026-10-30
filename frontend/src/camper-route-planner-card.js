@@ -157,6 +157,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._searchRequestIds = new Map();
     this._fitMapOnNextRender = false;
     this._pendingViewState = null;
+    this._viewScrollTracking = new Map();
+    this._viewScrollListeners = new Map();
     this._entryDiscoveryConnection = null;
     this._entryDiscoveryPromise = null;
   }
@@ -527,7 +529,12 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const capture = (element) => {
       if (!element || seen.has(element)) return;
       seen.add(element);
-      scrollTargets.push({ element, left: element.scrollLeft, top: element.scrollTop });
+      const tracked = this._viewScrollTracking.get(element);
+      scrollTargets.push({
+        element,
+        left: tracked?.left ?? element.scrollLeft,
+        top: tracked?.top ?? element.scrollTop,
+      });
     };
     // Only remember the card's own ancestor chain. This restores a scroll
     // anchor disturbed by this card's DOM replacement without touching other
@@ -539,6 +546,28 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }
     capture(document.scrollingElement);
     return { activeAction, scrollTargets };
+  }
+
+  trackViewScrollTargets() {
+    const targets = [];
+    let ancestor = this.parentElement;
+    while (ancestor) {
+      if (ancestor.scrollHeight > ancestor.clientHeight || ancestor.scrollWidth > ancestor.clientWidth) targets.push(ancestor);
+      ancestor = ancestor.parentElement;
+    }
+    if (document.scrollingElement) targets.push(document.scrollingElement);
+    targets.forEach((element) => {
+      if (this._viewScrollListeners.has(element)) return;
+      const record = { left: element.scrollLeft, top: element.scrollTop };
+      this._viewScrollTracking.set(element, record);
+      const listener = () => {
+        record.left = element.scrollLeft;
+        record.top = element.scrollTop;
+      };
+      const eventTarget = element === document.scrollingElement ? window : element;
+      eventTarget.addEventListener("scroll", listener, { passive: true });
+      this._viewScrollListeners.set(element, listener);
+    });
   }
 
   restoreViewState(state) {
@@ -880,6 +909,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     // preserved separately. Rebind every control after each render so
     // search, waypoint, and route actions remain usable after DOM updates.
     this.bindEvents();
+    this.trackViewScrollTargets();
     this._fitMapOnNextRender = false;
     this.restoreInputState(inputState);
     this.restoreViewState(viewState);
