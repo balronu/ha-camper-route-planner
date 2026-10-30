@@ -502,7 +502,12 @@ export class CamperRoutePlannerCard extends HTMLElement {
           routeOptions[field] = normalized;
         }
       }
-      const requestOptions = Object.fromEntries(Object.entries(routeOptions).filter(([field, value]) => !["depart_at", "arrive_at"].includes(field) || value));
+      const requestOptions = Object.fromEntries(Object.entries(routeOptions).filter(([field, value]) => {
+        if (["depart_at", "arrive_at"].includes(field)) return Boolean(value);
+        if (field === "poi_parking" || field === "poi_fuel") return value === true;
+        if (field === "poi_fuel_type") return routeOptions.poi_fuel === true;
+        return true;
+      }));
       const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...(this._state.diagnosticToken ? { diagnostic_token: this._state.diagnosticToken } : {}), ...requestOptions });
       this._state.result = normalizeServiceResponse(payload);
       this._state.requestDiagnosticsArmed = false;
@@ -1193,7 +1198,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
       if (key === "avoid") this._state.routeOptions.avoid = [...this.shadowRoot.querySelectorAll('input[data-route-option="avoid"]:checked')].map((item) => item.value);
       else if (input.type === "checkbox") this._state.routeOptions[key] = input.checked;
       else this._state.routeOptions[key] = key === "alternatives" ? Number(input.value) : input.value;
-      this._state.resultStale = Boolean(this._state.result);
+      if (!key.startsWith("poi_")) this._state.resultStale = Boolean(this._state.result);
       this.render();
     }));
     this.shadowRoot.querySelectorAll("button[data-action=edit-station]").forEach((button) => button.addEventListener("click", () => this.beginStationEdit(Number(button.dataset.index))));

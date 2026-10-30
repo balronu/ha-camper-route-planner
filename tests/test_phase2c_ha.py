@@ -74,6 +74,30 @@ async def test_config_flow_options_and_response_service(hass: HomeAssistant, ena
     assert response["provider"] == "mock"
     assert response["synthetic"] is True
 
+    # The service schema must accept all supported POI combinations before any
+    # provider request is attempted.  The mock provider keeps this fixture
+    # offline while exercising Home Assistant's real service validation.
+    for poi_data in (
+        {},
+        {"poi_parking": True},
+        {"poi_fuel": True, "poi_fuel_type": "diesel"},
+        {"poi_parking": True, "poi_fuel": True, "poi_fuel_type": "diesel"},
+    ):
+        response = await hass.services.async_call(
+            DOMAIN,
+            "calculate_route",
+            {
+                "entry_id": entry.entry_id,
+                "profile_id": "fixture",
+                "origin": {"latitude": 49, "longitude": 7},
+                "destination": {"latitude": 50, "longitude": 8},
+                **poi_data,
+            },
+            blocking=True,
+            return_response=True,
+        )
+        assert response["provider"] == "mock"
+
 
 @pytest.mark.asyncio
 async def test_provider_options_override_entry_data_and_reload_before_next_route(
@@ -157,7 +181,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
     body = await response.text()
-    assert "Camper Route Planner Card v0.1.6-beta.9" in body
+    assert "Camper Route Planner Card v0.1.6-beta.10" in body
     assert 'customElements.define("camper-route-planner-card"' in body
     assert 'return { entry_id: "" }' in body
     assert 'card.type === "camper-route-planner-card"' in body
@@ -180,7 +204,7 @@ async def test_frontend_static_path_resource_and_reload_cleanup(
     assert sum(item["url"] == FRONTEND_RESOURCE_URL for item in resources.async_items()) == 1
     response = await client.get(FRONTEND_URL)
     assert response.status == 200
-    assert "Camper Route Planner Card v0.1.6-beta.9" in await response.text()
+    assert "Camper Route Planner Card v0.1.6-beta.10" in await response.text()
 
 
 @pytest.mark.asyncio

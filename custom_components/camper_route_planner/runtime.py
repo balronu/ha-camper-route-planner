@@ -290,13 +290,20 @@ class RuntimeData:
         avoid = data.get("avoid", [])
         if isinstance(avoid, str):
             avoid = [item.strip() for item in avoid.split(",") if item.strip()]
+        poi_parking = data.get("poi_parking", False)
+        poi_fuel = data.get("poi_fuel", False)
+        poi_fuel_type = data.get("poi_fuel_type", "diesel")
+        if not isinstance(poi_parking, bool) or not isinstance(poi_fuel, bool):
+            raise ValueError("poi_parking and poi_fuel must be boolean")
+        if poi_fuel_type != "diesel":
+            raise ValueError("only diesel POIs are currently supported")
         request = RouteRequest(
             RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile,
             tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])),
             alternatives=int(data.get("alternatives", 0)), traffic=data.get("traffic", "off"),
             depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
             arrive_at=_time("arrive_at"),
-            poi_parking=bool(data.get("poi_parking", False)), poi_fuel=bool(data.get("poi_fuel", False)), poi_fuel_type=str(data.get("poi_fuel_type", "diesel")),
+            poi_parking=poi_parking, poi_fuel=poi_fuel, poi_fuel_type=poi_fuel_type,
         )
         self._pending_request_diagnostic = None
         self._last_request_error = None
