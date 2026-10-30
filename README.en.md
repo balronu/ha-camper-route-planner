@@ -1,6 +1,6 @@
 # Camper Route Planner
 
-![Camper Route Planner](assets/logo.svg)
+![Camper Route Planner – motorhome, route and destination](assets/logo.png)
 
 Plan motorhome trips directly in Home Assistant with your own vehicle profile,
 custom waypoints, and routes that can account for your vehicle's dimensions and
