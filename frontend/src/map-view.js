@@ -158,14 +158,29 @@ function updateLeafletRoute(container, route, points = []) {
   return true;
 }
 
-function fitMapToPoints(container, points, force = false) {
+function routeCoordinates(points = [], route = null) {
+  const geometry = Array.isArray(route?.geometry?.points) ? route.geometry.points : [];
+  return [...geometry, ...(Array.isArray(points) ? points : [])]
+    .filter((point) => Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude)))
+    .map((point) => [Number(point.latitude), Number(point.longitude)]);
+}
+
+export function fitMapToRoute(container, points = [], route = null, force = true) {
   const map = container?.[CRP_LEAFLET_MAP];
-  if (!map || !force || !points.length) return false;
+  const coordinates = routeCoordinates(points, route);
+  if (!map || !force || !coordinates.length) return false;
   map.invalidateSize({ pan: false });
-  const coordinates = points.map((point) => [Number(point.latitude), Number(point.longitude)]);
   if (coordinates.length === 1) map.setView(coordinates[0], 12, { animate: false });
   else map.fitBounds(L.latLngBounds(coordinates), { padding: [32, 32], maxZoom: 15, animate: false });
   return true;
+}
+
+function scheduleMapFit(container, points, route, force) {
+  if (!force) return;
+  const fit = () => fitMapToRoute(container, points, route, true);
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => requestAnimationFrame(fit));
+  } else fit();
 }
 
 /** Update markers without rebuilding the Leaflet map or its tile layer. */
@@ -178,7 +193,7 @@ export function updateMapPoints(container, points, labels = {}, options = {}) {
   updateLeafletMarkers(container, validPoints);
   updateLeafletBorderMarkers(container, options.borderCrossings || []);
   updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
-  fitMapToPoints(container, validPoints, Boolean(options.fitBounds));
+  scheduleMapFit(container, validPoints, options.route, Boolean(options.fitBounds));
   return true;
 }
 
@@ -236,9 +251,11 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     updateLeafletMarkers(container, points);
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
     updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
-    if (points.length === 1) {
+    if (options.fitBounds) {
+      scheduleMapFit(container, points, route, true);
+    } else if (!route && points.length === 1) {
       map.setView([Number(points[0].latitude), Number(points[0].longitude)], 12);
-    } else if (points.length > 1) {
+    } else if (!route && points.length > 1) {
       map.fitBounds(L.latLngBounds(points.map((point) => [Number(point.latitude), Number(point.longitude)])), { padding: [32, 32], maxZoom: 15 });
     } else {
       // A basemap is useful before a route exists. Keep a neutral central
