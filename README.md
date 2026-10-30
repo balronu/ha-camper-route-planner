@@ -15,11 +15,11 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 > Die Integration ist ein Planungswerkzeug und ersetzt kein spezialisiertes
 > Wohnmobil-Navigationsgerät.
 >
-> **v0.1.6-beta.10** ist als freiwillige Vorabversion verfügbar. Sie behebt
-> die Beta-9-Regressionen beim POI-Service-Schema und beim Kartenfokus:
-> deaktivierte POI-Felder werden nicht übertragen, und POI-Umschaltungen
-> verändern weder bestehende Route noch Kartenausschnitt. Die Beta-9-POI-
-> Funktionen bleiben erhalten.
+> **v0.1.6-beta.11** ist als freiwillige Diagnose-Vorabversion verfügbar. Sie
+> ergänzt für Parserfehler eine geschützte One-shot-Diagnose mit sicheren
+> Transportmetadaten, Request-ID und Response-Feldtypen, ohne vollständige
+> Providerantworten oder Zugangsdaten zu speichern. Die Beta-10-POI-
+> Funktionen und Kartenregressionen bleiben erhalten.
 > Für produktive Nutzung bleibt v0.1.5 die aktuelle Stable-Version.
 
 [English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
@@ -100,7 +100,7 @@ Planner als **Custom Repository**:
 2. `balronu/ha-camper-route-planner` als Repository vom Typ **Integration**
    hinzufügen.
 3. Für produktive Nutzung die reguläre Stable-Version `v0.1.5` installieren.
-   `v0.1.6-beta.10` ist nur über die Vorabversionen bzw. das Release-ZIP für
+   `v0.1.6-beta.11` ist nur über die Vorabversionen bzw. das Release-ZIP für
    Tests vorgesehen. Home Assistant bei Aufforderung neu starten.
 4. Unter **Einstellungen → Geräte & Dienste** die Integration einrichten und
    anschließend die Lovelace-Karte in dein Dashboard aufnehmen.
@@ -131,6 +131,7 @@ nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 - [v0.1.6-beta.8 Release Notes](docs/releases/v0.1.6-beta.8.md)
 - [v0.1.6-beta.9 Release Notes](docs/releases/v0.1.6-beta.9.md)
 - [v0.1.6-beta.10 Release Notes](docs/releases/v0.1.6-beta.10.md)
+- [v0.1.6-beta.11 Release Notes](docs/releases/v0.1.6-beta.11.md)
 - [NaKordoni-POI-Konzept](docs/NAKORDONI-POI-CONCEPT.md)
 
 ## Lizenz
