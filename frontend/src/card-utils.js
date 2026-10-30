@@ -119,6 +119,8 @@ export function providerErrorMessage(error, language = "en") {
   const messages = {
     de: {
       route_restrictions_unresolved: "Für diese Strecke konnte keine vollständig zulässige Route für dein Fahrzeug bestätigt werden. Prüfe deine Zwischenziele und Fahrzeugangaben.",
+      point_not_routable: "Der Routingdienst kann einen Wegpunkt nicht routen. Prüfe diesen Punkt und seine Koordinaten.",
+      route_timeout: "Der Routingdienst hat die Routenberechnung wegen eines Zeitlimits beendet. Bitte versuche es später erneut.",
       quota_exceeded: "Der Routingdienst hat sein Anfragelimit erreicht. Bitte versuche es später erneut.",
       timeout: "Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es später erneut.",
       network_error: "Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es später erneut.",
@@ -133,6 +135,8 @@ export function providerErrorMessage(error, language = "en") {
     },
     en: {
       route_restrictions_unresolved: "A fully permitted route for your vehicle could not be confirmed. Check your waypoints and vehicle details.",
+      point_not_routable: "The routing service cannot route one waypoint. Check that point and its coordinates.",
+      route_timeout: "The routing service stopped the route calculation because it timed out. Please try again later.",
       quota_exceeded: "The routing service has reached its request limit. Please try again later.",
       timeout: "The routing service did not respond in time. Please try again later.",
       network_error: "The network connection to the routing service failed. Please try again later.",

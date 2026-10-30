@@ -27,6 +27,7 @@ from .nakordoni_motorhome import (
     _fallback_border_data,
     build_motorhome_parameters as build_v2_motorhome_parameters,
     provider_error_from_payload,
+    safe_request_id,
 )
 
 PROVIDER_NAME = "nakordoni_motorhome"
@@ -397,6 +398,7 @@ class NakordoniRouteAdapterV3:
                 **_eta_metadata(data, route),
                 "routing_source": (payload.get("headers") or {}).get("X-Route-Source") or (payload.get("headers") or {}).get("x-route-source"),
                 "transport": payload.get("transport", {}),
+                "request_id": safe_request_id(payload.get("request_id") or (payload.get("headers") or {}).get("X-Request-Id") or (payload.get("headers") or {}).get("x-request-id")),
             }
             return RouteResult(PROVIDER_NAME, distance, int(duration), geometry, tuple(warnings), metadata, synthetic)
         except ProviderError:

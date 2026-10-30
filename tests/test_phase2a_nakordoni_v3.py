@@ -9,6 +9,7 @@ from custom_components.camper_route_planner.providers.nakordoni_v3 import (
     V3_ROUTE_ENDPOINT,
     build_v3_motorhome_parameters,
 )
+from custom_components.camper_route_planner.providers.nakordoni_motorhome import provider_error_from_payload
 
 
 def request(**changes):
@@ -219,6 +220,24 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
             asyncio.run(NakordoniRouteAdapterV3(api_key="dummy-key").calculate(request()))
         self.assertEqual(ctx.exception.code, "live_routing_disabled")
         self.assertFalse(called)
+
+    def test_point_not_routable_is_localized_and_bounded(self):
+        error = provider_error_from_payload({
+            "ok": False, "status": 400, "request_id": "req-42",
+            "error": {"reason": "point_not_routable", "waypoint_index": 2, "coordinates": {"latitude": 43.1172, "longitude": -9.8083}},
+        })
+        self.assertEqual(error.code, "point_not_routable")
+        self.assertFalse(error.retryable)
+        self.assertEqual(error.details["request_id"], "req-42")
+        self.assertEqual(error.details["waypoint_index"], 2)
+        self.assertEqual(error.details["coordinates"]["longitude"], -9.8083)
+        self.assertIn("Wegpunkt", str(error))
+
+    def test_route_timeout_is_retryable_only_for_explicit_user_retry(self):
+        error = provider_error_from_payload({"ok": False, "status": 504, "error": {"reason": "route_timeout"}})
+        self.assertEqual(error.code, "route_timeout")
+        self.assertTrue(error.retryable)
+        self.assertIn("Zeitlimit", str(error))
 
 
 if __name__ == "__main__":

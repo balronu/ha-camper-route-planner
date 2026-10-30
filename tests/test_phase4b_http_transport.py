@@ -133,6 +133,26 @@ class Phase4BHttpTransportTests(unittest.TestCase):
         self.assertEqual(payload["transport"]["response_length"], len(body))
         self.assertEqual(payload["transport"]["response_type"], "json")
 
+    def test_request_id_is_taken_from_header_but_not_exposed_as_raw_header(self):
+        response = BodyResponse(b'{"ok": false, "status": 400, "error": {"reason": "point_not_routable", "waypoint_index": 1, "coordinates": {"latitude": 43.1, "longitude": -9.8}}}', status=400)
+        response.headers["X-Request-Id"] = "req_2026.10:abc-123"
+        payload = asyncio.run(NakordoniHttpTransport(BodySession(response), "SECRET-KEY", min_interval_s=0)({}))
+        self.assertEqual(payload["request_id"], "req_2026.10:abc-123")
+        self.assertNotIn("X-Request-Id", payload["headers"])
+
+    def test_unsafe_request_id_is_discarded(self):
+        response = BodyResponse(b'{"ok": false, "status": 504, "request_id": "secret value", "error": {"reason": "route_timeout"}}', status=504)
+        payload = asyncio.run(NakordoniHttpTransport(BodySession(response), "SECRET-KEY", min_interval_s=0)({}))
+        self.assertNotIn("request_id", payload)
+        self.assertNotIn("request_id", payload["headers"])
+
+    def test_http_504_is_not_retried(self):
+        response = BodyResponse(b'{"ok": false, "status": 504, "error": {"reason": "route_timeout"}}', status=504)
+        session = BodySession(response)
+        payload = asyncio.run(NakordoniHttpTransport(session, "SECRET-KEY", min_interval_s=0)({}))
+        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(payload["status"], 504)
+
     def test_usage_transport_is_single_bounded_get_without_redirects(self):
         class UsageResponse(FakeResponse):
             async def json(self, *, content_type=None):

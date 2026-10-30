@@ -217,6 +217,7 @@ class RuntimeData:
                 "cache_hit": bool(result.metadata.get("cache_hit", False)),
                 "retry_count": max(int(transport.get("attempts", 1)) - 1, 0),
                 "error_code": None,
+                "request_id": result.metadata.get("request_id"),
                 "restriction_codes": restriction_codes,
                 "distance_m": result.distance_m,
                 "duration_s": result.duration_s,
@@ -262,6 +263,9 @@ class RuntimeData:
                 "elapsed_s": transport.get("elapsed_s"),
                 "attempts": transport.get("attempts"),
                 "error_code": exc.code,
+                "request_id": details.get("request_id"),
+                "waypoint_index": details.get("waypoint_index"),
+                "coordinates": details.get("coordinates"),
                 "retryable": exc.retryable,
                 "restriction_codes": restriction_codes,
                 "restriction_count": details.get("restriction_count", len(restriction_hits) if isinstance(restriction_hits, list) else 0),
@@ -309,6 +313,7 @@ class RuntimeData:
                 self._last_request_error = {
                     "api_version": api_version,
                     "error_code": exc.code,
+                    "request_id": details.get("request_id"),
                     "http_status": exc.status,
                     "retryable": exc.retryable,
                     "waypoint_count": len(request.waypoints),
@@ -319,6 +324,8 @@ class RuntimeData:
                     },
                     "restriction_hits": details.get("restriction_hits", []),
                     "restriction_count": details.get("restriction_count"),
+                    "waypoint_index": details.get("waypoint_index"),
+                    "coordinates": details.get("coordinates"),
                 }
             raise
         api_version = str(result.metadata.get("api_version") or ("v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"))

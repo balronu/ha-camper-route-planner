@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.5; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.6; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -14146,6 +14146,7 @@
   };
   TRANSLATIONS.de.providerNetworkAverage = "Durchschnittlicher Netzpreis; die tats\xE4chliche Abschnittsgeb\xFChr kann abweichen.";
   TRANSLATIONS.de.requestDiagnostics = "N\xE4chste Anfrage diagnostizieren";
+  TRANSLATIONS.de.requestId = "Request-ID";
   TRANSLATIONS.de.showDeveloperDiagnostics = "Entwicklerdiagnose anzeigen";
   TRANSLATIONS.de.requestDiagnosticsArmed = "F\xFCr die n\xE4chste Berechnung aktiviert";
   TRANSLATIONS.de.requestDiagnosticsResult = "Ausgef\xFChrte Anfrage (tempor\xE4r)";
@@ -14158,6 +14159,7 @@
   TRANSLATIONS.de.tollV3IncompleteNote = "Die Route wurde mit API v3 berechnet; deren Mautdaten sind unvollst\xE4ndig. Eine optionale v2-Sch\xE4tzung bleibt getrennt und kann abweichen.";
   TRANSLATIONS.en.providerNetworkAverage = "Average network price; the actual section charge may differ.";
   TRANSLATIONS.en.requestDiagnostics = "Diagnose der n\xE4chsten Anfrage";
+  TRANSLATIONS.en.requestId = "Request ID";
   TRANSLATIONS.en.showDeveloperDiagnostics = "Show developer diagnostics";
   TRANSLATIONS.en.requestDiagnosticsArmed = "Armed for the next calculation";
   TRANSLATIONS.en.requestDiagnosticsResult = "Executed request (temporary)";
@@ -14289,6 +14291,8 @@
     const messages = {
       de: {
         route_restrictions_unresolved: "F\xFCr diese Strecke konnte keine vollst\xE4ndig zul\xE4ssige Route f\xFCr dein Fahrzeug best\xE4tigt werden. Pr\xFCfe deine Zwischenziele und Fahrzeugangaben.",
+        point_not_routable: "Der Routingdienst kann einen Wegpunkt nicht routen. Pr\xFCfe diesen Punkt und seine Koordinaten.",
+        route_timeout: "Der Routingdienst hat die Routenberechnung wegen eines Zeitlimits beendet. Bitte versuche es sp\xE4ter erneut.",
         quota_exceeded: "Der Routingdienst hat sein Anfragelimit erreicht. Bitte versuche es sp\xE4ter erneut.",
         timeout: "Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es sp\xE4ter erneut.",
         network_error: "Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es sp\xE4ter erneut.",
@@ -14303,6 +14307,8 @@
       },
       en: {
         route_restrictions_unresolved: "A fully permitted route for your vehicle could not be confirmed. Check your waypoints and vehicle details.",
+        point_not_routable: "The routing service cannot route one waypoint. Check that point and its coordinates.",
+        route_timeout: "The routing service stopped the route calculation because it timed out. Please try again later.",
         quota_exceeded: "The routing service has reached its request limit. Please try again later.",
         timeout: "The routing service did not respond in time. Please try again later.",
         network_error: "The network connection to the routing service failed. Please try again later.",
@@ -32365,7 +32371,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate2("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate2("requestDiagnosticsArmed")}</span>` : ""}</div>`);
       if (diagnosticsVisible && requestDiagnostic) {
         const diagnosticText = JSON.stringify(requestDiagnostic, null, 2);
-        this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate2("requestDiagnosticsResult")}</summary><p class="subtle">${translate2("requestDiagnosticsPrivacy")}</p><button type="button" data-action="copy-diagnostics">${translate2("requestDiagnosticsCopy")}</button>${this._state.diagnosticCopyStatus ? `<p class="subtle" role="status">${escapeHtml(this._state.diagnosticCopyStatus)}</p>` : ""}<textarea data-diagnostic-copy readonly rows="10" aria-label="${translate2("requestDiagnosticsResult")}">${escapeHtml(diagnosticText)}</textarea></details>`);
+        const requestId = requestDiagnostic.response?.request_id;
+        const requestIdLine = requestId ? `<p class="subtle"><strong>${translate2("requestId")}</strong>: <code>${escapeHtml(String(requestId))}</code></p>` : "";
+        this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate2("requestDiagnosticsResult")}</summary><p class="subtle">${translate2("requestDiagnosticsPrivacy")}</p>${requestIdLine}<button type="button" data-action="copy-diagnostics">${translate2("requestDiagnosticsCopy")}</button>${this._state.diagnosticCopyStatus ? `<p class="subtle" role="status">${escapeHtml(this._state.diagnosticCopyStatus)}</p>` : ""}<textarea data-diagnostic-copy readonly rows="10" aria-label="${translate2("requestDiagnosticsResult")}">${escapeHtml(diagnosticText)}</textarea></details>`);
       }
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => {
         const key = input.dataset.routeOption;
