@@ -1,6 +1,6 @@
 # Camper Route Planner
 
-![Camper Route Planner](assets/logo.svg)
+![Camper Route Planner – Wohnmobil, Route und Ziel](assets/logo.png)
 
 Plane deine Wohnmobilreisen direkt in Home Assistant – mit deinem eigenen
 Fahrzeugprofil, individuellen Zwischenzielen und Routen, die auf die
