@@ -113,6 +113,45 @@ export function normalizeServiceResponse(response) {
   };
 }
 
+export function providerErrorMessage(error, language = "en") {
+  const code = String(error?.code || error?.data?.code || "");
+  const status = Number(error?.status || error?.data?.status || 0);
+  const messages = {
+    de: {
+      route_restrictions_unresolved: "Für diese Strecke konnte keine vollständig zulässige Route für dein Fahrzeug bestätigt werden. Prüfe deine Zwischenziele und Fahrzeugangaben.",
+      quota_exceeded: "Der Routingdienst hat sein Anfragelimit erreicht. Bitte versuche es später erneut.",
+      timeout: "Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es später erneut.",
+      network_error: "Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es später erneut.",
+      invalid_response: "Der Routingdienst hat keine gültige Antwort geliefert. Bitte versuche es später erneut.",
+      invalid_json: "Der Routingdienst hat kein gültiges JSON geliefert. Bitte versuche es später erneut.",
+      empty_response: "Der Routingdienst hat keine Antwort geliefert. Bitte versuche es später erneut.",
+      html_response: "Der Routingdienst hat eine ungültige HTML-Antwort geliefert. Bitte versuche es später erneut.",
+      unauthorized: "Der Routingdienst hat die Zugangsdaten abgelehnt.",
+      forbidden: "Der Routingdienst hat diese Anfrage nicht erlaubt.",
+      not_found: "Der Routingdienst-Endpunkt wurde nicht gefunden.",
+      provider_unavailable: "Der Routingdienst ist vorübergehend nicht verfügbar. Bitte versuche es später erneut."
+    },
+    en: {
+      route_restrictions_unresolved: "A fully permitted route for your vehicle could not be confirmed. Check your waypoints and vehicle details.",
+      quota_exceeded: "The routing service has reached its request limit. Please try again later.",
+      timeout: "The routing service did not respond in time. Please try again later.",
+      network_error: "The network connection to the routing service failed. Please try again later.",
+      invalid_response: "The routing service did not return a valid response. Please try again later.",
+      invalid_json: "The routing service did not return valid JSON. Please try again later.",
+      empty_response: "The routing service returned no response. Please try again later.",
+      html_response: "The routing service returned an invalid HTML response. Please try again later.",
+      unauthorized: "The routing service rejected the credentials.",
+      forbidden: "The routing service did not allow this request.",
+      not_found: "The routing service endpoint was not found.",
+      provider_unavailable: "The routing service is temporarily unavailable. Please try again later."
+    }
+  };
+  if (messages[language]?.[code]) return messages[language][code];
+  if (status === 429) return messages[language]?.quota_exceeded || messages.en.quota_exceeded;
+  if (status >= 500) return messages[language]?.provider_unavailable || messages.en.provider_unavailable;
+  return error?.message || (language === "de" ? "Die Routenberechnung ist fehlgeschlagen." : "Route calculation failed.");
+}
+
 export function normalizeRouteOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
   return {

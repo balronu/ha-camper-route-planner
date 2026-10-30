@@ -85,10 +85,17 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
             adapter.normalize_response(body, request=request())
         self.assertEqual(ctx.exception.code, "vehicle_confirmation_mismatch")
         body = payload()
-        body["data"]["route"]["restriction_hits"] = [{"kind": "height", "name": "low bridge"}]
+        body["data"]["route"]["restriction_hits"] = [{"kind": "height", "name": "low bridge", "message": "Low bridge at 48.123456, 7.123456"}, {"code": "weight", "description": "Weight limit"}]
         with self.assertRaises(ProviderError) as ctx:
             adapter.normalize_response(body, request=request())
         self.assertEqual(ctx.exception.code, "route_restrictions_unresolved")
+        self.assertEqual(ctx.exception.details["restriction_count"], 2)
+        self.assertEqual(ctx.exception.details["restriction_hits"][1]["description"], "Weight limit")
+        self.assertNotIn("48.123456", str(ctx.exception.details))
+
+    def test_multiple_waypoints_are_sent_in_order_and_are_not_repaired(self):
+        values = build_v3_motorhome_parameters(request(waypoints=(RouteWaypoint(40.0, -3.0, "first"), RouteWaypoint(41.0, -4.0, "second"))))
+        self.assertEqual(values["via"], "40.0,-3.0|41.0,-4.0")
 
     def test_response_preserves_pure_driving_time_without_fabricating_eta(self):
         result = NakordoniRouteAdapterV3().normalize_response(payload(), request=request())
@@ -180,11 +187,11 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
         with self.assertRaises(ProviderError) as ctx:
             adapter.normalize_response(body, request=request())
         self.assertEqual(ctx.exception.code, "invalid_response")
-        for status in (400, 401, 403, 404, 429, 500, 503, 504):
+        for status in (400, 401, 403, 404, 408, 429, 500, 502, 503, 504):
             with self.assertRaises(ProviderError) as ctx:
                 adapter.normalize_response({"ok": False, "status": status, "error": {"code": "provider_error"}}, request=request())
             self.assertEqual(ctx.exception.status, status)
-            self.assertEqual(ctx.exception.retryable, status in {500, 503, 504})
+            self.assertEqual(ctx.exception.retryable, status in {408, 500, 502, 503, 504})
 
     def test_injected_transport_is_the_only_calculation_path(self):
         captured = {}

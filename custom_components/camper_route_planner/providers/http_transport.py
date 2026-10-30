@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import json
 import time
 from typing import Any
+
+from ..models import ProviderError
 
 try:
     from aiohttp import ClientTimeout
@@ -30,6 +33,66 @@ SAFE_QUOTA_HEADERS = frozenset(
 
 _ROUTE_LOCK = asyncio.Lock()
 _LAST_ROUTE_START = 0.0
+
+
+def _response_kind(content_type: str, body: bytes) -> str:
+    if not body:
+        return "empty"
+    if "html" in content_type.casefold() or body.lstrip().lower().startswith((b"<!doctype html", b"<html")):
+        return "html"
+    try:
+        json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return "invalid_json"
+    return "json"
+
+
+def _retryable_status(status: int | None) -> bool:
+    return status in {408, 500, 502, 503, 504}
+
+
+def _status_error(status: int | None) -> tuple[str, str]:
+    messages = {
+        400: ("invalid_request", "Der Routingdienst hat die Anfrage abgelehnt."),
+        401: ("unauthorized", "Der Routingdienst hat die Zugangsdaten abgelehnt."),
+        403: ("forbidden", "Der Routingdienst hat diese Anfrage nicht erlaubt."),
+        404: ("not_found", "Der Routingdienst-Endpunkt wurde nicht gefunden."),
+        408: ("provider_timeout", "Der Routingdienst hat die Anfrage nicht rechtzeitig beantwortet."),
+        429: ("quota_exceeded", "Der Routingdienst hat sein Anfragelimit erreicht. Bitte versuche es später erneut."),
+    }
+    if status in messages:
+        return messages[status]
+    if status in {500, 502, 503, 504}:
+        return "provider_unavailable", "Der Routingdienst ist vorübergehend nicht verfügbar. Bitte versuche es später erneut."
+    return "invalid_response", "Der Routingdienst hat keine gültige Antwort geliefert. Bitte versuche es später erneut."
+
+
+async def _read_body(response: Any) -> tuple[bytes, Any]:
+    """Read a response once, with a small fake-session compatibility path."""
+    reader = getattr(response, "read", None)
+    if callable(reader):
+        body = await reader()
+        if isinstance(body, str):
+            body = body.encode("utf-8", "replace")
+        return bytes(body or b""), None
+    try:
+        return b"", await response.json(content_type=None)
+    except (TypeError, ValueError):
+        return b"", None
+
+
+def _parse_payload(body: bytes, fallback: Any) -> tuple[Any, str]:
+    if body:
+        kind = _response_kind("", body)
+        if kind != "json":
+            return None, kind
+        try:
+            return json.loads(body.decode("utf-8")), kind
+        except (UnicodeDecodeError, ValueError):
+            return None, "invalid_json"
+    if fallback is None:
+        return None, "empty"
+    return fallback, "json"
 
 
 @dataclass(slots=True)
@@ -66,29 +129,42 @@ class NakordoniHttpTransport:
                         timeout=ClientTimeout(total=self.timeout_s, connect=self.connect_timeout_s),
                         allow_redirects=False,
                     ) as response:
-                        try:
-                            payload = await response.json(content_type=None)
-                        except (TypeError, ValueError) as exc:
-                            raise ValueError("Nakordoni returned invalid JSON") from exc
-                        if not isinstance(payload, dict):
-                            raise ValueError("Nakordoni returned an invalid response")
+                        status = int(response.status)
+                        content_type = str(response.headers.get("Content-Type", "")).split(";", 1)[0].strip().lower()
+                        body, fallback = await _read_body(response)
+                        payload, response_type = _parse_payload(body, fallback)
+                        transport = {
+                            "attempts": attempts,
+                            "elapsed_s": round(time.monotonic() - started, 3),
+                            "status": status,
+                            "content_type": content_type or None,
+                            "response_type": response_type,
+                            "response_length": len(body) if body else None,
+                        }
+                        if payload is None or not isinstance(payload, dict):
+                            code, message = _status_error(status) if status >= 400 else (
+                                ("empty_response", "Der Routingdienst hat keine Antwort geliefert. Bitte versuche es später erneut.")
+                                if response_type == "empty" else
+                                ("html_response", "Der Routingdienst hat eine ungültige HTML-Antwort geliefert. Bitte versuche es später erneut.")
+                                if response_type == "html" else
+                                ("invalid_json", "Der Routingdienst hat kein gültiges JSON geliefert. Bitte versuche es später erneut.")
+                                if response_type == "invalid_json" else
+                                ("invalid_response", "Der Routingdienst hat keine gültige Antwort geliefert. Bitte versuche es später erneut.")
+                            )
+                            raise ProviderError(message, code=code, status=status, retryable=_retryable_status(status), details={"transport": transport})
                         result = dict(payload)
-                        result.setdefault("status", int(response.status))
+                        result.setdefault("status", status)
                         result["headers"] = {
                             key: str(value)
                             for key, value in response.headers.items()
                             if key.lower() in SAFE_QUOTA_HEADERS
                         }
-                        result["transport"] = {
-                            "attempts": attempts,
-                            "elapsed_s": round(time.monotonic() - started, 3),
-                            "status": int(response.status),
-                            "route_source": result["headers"].get("X-Route-Source") or result["headers"].get("x-route-source"),
-                        }
-                        if response.status >= 400 and result.get("ok") is True:
+                        transport["route_source"] = result["headers"].get("X-Route-Source") or result["headers"].get("x-route-source")
+                        result["transport"] = transport
+                        if status >= 400 and result.get("ok") is True:
                             result["ok"] = False
                         error = result.get("error") if isinstance(result.get("error"), dict) else {}
-                        busy = response.status == 503 and error.get("code") == "busy"
+                        busy = status == 503 and error.get("code") == "busy"
                         if not busy or attempts > self.max_busy_retries:
                             return result
                         raw_retry = error.get("retry_after") or result["headers"].get("Retry-After") or result["headers"].get("retry-after")
@@ -97,10 +173,12 @@ class NakordoniHttpTransport:
                         except (TypeError, ValueError):
                             retry_after = 1.0
                         await asyncio.sleep(retry_after)
-                except asyncio.TimeoutError:
+                except ProviderError:
                     raise
-                except OSError:
-                    raise
+                except asyncio.TimeoutError as exc:
+                    raise ProviderError("Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es später erneut.", code="timeout", retryable=True, details={"transport": {"attempts": attempts, "elapsed_s": round(time.monotonic() - started, 3), "response_type": "timeout"}}) from exc
+                except OSError as exc:
+                    raise ProviderError("Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es später erneut.", code="network_error", retryable=True, details={"transport": {"attempts": attempts, "elapsed_s": round(time.monotonic() - started, 3), "response_type": "network_error"}}) from exc
 @dataclass(slots=True)
 class NakordoniUsageTransport:
     """One explicit, non-routed account request using HA's session."""

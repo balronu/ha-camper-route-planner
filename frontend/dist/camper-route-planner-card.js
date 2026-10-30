@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.5; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.1; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -14264,6 +14264,44 @@
       route_options: normalizeRouteOptions(payload.route_options || payload.metadata?.request_options || {}),
       request_diagnostic: payload.request_diagnostic || null
     };
+  }
+  function providerErrorMessage(error2, language = "en") {
+    const code = String(error2?.code || error2?.data?.code || "");
+    const status = Number(error2?.status || error2?.data?.status || 0);
+    const messages = {
+      de: {
+        route_restrictions_unresolved: "F\xFCr diese Strecke konnte keine vollst\xE4ndig zul\xE4ssige Route f\xFCr dein Fahrzeug best\xE4tigt werden. Pr\xFCfe deine Zwischenziele und Fahrzeugangaben.",
+        quota_exceeded: "Der Routingdienst hat sein Anfragelimit erreicht. Bitte versuche es sp\xE4ter erneut.",
+        timeout: "Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es sp\xE4ter erneut.",
+        network_error: "Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es sp\xE4ter erneut.",
+        invalid_response: "Der Routingdienst hat keine g\xFCltige Antwort geliefert. Bitte versuche es sp\xE4ter erneut.",
+        invalid_json: "Der Routingdienst hat kein g\xFCltiges JSON geliefert. Bitte versuche es sp\xE4ter erneut.",
+        empty_response: "Der Routingdienst hat keine Antwort geliefert. Bitte versuche es sp\xE4ter erneut.",
+        html_response: "Der Routingdienst hat eine ung\xFCltige HTML-Antwort geliefert. Bitte versuche es sp\xE4ter erneut.",
+        unauthorized: "Der Routingdienst hat die Zugangsdaten abgelehnt.",
+        forbidden: "Der Routingdienst hat diese Anfrage nicht erlaubt.",
+        not_found: "Der Routingdienst-Endpunkt wurde nicht gefunden.",
+        provider_unavailable: "Der Routingdienst ist vor\xFCbergehend nicht verf\xFCgbar. Bitte versuche es sp\xE4ter erneut."
+      },
+      en: {
+        route_restrictions_unresolved: "A fully permitted route for your vehicle could not be confirmed. Check your waypoints and vehicle details.",
+        quota_exceeded: "The routing service has reached its request limit. Please try again later.",
+        timeout: "The routing service did not respond in time. Please try again later.",
+        network_error: "The network connection to the routing service failed. Please try again later.",
+        invalid_response: "The routing service did not return a valid response. Please try again later.",
+        invalid_json: "The routing service did not return valid JSON. Please try again later.",
+        empty_response: "The routing service returned no response. Please try again later.",
+        html_response: "The routing service returned an invalid HTML response. Please try again later.",
+        unauthorized: "The routing service rejected the credentials.",
+        forbidden: "The routing service did not allow this request.",
+        not_found: "The routing service endpoint was not found.",
+        provider_unavailable: "The routing service is temporarily unavailable. Please try again later."
+      }
+    };
+    if (messages[language]?.[code]) return messages[language][code];
+    if (status === 429) return messages[language]?.quota_exceeded || messages.en.quota_exceeded;
+    if (status >= 500) return messages[language]?.provider_unavailable || messages.en.provider_unavailable;
+    return error2?.message || (language === "de" ? "Die Routenberechnung ist fehlgeschlagen." : "Route calculation failed.");
   }
   function normalizeRouteOptions(options = {}) {
     const source = options && typeof options === "object" ? options : {};
@@ -31566,7 +31604,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       } catch (error2) {
         this._state.requestDiagnosticsArmed = false;
         this._state.diagnosticToken = "";
-        this._state.error = error2.message || t(language, "calculationFailed");
+        this._state.error = providerErrorMessage(error2, language);
         this._state.resultStale = Boolean(this._state.result);
       }
       this._state.busy = false;

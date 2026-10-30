@@ -14,6 +14,10 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 > und mit einer echten NaKordoni-v3-Routenberechnung erfolgreich überprüft.
 > Die Integration ist ein Planungswerkzeug und ersetzt kein spezialisiertes
 > Wohnmobil-Navigationsgerät.
+>
+> **v0.1.6-beta.1** ist als freiwillige Vorabversion verfügbar. Sie verbessert
+> die Erkennung und Darstellung von NaKordoni-Fehlern. Für produktive Nutzung
+> bleibt v0.1.5 die aktuelle Stable-Version.
 
 [English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
@@ -92,8 +96,9 @@ Planner als **Custom Repository**:
 1. In HACS **Integrationen → ⋮ → Benutzerdefinierte Repositories** öffnen.
 2. `balronu/ha-camper-route-planner` als Repository vom Typ **Integration**
    hinzufügen.
-3. Die reguläre Stable-Version `v0.1.5` installieren und Home Assistant bei
-   Aufforderung neu starten.
+3. Für produktive Nutzung die reguläre Stable-Version `v0.1.5` installieren.
+   `v0.1.6-beta.1` ist nur über die Vorabversionen bzw. das Release-ZIP für
+   Tests vorgesehen. Home Assistant bei Aufforderung neu starten.
 4. Unter **Einstellungen → Geräte & Dienste** die Integration einrichten und
    anschließend die Lovelace-Karte in dein Dashboard aufnehmen.
 
@@ -113,6 +118,7 @@ nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 - [Sicherheit und Datenschutz](docs/SECURITY-AND-PRIVACY.md)
 - [Technische Architektur](docs/ARCHITECTURE.md)
 - [v0.1.5 Release Notes](docs/releases/v0.1.5.md)
+- [v0.1.6-beta.1 Release Notes](docs/releases/v0.1.6-beta.1.md)
 
 ## Lizenz
 

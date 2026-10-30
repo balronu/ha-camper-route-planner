@@ -16,5 +16,6 @@ async def async_get_config_entry_diagnostics(hass: Any, entry: Any) -> dict[str,
             "route_calls": {"v2": 0, "v3": 0},
             "last_operation": None,
             "status": "not_loaded",
+            "last_request_error": None,
         }
     return runtime.diagnostics()

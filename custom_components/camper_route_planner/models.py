@@ -242,8 +242,11 @@ class RouteResult:
 class ProviderError(RuntimeError):
     """Normalized provider error; it never contains credentials."""
 
-    def __init__(self, message: str, *, code: str, status: int | None = None, retryable: bool = False) -> None:
+    def __init__(self, message: str, *, code: str, status: int | None = None, retryable: bool = False, details: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.status = status
         self.retryable = retryable
+        # Details are always optional, bounded and supplied by a provider
+        # adapter.  They are never the raw response body or request headers.
+        self.details = dict(details) if isinstance(details, dict) else {}

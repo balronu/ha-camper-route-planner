@@ -27,6 +27,11 @@ test("frontend labels the provider returned by the backend", () => {
   assert.match(source, /result\.synthetic.*mockDataNotice/);
 });
 
+test("calculation errors use stable provider codes and preserve stale results", () => {
+  assert.match(source, /providerErrorMessage\(error, language\)/);
+  assert.match(source, /resultStale = Boolean\(this\._state\.result\)/);
+});
+
 test("installable integration contains the same built bundle", () => {
   const packaged = readFileSync(new URL("../../custom_components/camper_route_planner/frontend/camper-route-planner-card.js", import.meta.url), "utf8");
   const built = readFileSync(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");

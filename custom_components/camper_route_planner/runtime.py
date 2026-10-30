@@ -52,6 +52,7 @@ class RuntimeData:
         self.usage_transport = None
         self._diagnostic_counts = {"v2": 0, "v3": 0}
         self._request_diagnostic_token: str | None = None
+        self._last_request_error: dict[str, Any] | None = None
 
     @classmethod
     def from_config_entry(cls, hass: Any, entry: Any) -> "RuntimeData":
@@ -120,6 +121,7 @@ class RuntimeData:
             "route_calls": dict(self._diagnostic_counts),
             "last_operation": None,
             "status": "available" if calls else "no_route_calculation",
+            "last_request_error": dict(self._last_request_error) if self._last_request_error else None,
         }
 
     def arm_request_diagnostics(self) -> str:
@@ -185,13 +187,29 @@ class RuntimeData:
     @staticmethod
     def _request_diagnostic(snapshot: dict[str, Any], result: Any) -> dict[str, Any]:
         transport = result.metadata.get("transport") if isinstance(result.metadata.get("transport"), dict) else {}
+        restriction_hits = result.metadata.get("restriction_hits")
+        restriction_codes = []
+        if isinstance(restriction_hits, list):
+            restriction_codes = [
+                hit.get("code")
+                for hit in restriction_hits
+                if isinstance(hit, dict) and isinstance(hit.get("code"), str)
+            ][:20]
         return {
             "request": snapshot,
             "response": {
+                "api_version": result.metadata.get("api_version") or snapshot.get("api_version"),
+                "waypoint_count": len(snapshot.get("coordinates", {}).get("waypoints", [])),
                 "http_status": transport.get("status"),
+                "content_type": transport.get("content_type"),
+                "response_type": transport.get("response_type"),
+                "response_length": transport.get("response_length"),
+                "elapsed_s": transport.get("elapsed_s"),
                 "routing_source": transport.get("route_source") or result.metadata.get("routing_source"),
                 "cache_hit": bool(result.metadata.get("cache_hit", False)),
                 "retry_count": max(int(transport.get("attempts", 1)) - 1, 0),
+                "error_code": None,
+                "restriction_codes": restriction_codes,
                 "distance_m": result.distance_m,
                 "duration_s": result.duration_s,
                 "response_fields": {"distance": "distance_m", "duration": "duration_s"},
@@ -239,10 +257,28 @@ class RuntimeData:
             )
         except ProviderError as exc:
             api_version = "v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"
-            self._record_diagnostic(api_version=api_version)
+            details = exc.details if isinstance(exc.details, dict) else {}
+            self._record_diagnostic(api_version=api_version, metadata={"transport": details.get("transport")})
+            if diagnostic_snapshot:
+                transport = details.get("transport") if isinstance(details.get("transport"), dict) else {}
+                self._last_request_error = {
+                    "api_version": api_version,
+                    "error_code": exc.code,
+                    "http_status": exc.status,
+                    "retryable": exc.retryable,
+                    "waypoint_count": len(request.waypoints),
+                    "transport": {
+                        key: transport.get(key)
+                        for key in ("status", "content_type", "response_type", "response_length", "elapsed_s", "attempts")
+                        if key in transport
+                    },
+                    "restriction_hits": details.get("restriction_hits", []),
+                    "restriction_count": details.get("restriction_count"),
+                }
             raise
         api_version = str(result.metadata.get("api_version") or ("v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"))
         self._record_diagnostic(api_version=api_version, metadata=result.metadata)
+        self._last_request_error = None
         return {
             "provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m,
             "duration_s": result.duration_s, "warnings": [warning.message for warning in result.warnings],
