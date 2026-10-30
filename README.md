@@ -15,11 +15,12 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 > Die Integration ist ein Planungswerkzeug und ersetzt kein spezialisiertes
 > Wohnmobil-Navigationsgerät.
 >
-> **v0.1.6-beta.8** ist als freiwillige Vorabversion verfügbar. Sie ersetzt
-> technische Tracker-IDs durch eine verständliche Standortbezeichnung, macht
-> leere Zielstationen eindeutig und passt die normale Dashboard-Karte beim
-> Laden gespeicherter Routen an die vollständige Geometrie an. Die Popup-Karte
-> und die POI-Unterstützung bleiben unverändert.
+> **v0.1.6-beta.9** ist als freiwillige Vorabversion verfügbar. Sie ergänzt
+> opt-in Parkplätze und Diesel-Tankstellen entlang einer bewusst neu
+> berechneten Route. Gespeicherte Routen bleiben rückwärtskompatibel; POIs
+> gehören nur zum aktuellen Routenergebnis. Die Beta-8-Korrekturen für
+> Tracker-Bezeichnung, leeres Ziel, gespeicherten Kartenfit und Popup bleiben
+> erhalten.
 > Für produktive Nutzung bleibt v0.1.5 die aktuelle Stable-Version.
 
 [English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
@@ -100,7 +101,7 @@ Planner als **Custom Repository**:
 2. `balronu/ha-camper-route-planner` als Repository vom Typ **Integration**
    hinzufügen.
 3. Für produktive Nutzung die reguläre Stable-Version `v0.1.5` installieren.
-   `v0.1.6-beta.8` ist nur über die Vorabversionen bzw. das Release-ZIP für
+   `v0.1.6-beta.9` ist nur über die Vorabversionen bzw. das Release-ZIP für
    Tests vorgesehen. Home Assistant bei Aufforderung neu starten.
 4. Unter **Einstellungen → Geräte & Dienste** die Integration einrichten und
    anschließend die Lovelace-Karte in dein Dashboard aufnehmen.
@@ -129,6 +130,7 @@ nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 - [v0.1.6-beta.6 Release Notes](docs/releases/v0.1.6-beta.6.md)
 - [v0.1.6-beta.7 Release Notes](docs/releases/v0.1.6-beta.7.md)
 - [v0.1.6-beta.8 Release Notes](docs/releases/v0.1.6-beta.8.md)
+- [v0.1.6-beta.9 Release Notes](docs/releases/v0.1.6-beta.9.md)
 - [NaKordoni-POI-Konzept](docs/NAKORDONI-POI-CONCEPT.md)
 
 ## Lizenz

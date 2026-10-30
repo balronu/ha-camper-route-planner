@@ -202,6 +202,9 @@ class RouteRequest:
     avoid: tuple[AvoidOption, ...] = ()
     route_type: RouteType = "fastest"
     arrive_at: datetime | None = None
+    poi_parking: bool = False
+    poi_fuel: bool = False
+    poi_fuel_type: str = "diesel"
 
     def __post_init__(self) -> None:
         if len(self.waypoints) > 5:
@@ -218,9 +221,11 @@ class RouteRequest:
             raise ValidationError("alternatives are not supported with waypoints")
         if self.route_type not in ("fastest", "eco") or any(item not in {"tolls", "motorways", "ferries", "tunnels"} for item in self.avoid):
             raise ValidationError("unsupported route option")
+        if self.poi_fuel_type != "diesel":
+            raise ValidationError("only diesel POIs are currently supported")
 
     def cache_key(self) -> str:
-        return repr((self.origin, self.destination, self.vehicle.as_dict(), self.waypoints, self.alternatives, self.traffic, self.geometry_format, self.depart_at, self.arrive_at, self.avoid, self.route_type))
+        return repr((self.origin, self.destination, self.vehicle.as_dict(), self.waypoints, self.alternatives, self.traffic, self.geometry_format, self.depart_at, self.arrive_at, self.avoid, self.route_type, self.poi_parking, self.poi_fuel, self.poi_fuel_type))
 
 
 @dataclass(frozen=True, slots=True)

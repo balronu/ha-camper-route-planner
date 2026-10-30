@@ -296,6 +296,7 @@ class RuntimeData:
             alternatives=int(data.get("alternatives", 0)), traffic=data.get("traffic", "off"),
             depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
             arrive_at=_time("arrive_at"),
+            poi_parking=bool(data.get("poi_parking", False)), poi_fuel=bool(data.get("poi_fuel", False)), poi_fuel_type=str(data.get("poi_fuel_type", "diesel")),
         )
         self._pending_request_diagnostic = None
         self._last_request_error = None

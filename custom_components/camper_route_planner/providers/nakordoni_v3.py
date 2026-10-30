@@ -29,6 +29,7 @@ from .nakordoni_motorhome import (
     provider_error_from_payload,
     safe_request_id,
 )
+from .poi import build_poi_parameters, normalize_pois
 
 PROVIDER_NAME = "nakordoni_motorhome"
 V3_ROUTE_ENDPOINT = "https://nakordoni.eu/api/v3/data/truck-route"
@@ -90,6 +91,7 @@ def build_v3_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
         parameters["arrive_at"] = request.arrive_at.isoformat()
     if profile.emission_class:
         parameters["emission_class"] = profile.emission_class
+    parameters.update(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type))
     return parameters
 
 
@@ -394,11 +396,15 @@ class NakordoniRouteAdapterV3:
                     "alternatives": request.alternatives,
                     "depart_at": request.depart_at.isoformat() if request.depart_at else None,
                     "arrive_at": request.arrive_at.isoformat() if request.arrive_at else None,
+                    "poi_parking": request.poi_parking,
+                    "poi_fuel": request.poi_fuel,
+                    "poi_fuel_type": request.poi_fuel_type,
                 },
                 **_eta_metadata(data, route),
                 "routing_source": (payload.get("headers") or {}).get("X-Route-Source") or (payload.get("headers") or {}).get("x-route-source"),
                 "transport": payload.get("transport", {}),
                 "request_id": safe_request_id(payload.get("request_id") or (payload.get("headers") or {}).get("X-Request-Id") or (payload.get("headers") or {}).get("x-request-id")),
+                "pois": normalize_pois(data, requested=tuple(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type).get("include", "").split(",")) if (request.poi_parking or request.poi_fuel) else (), route_distance_m=distance),
             }
             return RouteResult(PROVIDER_NAME, distance, int(duration), geometry, tuple(warnings), metadata, synthetic)
         except ProviderError:

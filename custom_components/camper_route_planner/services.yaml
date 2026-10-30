@@ -76,3 +76,24 @@ calculate_route:
       required: false
       selector:
         text:
+    poi_parking:
+      name: Show parking POIs
+      description: Include documented parking POIs in the same deliberate route request.
+      required: false
+      default: false
+      selector:
+        boolean:
+    poi_fuel:
+      name: Show fuel POIs
+      description: Include documented diesel fuel POIs in the same deliberate route request.
+      required: false
+      default: false
+      selector:
+        boolean:
+    poi_fuel_type:
+      name: POI fuel type
+      required: false
+      default: diesel
+      selector:
+        select:
+          options: [diesel]

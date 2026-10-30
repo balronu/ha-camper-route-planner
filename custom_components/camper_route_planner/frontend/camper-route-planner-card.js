@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.8; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.9; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13945,6 +13945,16 @@
       mapClose: "Karte schlie\xDFen",
       mapFitRoute: "Gesamte Route anzeigen",
       previewLine: "Luftlinien-Vorschau \u2013 noch keine Stra\xDFenroute",
+      alongRoute: "Entlang der Route",
+      showParking: "Parkpl\xE4tze anzeigen",
+      showFuel: "Tankstellen anzeigen",
+      poiFuelType: "Kraftstoff",
+      poiDiesel: "Diesel",
+      poiNextCalculation: "Die Auswahl wird bei der n\xE4chsten bewussten Routenberechnung ber\xFCcksichtigt.",
+      poiParking: "Parkplatz",
+      poiFuelStation: "Tankstelle",
+      poiNoData: "Keine POI-Daten f\xFCr diese Route verf\xFCgbar.",
+      poiDistance: "ab Routenstart",
       vehicleKind: { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw" },
       fuelType: { diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" },
       fuelLevelUnit: "F\xFCllstandseinheit",
@@ -14118,6 +14128,16 @@
       mapClose: "Close map",
       mapFitRoute: "Show entire route",
       previewLine: "Straight-line preview \u2013 not a road route yet",
+      alongRoute: "Along the route",
+      showParking: "Show parking",
+      showFuel: "Show fuel stations",
+      poiFuelType: "Fuel",
+      poiDiesel: "Diesel",
+      poiNextCalculation: "The selection is applied with the next deliberate route calculation.",
+      poiParking: "Parking",
+      poiFuelStation: "Fuel station",
+      poiNoData: "No POI data is available for this route.",
+      poiDistance: "from route start",
       vehicleKind: { motorhome: "Motorhome", truck: "Truck", car: "Car" },
       fuelType: { diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" },
       fuelLevelUnit: "Fuel level unit",
@@ -14342,7 +14362,10 @@
       route_type: source.route_type || "fastest",
       alternatives: Number.isFinite(Number(source.alternatives)) ? Number(source.alternatives) : 0,
       depart_at: source.depart_at || "",
-      arrive_at: source.arrive_at || ""
+      arrive_at: source.arrive_at || "",
+      poi_parking: source.poi_parking === true,
+      poi_fuel: source.poi_fuel === true,
+      poi_fuel_type: source.poi_fuel_type === "diesel" ? "diesel" : "diesel"
     };
   }
   var PROVIDER_ALIASES = {
@@ -14525,12 +14548,13 @@
   var CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
   var CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
   var CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-restriction-markers");
+  var CRP_LEAFLET_POI_MARKERS = Symbol("camper-route-planner-leaflet-poi-markers");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
     return element;
   }
-  function renderGeometryMap(container, route, labels) {
+  function renderGeometryMap(container, route, labels, pois = {}) {
     container.replaceChildren();
     container.className = "crp-map";
     const points = route?.geometry?.points || [];
@@ -14555,6 +14579,12 @@
       marker.setAttribute("aria-label", index === 0 ? labels.start : index === projected.length - 1 ? labels.destination : `${labels.waypoint} ${index}`);
       svg.append(marker);
     });
+    for (const item of [...pois.parking || [], ...pois.fuel || []]) {
+      const projectedPoi = project(item);
+      const marker = svgElement("circle", { cx: projectedPoi[0], cy: projectedPoi[1], r: 6, fill: item.category === "fuel" ? "#7b1fa2" : "#1565c0", stroke: "white", "stroke-width": 2, "data-poi-id": item.id });
+      marker.setAttribute("aria-label", item.name || (item.category === "fuel" ? labels.fuelStation : labels.parking));
+      svg.append(marker);
+    }
     container.append(svg);
     const caption = document.createElement("small");
     caption.textContent = labels.geometryFallback;
@@ -14595,6 +14625,7 @@
       container[CRP_LEAFLET_LABELS] = null;
       container[CRP_LEAFLET_BORDER_MARKERS] = null;
       container[CRP_LEAFLET_RESTRICTION_MARKERS] = null;
+      container[CRP_LEAFLET_POI_MARKERS] = null;
     }
   }
   function markerIcon(target) {
@@ -14654,6 +14685,24 @@
     container[CRP_LEAFLET_RESTRICTION_MARKERS] = markers;
     return true;
   }
+  function poiMarkerIcon(category) {
+    const glyph = category === "fuel" ? "F" : "P";
+    const color = category === "fuel" ? "#7b1fa2" : "#1565c0";
+    return import_leaflet.default.divIcon({ className: `crp-marker crp-marker-poi crp-marker-poi-${category}`, html: `<span aria-hidden="true" style="background:${color}">${glyph}</span>`, iconSize: [24, 32], iconAnchor: [12, 30] });
+  }
+  function updateLeafletPoiMarkers(container, pois = {}) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map) return false;
+    for (const marker of container[CRP_LEAFLET_POI_MARKERS] || []) marker.remove();
+    const markers = [...pois.parking || [], ...pois.fuel || []].filter((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))).map((item) => {
+      const marker = import_leaflet.default.marker([Number(item.latitude), Number(item.longitude)], { icon: poiMarkerIcon(item.category) });
+      const distance = item.km_from_start == null ? "" : ` \xB7 ${Number(item.km_from_start).toFixed(1)} km`;
+      marker.addTo(map).bindTooltip(`${item.name || (item.category === "fuel" ? "Fuel station" : "Parking")}${distance}`);
+      return marker;
+    });
+    container[CRP_LEAFLET_POI_MARKERS] = markers;
+    return true;
+  }
   function updateLeafletRoute(container, route, points = []) {
     const map = container?.[CRP_LEAFLET_MAP];
     if (!map) return false;
@@ -14703,6 +14752,7 @@
     updateLeafletMarkers(container, validPoints);
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
     updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
+    updateLeafletPoiMarkers(container, options.pois || {});
     scheduleMapFit(container, validPoints, options.route, Boolean(options.fitBounds));
     return true;
   }
@@ -14758,6 +14808,7 @@
       updateLeafletMarkers(container, points);
       updateLeafletBorderMarkers(container, options.borderCrossings || []);
       updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
+      updateLeafletPoiMarkers(container, options.pois || {});
       if (options.fitBounds) {
         scheduleMapFit(container, points, route, true);
       } else if (!route && points.length === 1) {
@@ -14772,7 +14823,7 @@
       return;
     }
     const emptyMessage = mapConfig?.provider === "carto" ? labels.mapUnavailable || labels.noRoute : mapConfig ? labels.noRoute : labels.mapLoading || labels.noRoute;
-    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage });
+    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {});
   }
 
   // src/leaflet-css.js
@@ -31387,6 +31438,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const trafficLabel = translate2(`trafficMode.${trafficMode}`);
     return `<details class="route-details restrictions" open><summary><h3>${translate2("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(trafficLabel.startsWith("trafficMode.") ? translate2("trafficMode.off") : trafficLabel)}</p>${groups}${notes}</details>`;
   }
+  function renderPois(result, translate2) {
+    const pois = result?.metadata?.pois;
+    if (!pois || typeof pois !== "object") return "";
+    const items = [...Array.isArray(pois.parking) ? pois.parking : [], ...Array.isArray(pois.fuel) ? pois.fuel : []].sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start));
+    if (!items.length) return pois.requested?.length ? `<section class="route-pois"><h3>${translate2("alongRoute")}</h3><p class="subtle">${translate2("poiNoData")}</p></section>` : "";
+    const rows = items.map((item) => {
+      const category = item.category === "fuel" ? translate2("poiFuelStation") : translate2("poiParking");
+      const prices = Array.isArray(item.prices) ? item.prices.map((price) => `${price.price} ${price.currency}/${price.fuel_type}`).join(", ") : "";
+      const details = [item.brand, item.country, item.distance_from_route_km != null ? `${item.distance_from_route_km} km ab Route` : "", prices].filter(Boolean).join(" \xB7 ");
+      return `<li class="route-poi route-poi-${escapeHtml(item.category || "parking")}" data-poi-id="${escapeHtml(item.id || "")}"><span class="poi-badge" aria-hidden="true">${item.category === "fuel" ? "F" : "P"}</span><span><b>${escapeHtml(item.name || category)}</b><small>${escapeHtml(category)} \xB7 ${escapeHtml(Number(item.km_from_start).toFixed(1))} km ${translate2("poiDistance")}${details ? ` \xB7 ${escapeHtml(details)}` : ""}</small></span></li>`;
+    }).join("");
+    return `<section class="route-pois"><h3>${translate2("alongRoute")}</h3><ul>${rows}</ul></section>`;
+  }
   function renderFuelPlan(result, profile, fuelValues, translate2, language) {
     const enteredFuelValues = Object.fromEntries(Object.entries(fuelValues || {}).filter(([, value]) => value !== "" && value != null));
     const plan = calculateFuelPlan(result?.distance_m, { ...profile || {}, ...enteredFuelValues });
@@ -31449,7 +31513,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -32411,6 +32475,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const fuelType = profile ? translate2(`fuelType.${profile.fuel_type}`) : "";
       const navigationTarget = result && !this._state.resultStale ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
       this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(this.providerLabel(result.provider, language, result.metadata?.api_version))}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
+      const poiStyle = document.createElement("style");
+      poiStyle.textContent = POI_STYLES;
+      this.shadowRoot.append(poiStyle);
       const mapSection = this.shadowRoot.querySelector(".map-section");
       const mapHeading = mapSection?.querySelector("h3");
       mapHeading?.insertAdjacentHTML("afterend", `<button type="button" data-action="open-map-popup">${translate2("mapEnlarge")}</button>`);
@@ -32422,6 +32489,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       legacyGrid?.replaceWith(this.htmlNodes(`<section class="stations-panel"><div class="stations-heading"><h3>${translate2("stations")}</h3><span class="subtle">${translate2("stationsHint")}</span></div><div class="stations-list">${stations.map((station, index) => this.renderStation(station, index, translate2, stations.length)).join("")}</div><button type="button" data-action="add-station" ${stations.length >= 7 ? "disabled" : ""}>\uFF0B ${translate2("addWaypoint")}</button></section>`)[0]);
       const optionAnchor = this.shadowRoot.querySelector(".map-section");
       optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate2("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate2("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate2("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate2("avoidTunnels")}</span></label></div></details>`);
+      optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate2("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate2("poiDiesel")}</option></select></label><p class="subtle">${translate2("poiNextCalculation")}</p></div>`);
       if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate2("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate2("requestDiagnosticsArmed")}</span>` : ""}</div>`);
       if (diagnosticsVisible && requestDiagnostic) {
         const diagnosticText = JSON.stringify(requestDiagnostic, null, 2);
@@ -32432,10 +32500,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => {
         const key = input.dataset.routeOption;
         if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value);
+        else if (input.type === "checkbox") input.checked = this._state.routeOptions[key] === true;
         else input.value = key === "depart_at" || key === "arrive_at" ? isoDateTimeToLocalInput(this._state.routeOptions[key]) : this._state.routeOptions[key] ?? "";
       });
       const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
-      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
+      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
       if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${translate2("staleRoute")}</p>`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
@@ -32477,9 +32546,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
         }
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate2("geocodingAttribution")}</a>`);
-      const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") };
+      const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait"), parking: translate2("poiParking"), fuelStation: translate2("poiFuelStation") };
       const activeMapRoute = this.currentMapRoute();
-      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute?.metadata?.pois || {}, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
       const mapHost = this.shadowRoot.querySelector(".map-host");
       if (preserveMap) {
         mapHost.append(oldMap);
@@ -32552,6 +32621,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => input.addEventListener("change", () => {
         const key = input.dataset.routeOption;
         if (key === "avoid") this._state.routeOptions.avoid = [...this.shadowRoot.querySelectorAll('input[data-route-option="avoid"]:checked')].map((item) => item.value);
+        else if (input.type === "checkbox") this._state.routeOptions[key] = input.checked;
         else this._state.routeOptions[key] = key === "alternatives" ? Number(input.value) : input.value;
         this._state.resultStale = Boolean(this._state.result);
         this.render();
@@ -32658,6 +32728,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
   };
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions,.export-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,.export-actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.route-options{margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-options summary{cursor:pointer;min-height:28px}.option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.option-grid label{display:grid;gap:4px;min-width:0}.avoid-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px}.avoid-options label{display:flex;align-items:center;gap:8px;min-height:42px;line-height:1.25;overflow-wrap:anywhere}.avoid-options input{flex:0 0 auto;min-width:22px;min-height:22px}.fuel-profile-facts,.fuel-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.fuel-profile-facts span{display:grid;gap:2px;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.fuel-input{display:grid;gap:4px;min-width:0;line-height:1.25}.fuel-input input{width:100%}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1;min-width:0}.actions>*{flex:1 1 auto;min-width:0}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
+  var POI_STYLES = `.poi-options{display:grid;gap:8px;margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.poi-options label{display:flex;align-items:center;gap:8px;min-height:40px;line-height:1.25}.poi-options input{flex:0 0 auto;min-width:22px;min-height:22px}.poi-options select{max-width:220px}.route-pois{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-pois ul{display:grid;gap:0;margin:0;padding:0;list-style:none}.route-poi{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.route-poi:first-child{border-top:0}.route-poi small{display:block;overflow-wrap:anywhere}.poi-badge{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;color:#fff;font-weight:700;background:#1565c0}.route-poi-fuel .poi-badge{background:#7b1fa2}`;
   var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.stations-panel{grid-column:1/-1;border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}.stations-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.stations-list{display:grid}.station-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 0;border-top:1px solid var(--divider-color,#ddd)}.station-row:first-child{border-top:0}.station-position{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--secondary-background-color,#f5f5f5);font-weight:700}.station-copy{display:grid;gap:3px;min-width:0}.station-copy b{font-weight:700;overflow-wrap:anywhere}.station-copy small{font-weight:400}.station-role{color:var(--secondary-text-color);font-size:.78rem}.station-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.station-actions button{min-height:36px;padding:6px 9px}.station-editor{grid-column:2/-1;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.station-editor-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.station-editor-actions button{min-width:100px}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-narrow) .station-row{grid-template-columns:auto minmax(0,1fr)}:host(.crp-narrow) .station-actions{grid-column:2;justify-content:flex-start}:host(.crp-narrow) .station-editor{grid-column:1/-1}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
