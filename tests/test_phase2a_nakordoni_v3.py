@@ -239,6 +239,15 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
         self.assertTrue(error.retryable)
         self.assertIn("Zeitlimit", str(error))
 
+    def test_request_id_header_and_json_mismatch_is_flagged_and_header_wins(self):
+        error = provider_error_from_payload({
+            "ok": False, "status": 400, "request_id": "json-42",
+            "headers": {"X-Request-Id": "header-42"},
+            "error": {"reason": "point_not_routable"},
+        })
+        self.assertEqual(error.details["request_id"], "header-42")
+        self.assertTrue(error.details["request_id_mismatch"])
+
 
 if __name__ == "__main__":
     unittest.main()
