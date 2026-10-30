@@ -28,7 +28,7 @@ test("developer diagnostics are disabled by default and opt in per card", () => 
 });
 
 test("optional route times omit null values but preserve valid values", () => {
-  assert.deepEqual(normalizeRouteOptions({ depart_at: null, arrive_at: null }), { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" });
+  assert.deepEqual(normalizeRouteOptions({ depart_at: null, arrive_at: null }), { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" });
   assert.equal(normalizeRouteOptions({ depart_at: "2026-10-29T08:00:00+02:00" }).depart_at, "2026-10-29T08:00:00+02:00");
   assert.equal(normalizeServiceResponse({ route_options: { depart_at: null } }).route_options.depart_at, "");
 });

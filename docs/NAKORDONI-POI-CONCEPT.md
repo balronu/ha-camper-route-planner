@@ -2,10 +2,10 @@
 
 ## Deutsch
 
-Dieses Dokument ist eine technische Machbarkeitsbewertung, keine produktive
-POI-Implementierung. In Beta 6 werden weder `include=parking,fuel` noch
-`fuel=diesel` automatisch an NaKordoni übertragen und es werden dafür keine
-zusätzlichen API-Anfragen ausgeführt.
+Dieses Dokument begann als technische Machbarkeitsbewertung. Seit Beta 9 ist
+die dort beschriebene optionale, same-request-basierte POI-Verarbeitung als
+fixture-getestete Beta-Funktion umgesetzt. Es gibt weiterhin keine zusätzliche
+Anfrage beim Öffnen, Schließen, Zoomen oder Verschieben der Karte.
 
 ### Vorgeschlagene Architektur
 
@@ -26,19 +26,21 @@ zusätzlichen API-Anfragen ausgeführt.
   bleibt aber ein unabhängiger Provider mit eigenen Zugangsdaten, Anfragen und
   Cache-Grenzen.
 
-### Offene Machbarkeit
+### Umgesetzte Grenzen und offene Praxisprüfung
 
-Die konkrete Antwortstruktur, Datenqualität, Dieselpreis-Verfügbarkeit,
-Fahrzeugtauglichkeit, Laufzeit und Kontingentwirkung wurden ohne Live-Anfrage
-nicht verifiziert. Dafür wird zunächst ein anonymisiertes Provider-Fixture oder
-eine dokumentierte Antwortprobe benötigt. Erst danach sollte eine getrennte
-Freigabe für Implementierung und zusätzliche API-Anfragen erfolgen.
+Die dokumentierte Antwortstruktur wird über isolierte Fixtures normalisiert:
+`parking` und `fuel` werden begrenzt, Koordinaten und Entfernungen validiert,
+und nur tatsächlich gelieferte Preisfelder übernommen. Fahrzeugtauglichkeit,
+Öffnungszeiten, Preise und Laufzeit werden nicht ergänzt oder erfunden.
+Eine produktive Praxisprüfung, Kontingentmessung und Live-Datenqualitätsprüfung
+bleiben für eine spätere, ausdrücklich freigegebene Abnahme offen.
 
 ## English
 
-This document is a technical feasibility assessment, not a production POI
-implementation. Beta 6 sends neither `include=parking,fuel` nor optional
-`fuel=diesel` and makes no additional API request for POIs.
+This document started as a technical feasibility assessment. Since beta 9,
+the optional same-request POI processing described here is implemented and
+covered by isolated fixtures. Opening, closing, zooming, or panning the map
+still makes no additional request.
 
 ### Proposed architecture
 
@@ -58,9 +60,11 @@ implementation. Beta 6 sends neither `include=parking,fuel` nor optional
 - Mobile Fuel Stations may reuse the normalized display model, but remains an
   independent provider with separate credentials, requests, and cache limits.
 
-### Feasibility still open
+### Implemented limits and practical validation still open
 
-The exact response shape, data quality, diesel-price availability, vehicle
-suitability, latency, and quota impact remain unverified without a live request.
-An anonymized provider fixture or documented response sample is required first;
-implementation and extra API calls need separate approval.
+The documented response shape is normalized through isolated fixtures:
+`parking` and `fuel` are bounded, coordinates and distances are validated, and
+only actually supplied price fields are retained. Vehicle suitability, opening
+hours, prices, and latency are never invented. A productive acceptance test,
+quota measurement, and live data-quality review remain open for a separately
+approved future step.

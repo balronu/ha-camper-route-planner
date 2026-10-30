@@ -23,6 +23,7 @@ from ..models import (
     RouteWaypoint,
     ValidationError,
 )
+from .poi import build_poi_parameters, normalize_pois
 
 PROVIDER_NAME = "nakordoni_motorhome"
 # Nakordoni documents routing on the public API host, while OAuth and usage
@@ -109,6 +110,7 @@ def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
     # fields available for local display/PDF without inventing API parameters.
     if FORBIDDEN_TRUCK_TIME_FIELDS.intersection(parameters):
         raise ValidationError("truck driver-time parameters are not valid for motorhomes")
+    parameters.update(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type))
     return parameters
 
 
@@ -345,6 +347,9 @@ class NakordoniMotorhomeProvider:
                     "alternatives": request.alternatives if request else 0,
                     "depart_at": request.depart_at.isoformat() if request and request.depart_at else None,
                     "arrive_at": request.arrive_at.isoformat() if request and request.arrive_at else None,
+                    "poi_parking": request.poi_parking if request else False,
+                    "poi_fuel": request.poi_fuel if request else False,
+                    "poi_fuel_type": request.poi_fuel_type if request else "diesel",
                 },
                 "border_crossings": border_crossings,
                 "border_state": border_state,
@@ -356,6 +361,7 @@ class NakordoniMotorhomeProvider:
                 "attribution": data.get("attribution", ["Data by nakordoni.eu"]),
                 "routing_source": (payload.get("headers") or {}).get("X-Route-Source") or (payload.get("headers") or {}).get("x-route-source"),
                 "transport": payload.get("transport", {}),
+                "pois": normalize_pois(data, requested=tuple(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type).get("include", "").split(",")) if (request and (request.poi_parking or request.poi_fuel)) else (), route_distance_m=float(route["distance_m"])),
             }
             return RouteResult(PROVIDER_NAME, float(route["distance_m"]), int(route["duration_s"]), RouteGeometry(points), warnings, metadata, synthetic)
         except (KeyError, TypeError, ValueError, IndexError) as exc:

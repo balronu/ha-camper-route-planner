@@ -168,6 +168,9 @@ export function normalizeRouteOptions(options = {}) {
     alternatives: Number.isFinite(Number(source.alternatives)) ? Number(source.alternatives) : 0,
     depart_at: source.depart_at || "",
     arrive_at: source.arrive_at || "",
+    poi_parking: source.poi_parking === true,
+    poi_fuel: source.poi_fuel === true,
+    poi_fuel_type: source.poi_fuel_type === "diesel" ? "diesel" : "diesel",
   };
 }
 

@@ -12,6 +12,7 @@ const CRP_LEAFLET_LABELS = Symbol("camper-route-planner-leaflet-labels");
 const CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
 const CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
 const CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-restriction-markers");
+const CRP_LEAFLET_POI_MARKERS = Symbol("camper-route-planner-leaflet-poi-markers");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -19,7 +20,7 @@ function svgElement(name, attributes = {}) {
   return element;
 }
 
-export function renderGeometryMap(container, route, labels) {
+export function renderGeometryMap(container, route, labels, pois = {}) {
   container.replaceChildren();
   container.className = "crp-map";
   const points = route?.geometry?.points || [];
@@ -44,6 +45,12 @@ export function renderGeometryMap(container, route, labels) {
     marker.setAttribute("aria-label", index === 0 ? labels.start : index === projected.length - 1 ? labels.destination : `${labels.waypoint} ${index}`);
     svg.append(marker);
   });
+  for (const item of [...(pois.parking || []), ...(pois.fuel || [])]) {
+    const projectedPoi = project(item);
+    const marker = svgElement("circle", { cx: projectedPoi[0], cy: projectedPoi[1], r: 6, fill: item.category === "fuel" ? "#7b1fa2" : "#1565c0", stroke: "white", "stroke-width": 2, "data-poi-id": item.id });
+    marker.setAttribute("aria-label", item.name || (item.category === "fuel" ? labels.fuelStation : labels.parking));
+    svg.append(marker);
+  }
   container.append(svg);
   const caption = document.createElement("small");
   caption.textContent = labels.geometryFallback;
@@ -72,6 +79,7 @@ export function destroyMap(container) {
     container[CRP_LEAFLET_LABELS] = null;
     container[CRP_LEAFLET_BORDER_MARKERS] = null;
     container[CRP_LEAFLET_RESTRICTION_MARKERS] = null;
+    container[CRP_LEAFLET_POI_MARKERS] = null;
   }
 }
 
@@ -137,6 +145,26 @@ function updateLeafletRestrictionMarkers(container, items = []) {
   return true;
 }
 
+function poiMarkerIcon(category) {
+  const glyph = category === "fuel" ? "F" : "P";
+  const color = category === "fuel" ? "#7b1fa2" : "#1565c0";
+  return L.divIcon({ className: `crp-marker crp-marker-poi crp-marker-poi-${category}`, html: `<span aria-hidden="true" style="background:${color}">${glyph}</span>`, iconSize: [24, 32], iconAnchor: [12, 30] });
+}
+
+function updateLeafletPoiMarkers(container, pois = {}) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return false;
+  for (const marker of container[CRP_LEAFLET_POI_MARKERS] || []) marker.remove();
+  const markers = [...(pois.parking || []), ...(pois.fuel || [])].filter((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))).map((item) => {
+    const marker = L.marker([Number(item.latitude), Number(item.longitude)], { icon: poiMarkerIcon(item.category) });
+    const distance = item.km_from_start == null ? "" : ` · ${Number(item.km_from_start).toFixed(1)} km`;
+    marker.addTo(map).bindTooltip(`${item.name || (item.category === "fuel" ? "Fuel station" : "Parking")}${distance}`);
+    return marker;
+  });
+  container[CRP_LEAFLET_POI_MARKERS] = markers;
+  return true;
+}
+
 function updateLeafletRoute(container, route, points = []) {
   const map = container?.[CRP_LEAFLET_MAP];
   if (!map) return false;
@@ -193,6 +221,7 @@ export function updateMapPoints(container, points, labels = {}, options = {}) {
   updateLeafletMarkers(container, validPoints);
   updateLeafletBorderMarkers(container, options.borderCrossings || []);
   updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
+  updateLeafletPoiMarkers(container, options.pois || {});
   scheduleMapFit(container, validPoints, options.route, Boolean(options.fitBounds));
   return true;
 }
@@ -251,6 +280,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     updateLeafletMarkers(container, points);
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
     updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
+    updateLeafletPoiMarkers(container, options.pois || {});
     if (options.fitBounds) {
       scheduleMapFit(container, points, route, true);
     } else if (!route && points.length === 1) {
@@ -269,5 +299,5 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
   const emptyMessage = mapConfig?.provider === "carto"
     ? (labels.mapUnavailable || labels.noRoute)
     : (mapConfig ? labels.noRoute : (labels.mapLoading || labels.noRoute));
-  renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage });
+    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {});
 }
