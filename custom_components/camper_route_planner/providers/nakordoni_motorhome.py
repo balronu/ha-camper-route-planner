@@ -421,9 +421,14 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
         "reset_at": reset_at,
         "transport": safe_transport,
     }
-    request_id = safe_request_id(payload.get("request_id") or headers.get("X-Request-Id") or headers.get("x-request-id"))
+    header_request_id = safe_request_id(headers.get("X-Request-Id") or headers.get("x-request-id"))
+    json_request_id = safe_request_id(payload.get("request_id"))
+    request_id = header_request_id or json_request_id
     if request_id:
         details["request_id"] = request_id
+        if header_request_id and json_request_id and header_request_id != json_request_id:
+            details["request_id_mismatch"] = True
+        message += f" Fehlerreferenz: {request_id}."
     if code == "point_not_routable":
         waypoint_index = error.get("waypoint_index", error.get("via_index"))
         if isinstance(waypoint_index, int) and not isinstance(waypoint_index, bool) and 0 <= waypoint_index <= 100:

@@ -159,13 +159,12 @@ class NakordoniHttpTransport:
                             for key, value in response.headers.items()
                             if key.lower() in SAFE_QUOTA_HEADERS or key.lower() == "x-request-id"
                         }
-                        raw_request_id = (
-                            result["headers"].get("X-Request-Id")
-                            or result["headers"].get("x-request-id")
-                            or result.get("request_id")
-                        )
-                        request_id = safe_request_id(raw_request_id)
+                        header_request_id = safe_request_id(result["headers"].get("X-Request-Id") or result["headers"].get("x-request-id"))
+                        json_request_id = safe_request_id(result.get("request_id"))
                         result.pop("request_id", None)
+                        if header_request_id and json_request_id and header_request_id != json_request_id:
+                            result["request_id_mismatch"] = True
+                        request_id = header_request_id or json_request_id
                         if request_id:
                             result["request_id"] = request_id
                         result["headers"] = {

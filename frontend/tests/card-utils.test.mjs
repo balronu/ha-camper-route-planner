@@ -252,4 +252,6 @@ test("provider errors are localized without exposing provider response text", ()
   assert.match(providerErrorMessage({ code: "route_restrictions_unresolved", message: "raw location detail" }, "de"), /vollständig zulässige Route/);
   assert.match(providerErrorMessage({ code: "quota_exceeded" }, "en"), /request limit/);
   assert.match(providerErrorMessage({ status: 503, message: "raw upstream body" }, "de"), /vorübergehend nicht verfügbar/);
+  assert.match(providerErrorMessage({ code: "route_timeout", message: "Fehlerreferenz: req-42." }, "en"), /Error reference: req-42/);
+  assert.doesNotMatch(providerErrorMessage({ code: "route_timeout", message: "Fehlerreferenz: secret value." }, "de"), /secret value/);
 });

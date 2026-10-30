@@ -14293,6 +14293,7 @@
         route_restrictions_unresolved: "F\xFCr diese Strecke konnte keine vollst\xE4ndig zul\xE4ssige Route f\xFCr dein Fahrzeug best\xE4tigt werden. Pr\xFCfe deine Zwischenziele und Fahrzeugangaben.",
         point_not_routable: "Der Routingdienst kann einen Wegpunkt nicht routen. Pr\xFCfe diesen Punkt und seine Koordinaten.",
         route_timeout: "Der Routingdienst hat die Routenberechnung wegen eines Zeitlimits beendet. Bitte versuche es sp\xE4ter erneut.",
+        error_reference: "Fehlerreferenz",
         quota_exceeded: "Der Routingdienst hat sein Anfragelimit erreicht. Bitte versuche es sp\xE4ter erneut.",
         timeout: "Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es sp\xE4ter erneut.",
         network_error: "Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es sp\xE4ter erneut.",
@@ -14309,6 +14310,7 @@
         route_restrictions_unresolved: "A fully permitted route for your vehicle could not be confirmed. Check your waypoints and vehicle details.",
         point_not_routable: "The routing service cannot route one waypoint. Check that point and its coordinates.",
         route_timeout: "The routing service stopped the route calculation because it timed out. Please try again later.",
+        error_reference: "Error reference",
         quota_exceeded: "The routing service has reached its request limit. Please try again later.",
         timeout: "The routing service did not respond in time. Please try again later.",
         network_error: "The network connection to the routing service failed. Please try again later.",
@@ -14322,10 +14324,11 @@
         provider_unavailable: "The routing service is temporarily unavailable. Please try again later."
       }
     };
-    if (messages[language]?.[code]) return messages[language][code];
-    if (status === 429) return messages[language]?.quota_exceeded || messages.en.quota_exceeded;
-    if (status >= 500) return messages[language]?.provider_unavailable || messages.en.provider_unavailable;
-    return error2?.message || (language === "de" ? "Die Routenberechnung ist fehlgeschlagen." : "Route calculation failed.");
+    const source = [error2?.data?.request_id, error2?.data?.details?.request_id, error2?.message].find((value) => typeof value === "string");
+    const referenceMatch = source?.match(/(?:Fehlerreferenz|Error reference):\s*([A-Za-z0-9._:-]{1,128})/i);
+    const reference = referenceMatch?.[1] || (typeof error2?.data?.request_id === "string" ? error2.data.request_id.match(/^[A-Za-z0-9._:-]{1,128}$/)?.[0] : null);
+    const base = messages[language]?.[code] || (status === 429 ? messages[language]?.quota_exceeded : status >= 500 ? messages[language]?.provider_unavailable : null) || error2?.message || (language === "de" ? "Die Routenberechnung ist fehlgeschlagen." : "Route calculation failed.");
+    return reference ? `${base} ${messages[language]?.error_reference || messages.en.error_reference}: ${reference}.` : base;
   }
   function normalizeRouteOptions(options = {}) {
     const source = options && typeof options === "object" ? options : {};
