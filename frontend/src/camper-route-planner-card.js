@@ -1,7 +1,7 @@
 import { languageOf, t } from "./localization.js";
 import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
 import { armRequestDiagnostics, callWebsocket, calculateRoute, deliverGpxExport, disarmRequestDiagnostics, estimateTollsV2, exportGpx, geocode, getRequestDiagnostic, reverseGeocode, trackerPosition } from "./services.js";
-import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
+import { destroyMap, fitMapToRoute, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "./toll-display.js";
 import { createTravelPlanPdf, downloadPdf, pdfFileName } from "./pdf-export.js";
@@ -169,6 +169,9 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._editStationId = null;
     this._editDraft = null;
     this._editError = "";
+    this._mapPopupOpen = false;
+    this._mapPopupReturnFocus = null;
+    this._bodyOverflowBeforeMapPopup = null;
   }
 
   ensureStations() {
@@ -268,7 +271,46 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._resizeObserver?.disconnect();
     // Leaflet installs window listeners. Removing the host DOM alone does not
     // call map.remove(), so clean up before HA discards a preview/card.
-    destroyMap(this.shadowRoot?.querySelector(".crp-map"));
+    destroyMap(this.shadowRoot?.querySelector(".map-section > .crp-map"));
+    destroyMap(this.shadowRoot?.querySelector(".map-popup > .crp-map"));
+    this.unlockMapPopupScroll();
+  }
+
+  lockMapPopupScroll() {
+    if (this._bodyOverflowBeforeMapPopup !== null || !document.body) return;
+    this._bodyOverflowBeforeMapPopup = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+
+  unlockMapPopupScroll() {
+    if (this._bodyOverflowBeforeMapPopup === null || !document.body) return;
+    document.body.style.overflow = this._bodyOverflowBeforeMapPopup;
+    this._bodyOverflowBeforeMapPopup = null;
+  }
+
+  openMapPopup() {
+    if (this._mapPopupOpen) return;
+    this._mapPopupReturnFocus = this.shadowRoot?.activeElement || null;
+    this._mapPopupOpen = true;
+    this.lockMapPopupScroll();
+    this.render();
+  }
+
+  closeMapPopup() {
+    if (!this._mapPopupOpen) return;
+    this._mapPopupOpen = false;
+    this.unlockMapPopupScroll();
+    const returnFocus = this._mapPopupReturnFocus;
+    this._mapPopupReturnFocus = null;
+    this.render();
+    requestAnimationFrame(() => {
+      const target = returnFocus?.isConnected ? returnFocus : this.shadowRoot?.querySelector('button[data-action="open-map-popup"]');
+      target?.focus({ preventScroll: true });
+    });
+  }
+
+  focusMapPopup() {
+    this.shadowRoot?.querySelector(".map-popup-close")?.focus({ preventScroll: true });
   }
 
   updateResponsiveClass() {
@@ -427,6 +469,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
       this._state.diagnosticToken = "";
       this._state.diagnosticCopyStatus = "";
       this._state.resultStale = false;
+      this._fitMapOnNextRender = true;
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
     } catch (error) {
       this._state.requestDiagnosticsArmed = false; this._state.diagnosticToken = "";
@@ -673,6 +716,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
         element.scrollLeft = left;
         element.scrollTop = top;
       });
+      if (this._mapPopupOpen) return;
       const activeAction = state.activeAction;
       if (!activeAction) return;
       const selector = activeAction.index == null
@@ -929,7 +973,9 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const inputState = this.captureInputState();
     const viewState = this._pendingViewState || this.captureViewState();
     this._pendingViewState = null;
-    const oldMap = this.shadowRoot?.querySelector(".crp-map");
+    const oldMap = this.shadowRoot?.querySelector(".map-section > .crp-map");
+    const oldPopupMap = this.shadowRoot?.querySelector(".map-popup > .crp-map");
+    destroyMap(oldPopupMap);
     const preserveMap = Boolean(oldMap?.classList.contains("leaflet-container") && this._state.mapConfig?.provider === "carto" && this._state.mapConfig?.status === "configured");
     if (preserveMap) oldMap.remove();
     else destroyMap(oldMap);
@@ -944,6 +990,12 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const fuelType = profile ? translate(`fuelType.${profile.fuel_type}`) : "";
     const navigationTarget = result && !this._state.resultStale ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
       this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate("vehicle")}</h3><select data-action="profile" aria-label="${translate("vehicle")}"><option value="">${translate("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H × W × L</dt><dd>${profile.height_m} × ${profile.width_m} × ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} · ${escapeHtml(fuelType)}${profile.emission_class ? ` · ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">＋ ${translate("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate("geocodingPrivacy")}</p><section class="map-section"><h3>${translate("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("calculating") : translate("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate("saving") : translate("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate("provider")}: ${escapeHtml(this.providerLabel(result.provider, language, result.metadata?.api_version))}` : translate("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate("exportCombined")}</button><button type="button" data-action="pdf">${translate("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>🧭 ${translate("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} · ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate("delete")}</button></div>`).join("") : `<p class="subtle">${translate("noRoute")}</p>`}</section></div></ha-card>`;
+    const mapSection = this.shadowRoot.querySelector(".map-section");
+    const mapHeading = mapSection?.querySelector("h3");
+    mapHeading?.insertAdjacentHTML("afterend", `<button type="button" data-action="open-map-popup">${translate("mapEnlarge")}</button>`);
+    if (this._mapPopupOpen) {
+      mapSection?.insertAdjacentHTML("afterend", `<div class="map-popup" role="dialog" aria-modal="true" aria-labelledby="map-popup-title"><div class="map-popup-heading"><h2 id="map-popup-title">${translate("map")}</h2><button type="button" class="map-popup-close" data-action="close-map-popup" aria-label="${translate("mapClose")}">×</button></div><div class="map-popup-actions"><button type="button" data-action="fit-map-popup">${translate("mapFitRoute")}</button></div><div class="map-popup-host"></div></div>`);
+    }
     const legacyGrid = this.shadowRoot.querySelector(".grid");
     const stations = this.ensureStations();
     legacyGrid?.replaceWith(this.htmlNodes(`<section class="stations-panel"><div class="stations-heading"><h3>${translate("stations")}</h3><span class="subtle">${translate("stationsHint")}</span></div><div class="stations-list">${stations.map((station, index) => this.renderStation(station, index, translate, stations.length)).join("")}</div><button type="button" data-action="add-station" ${stations.length >= 7 ? "disabled" : ""}>＋ ${translate("addWaypoint")}</button></section>`)[0]);
@@ -1007,6 +1059,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
     } else {
       renderMap(mapHost, result, this._state.mapConfig, mapLabels, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); }, mapOptions);
     }
+    if (this._mapPopupOpen) {
+      const popupHost = this.shadowRoot.querySelector(".map-popup-host");
+      renderMap(popupHost, result, this._state.mapConfig, mapLabels, () => {}, { ...mapOptions, fitBounds: true });
+    }
+    const popupStyle = document.createElement("style");
+    popupStyle.textContent = ".map-section>h3{display:inline-block;margin-right:10px}.map-section>button{vertical-align:middle}.map-popup{position:fixed;inset:0;z-index:1000;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;padding:clamp(12px,3vw,28px);background:var(--primary-background-color,#fff);color:var(--primary-text-color);overflow:hidden}.map-popup-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.map-popup-heading h2{margin:0}.map-popup-close{min-width:44px;min-height:44px;font-size:1.7rem;line-height:1}.map-popup-actions{display:flex;gap:8px}.map-popup-host{min-height:0;height:100%;overflow:hidden;border-radius:12px}.map-popup-host .crp-leaflet-map{height:100%;min-height:240px}.map-popup-host .crp-map>svg{height:100%}.map-popup button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.map-popup button:focus-visible,.map-section>button:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}@media(max-width:600px){.map-popup{padding:8px}.map-popup-host .crp-leaflet-map{min-height:0}.map-popup-actions button{flex:1}}";
+    popupStyle.textContent += ".map-popup>.crp-leaflet-map{height:100%;min-height:240px;overflow:hidden;border-radius:12px}.map-popup>.crp-map>svg{height:100%}@media(max-width:600px){.map-popup>.crp-leaflet-map{min-height:0}}";
+    this.shadowRoot.append(popupStyle);
     // The DOM is rebuilt for the card controls while the Leaflet host is
     // preserved separately. Rebind every control after each render so
     // search, waypoint, and route actions remain usable after DOM updates.
@@ -1015,6 +1075,10 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._fitMapOnNextRender = false;
     this.restoreInputState(inputState);
     this.restoreViewState(viewState);
+    if (this._mapPopupOpen) {
+      this.focusMapPopup();
+      requestAnimationFrame(() => this.focusMapPopup());
+    }
     this._preserveInputDraftKeys.clear();
     if (this._cardExpanded) requestAnimationFrame(() => invalidateMapSize(this.shadowRoot?.querySelector(".crp-map")));
   }
@@ -1070,6 +1134,20 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelectorAll("button[data-action=remove-station]").forEach((button) => button.addEventListener("click", () => this.removeStation(Number(button.dataset.index))));
     this.shadowRoot.querySelectorAll("button[data-action=up-station]").forEach((button) => button.addEventListener("click", () => this.moveStation(Number(button.dataset.index), -1)));
     this.shadowRoot.querySelectorAll("button[data-action=down-station]").forEach((button) => button.addEventListener("click", () => this.moveStation(Number(button.dataset.index), 1)));
+    this.shadowRoot.querySelectorAll("button[data-action=open-map-popup]").forEach((button) => button.addEventListener("click", () => this.openMapPopup()));
+    this.shadowRoot.querySelectorAll("button[data-action=close-map-popup]").forEach((button) => button.addEventListener("click", () => this.closeMapPopup()));
+    this.shadowRoot.querySelectorAll("button[data-action=fit-map-popup]").forEach((button) => button.addEventListener("click", () => {
+      fitMapToRoute(this.shadowRoot?.querySelector(".map-popup > .crp-map"), this.mapPoints(), this._state.result, true);
+    }));
+    this.shadowRoot.querySelectorAll(".map-popup").forEach((popup) => popup.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault(); this.closeMapPopup(); return; }
+      if (event.key !== "Tab") return;
+      const focusable = [...popup.querySelectorAll("button:not([disabled])")];
+      if (!focusable.length) return;
+      const first = focusable[0]; const last = focusable[focusable.length - 1];
+      if (event.shiftKey && this.shadowRoot.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && this.shadowRoot.activeElement === last) { event.preventDefault(); first.focus(); }
+    }));
     this.shadowRoot.querySelectorAll("input[data-edit-field]").forEach((input) => input.addEventListener("input", () => {
       if (!this._editDraft) return;
       this._editDraft[input.dataset.editField] = input.value;
