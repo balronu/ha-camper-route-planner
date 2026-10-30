@@ -21,8 +21,15 @@ travel documents together.
 
 [Deutsche Version](README.md) · [Documentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
-![Desktop](assets/screenshots/desktop.png)
-![Mobile](assets/screenshots/mobile.png)
+### Current v0.1.6 interface
+
+![Real Chromium capture of the compact station list, route options, fuel planning, and result](assets/screenshots/v016-desktop.png)
+
+![Real Chromium capture of the mobile stations, map, and result view](assets/screenshots/v016-mobile.png)
+
+These captures come from the v0.1.6 Chromium E2E run with isolated mock data.
+They show the current interface without a productive NaKordoni request and
+contain no private locations or credentials.
 
 ## Built for motorhome trip planning
 

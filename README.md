@@ -22,8 +22,16 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 
 [English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
-![Desktop](assets/screenshots/desktop.png)
-![Mobil](assets/screenshots/mobile.png)
+### Aktuelle Oberfläche v0.1.6
+
+![Echte Chromium-Aufnahme der kompakten Stationsliste, Routenoptionen,
+Tankplanung und des Ergebnisses](assets/screenshots/v016-desktop.png)
+
+![Echte Chromium-Aufnahme der mobilen Stations-, Karten- und Ergebnisansicht](assets/screenshots/v016-mobile.png)
+
+Die Aufnahmen stammen aus dem v0.1.6-Chromium-E2E-Lauf mit isolierten Mock-Daten.
+Sie zeigen die aktuelle Oberfläche ohne produktive NaKordoni-Anfrage und
+enthalten keine privaten Standorte oder Zugangsdaten.
 
 ## Für deine Reiseplanung
 
