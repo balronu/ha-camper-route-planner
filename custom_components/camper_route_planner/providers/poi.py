@@ -74,7 +74,11 @@ def _prices(raw: Any) -> list[dict[str, Any]]:
 
 def normalize_pois(data: dict[str, Any], *, requested: tuple[str, ...] = (), route_distance_m: float | None = None) -> dict[str, Any]:
     """Normalize documented parking/fuel arrays without inventing metadata."""
-    route_km = _number(route_distance_m, minimum=0) / 1000 if route_distance_m is not None else None
+    # Route distance is already validated by the route adapter and can exceed
+    # the per-POI numeric bound used elsewhere in this module.  Keep the
+    # conversion safe for long routes and for an absent/invalid optional value.
+    normalized_route_distance = _number(route_distance_m, minimum=0, maximum=float("inf"))
+    route_km = normalized_route_distance / 1000 if normalized_route_distance is not None else None
 
     def records(category: str, source: Any) -> list[dict[str, Any]]:
         if not isinstance(source, list):
