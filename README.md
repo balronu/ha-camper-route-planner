@@ -10,18 +10,15 @@ Camper Route Planner verbindet eine übersichtliche Lovelace-Karte mit der
 Routing-Technologie von [NaKordoni](https://nakordoni.eu). So bleiben
 Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 
-> **v0.1.5 Stable** ist veröffentlicht. Die Stable-Version wurde automatisiert
-> und mit einer echten NaKordoni-v3-Routenberechnung erfolgreich überprüft.
+> **v0.1.6 Stable** ist veröffentlicht. Die Stable-Version wurde automatisiert
+> geprüft und enthält die getestete Routenplanung, POI-Filter, individuelle
+> Kilometerabstände sowie die optionale intelligente Tankplanung.
 > Die Integration ist ein Planungswerkzeug und ersetzt kein spezialisiertes
 > Wohnmobil-Navigationsgerät.
 >
-> **v0.1.6-beta.17** ist als Fehlerkorrektur für gespeicherte
-> POI-Anforderungen und lokale Kartenansichten verfügbar. Sie baut auf der
-> POI-/UX-Vorabversion Beta.15 auf. v0.1.5 bleibt die aktuelle Stable-Version.
-> Für produktive Nutzung bleibt v0.1.5 die aktuelle Stable-Version.
-> Beta.17 ergänzt außerdem die optionale intelligente Tankplanung von NaKordoni
-> v3 im bestehenden Bereich „Kraftstoff & Reichweite“; sie ist standardmäßig
-> deaktiviert und liefert ausschließlich gekennzeichnete Schätzungen.
+> Die aktuelle Stable nutzt NaKordoni als Routinganbieter; der technische
+> Austausch mit dem NaKordoni-Team ist keine formelle Partnerschaft oder
+> Zertifizierung.
 
 [English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
@@ -100,9 +97,9 @@ Planner als **Custom Repository**:
 1. In HACS **Integrationen → ⋮ → Benutzerdefinierte Repositories** öffnen.
 2. `balronu/ha-camper-route-planner` als Repository vom Typ **Integration**
    hinzufügen.
-3. Für produktive Nutzung die reguläre Stable-Version `v0.1.5` installieren.
-   `v0.1.6-beta.17` ist nur über die Vorabversionen bzw. das Release-ZIP für
-   Tests vorgesehen. Home Assistant bei Aufforderung neu starten.
+3. Für produktive Nutzung die Stable-Version `v0.1.6` installieren. Die
+   früheren Beta-Versionen bleiben als historische Vorabversionen verfügbar.
+   Home Assistant bei Aufforderung neu starten.
 4. Unter **Einstellungen → Geräte & Dienste** die Integration einrichten und
    anschließend die Lovelace-Karte in dein Dashboard aufnehmen.
 
@@ -122,6 +119,7 @@ nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 - [Sicherheit und Datenschutz](docs/SECURITY-AND-PRIVACY.md)
 - [Technische Architektur](docs/ARCHITECTURE.md)
 - [v0.1.5 Release Notes](docs/releases/v0.1.5.md)
+- [v0.1.6 Release Notes](docs/releases/v0.1.6.md)
 - [v0.1.6-beta.1 Release Notes](docs/releases/v0.1.6-beta.1.md)
 - [v0.1.6-beta.2 Release Notes](docs/releases/v0.1.6-beta.2.md)
 - [v0.1.6-beta.3 Release Notes](docs/releases/v0.1.6-beta.3.md)
@@ -136,7 +134,6 @@ nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 - [v0.1.6-beta.12 Release Notes](docs/releases/v0.1.6-beta.12.md)
 - [v0.1.6-beta.13 Release Notes](docs/releases/v0.1.6-beta.13.md)
 - [v0.1.6-beta.14 Release Notes](docs/releases/v0.1.6-beta.14.md)
-- [v0.1.6-beta.17 Release Notes](docs/releases/v0.1.6-beta.17.md)
 - [v0.1.6-beta.16 Release Notes](docs/releases/v0.1.6-beta.16.md)
 - [NaKordoni-POI-Konzept](docs/NAKORDONI-POI-CONCEPT.md)
 
