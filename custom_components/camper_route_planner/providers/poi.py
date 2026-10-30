@@ -10,12 +10,12 @@ MAX_POIS_PER_CATEGORY = 50
 MAX_TEXT_LENGTH = 160
 
 
-def build_poi_parameters(*, parking: bool = False, fuel: bool = False, fuel_type: str = "diesel") -> dict[str, str]:
+def build_poi_parameters(*, parking: bool = False, fuel: bool = False, fuel_type: str = "diesel", fuel_plan: bool = False) -> dict[str, str]:
     """Return only explicitly requested, documented POI query parameters."""
-    include = [category for category, enabled in (("parking", parking), ("fuel", fuel)) if enabled]
+    include = [category for category, enabled in (("parking", parking), ("fuel", fuel), ("fuel_plan", fuel_plan)) if enabled]
     if not include:
         return {}
-    if fuel and fuel_type != "diesel":
+    if (fuel or fuel_plan) and fuel_type != "diesel":
         raise ValueError("only diesel POIs are currently supported")
     result = {"include": ",".join(include)}
     if fuel:

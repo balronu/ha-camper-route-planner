@@ -92,7 +92,15 @@ def build_v3_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
         parameters["arrive_at"] = request.arrive_at.isoformat()
     if profile.emission_class:
         parameters["emission_class"] = profile.emission_class
-    parameters.update(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type))
+    parameters.update(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type, fuel_plan=request.fuel_plan_enabled))
+    if request.fuel_plan_enabled:
+        parameters.update({
+            "tank_l": request.fuel_plan_tank_l,
+            "consumption_l100": request.fuel_plan_consumption_l100,
+            "start_fuel_pct": request.fuel_plan_start_fuel_pct,
+            "reserve_pct": request.fuel_plan_reserve_pct,
+            "fuel": request.poi_fuel_type,
+        })
     return parameters
 
 
@@ -146,6 +154,58 @@ def _geometry(route: dict[str, Any], requested_format: str) -> RouteGeometry:
         points = tuple(RouteWaypoint(float(point[0]), float(point[1])) for point in raw)
         return RouteGeometry(points, geometry_format)  # type: ignore[arg-type]
     raise ValueError("v3 response has no supported geometry")
+
+
+def normalize_fuel_plan(raw: Any) -> dict[str, Any] | None:
+    """Keep only bounded, documented fuel-plan fields; never invent stops."""
+    if not isinstance(raw, dict):
+        return None
+    result: dict[str, Any] = {}
+    for key in ("grade", "tank_l", "consumption_l100", "start_fuel_pct", "reserve_pct", "total_litres", "total_est_cost", "total_currency", "fuel_left_at_destination_pct"):
+        value = raw.get(key)
+        if key in {"grade", "total_currency"}:
+            if isinstance(value, str) and value.strip(): result[key] = value.strip()[:32]
+        elif isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)):
+            result[key] = float(value)
+    stops: list[dict[str, Any]] = []
+    for stop in raw.get("stops", []) if isinstance(raw.get("stops"), list) else []:
+        if not isinstance(stop, dict):
+            continue
+        km = stop.get("km_from_start")
+        litres = stop.get("litres")
+        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0 for value in (km, litres)):
+            continue
+        item: dict[str, Any] = {"km_from_start": float(km), "litres": float(litres)}
+        station = stop.get("station")
+        if isinstance(station, dict):
+            safe_station = {}
+            for key in ("id", "name", "brand", "country", "latitude", "longitude", "lat", "lon"):
+                value = station.get(key)
+                if isinstance(value, str):
+                    safe_station[key] = value[:160]
+                elif isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)):
+                    if key in {"latitude", "lat"} and not -90 <= float(value) <= 90:
+                        continue
+                    if key in {"longitude", "lon"} and not -180 <= float(value) <= 180:
+                        continue
+                    safe_station[key] = float(value)
+            if safe_station: item["station"] = safe_station
+        for key in ("est_price_per_l", "est_cost", "est_cost_eur", "fuel_left_on_arrival_pct"):
+            value = stop.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0: item[key] = float(value)
+        if isinstance(stop.get("price_updated_at"), str): item["price_updated_at"] = stop["price_updated_at"][:64]
+        if isinstance(stop.get("below_reserve"), bool): item["below_reserve"] = stop["below_reserve"]
+        if item.get("station") or item.get("below_reserve"):
+            stops.append(item)
+    result["stops"] = stops
+    warnings = []
+    for warning in raw.get("warnings", []) if isinstance(raw.get("warnings"), list) else []:
+        if isinstance(warning, dict):
+            item = {key: warning[key] for key in ("code", "km_from_start", "message") if key in warning and isinstance(warning[key], (str, int, float)) and not isinstance(warning[key], bool)}
+            if item: warnings.append(item)
+        elif isinstance(warning, str) and warning.strip(): warnings.append({"message": warning.strip()[:256]})
+    result["warnings"] = warnings[:20]
+    return result
 
 
 def _number(value: Any) -> float | None:
@@ -525,12 +585,18 @@ class NakordoniRouteAdapterV3:
                     "poi_parking": request.poi_parking,
                     "poi_fuel": request.poi_fuel,
                     "poi_fuel_type": request.poi_fuel_type,
+                    "fuel_plan_enabled": request.fuel_plan_enabled,
+                    "fuel_plan_tank_l": request.fuel_plan_tank_l,
+                    "fuel_plan_consumption_l100": request.fuel_plan_consumption_l100,
+                    "fuel_plan_start_fuel_pct": request.fuel_plan_start_fuel_pct,
+                    "fuel_plan_reserve_pct": request.fuel_plan_reserve_pct,
                 },
                 **_eta_metadata(data, route),
                 "routing_source": (payload.get("headers") or {}).get("X-Route-Source") or (payload.get("headers") or {}).get("x-route-source"),
                 "transport": payload.get("transport", {}),
                 "request_id": safe_request_id(payload.get("request_id") or (payload.get("headers") or {}).get("X-Request-Id") or (payload.get("headers") or {}).get("x-request-id")),
-                "pois": normalize_pois(data, requested=tuple(build_poi_parameters(parking=request.poi_parking, fuel=request.poi_fuel, fuel_type=request.poi_fuel_type).get("include", "").split(",")) if (request.poi_parking or request.poi_fuel) else (), route_distance_m=distance),
+                "pois": normalize_pois(data, requested=tuple(category for category in ("parking", "fuel") if (category == "parking" and request.poi_parking) or (category == "fuel" and request.poi_fuel)), route_distance_m=distance),
+                "fuel_plan": normalize_fuel_plan(data.get("fuel_plan")),
             }
             return RouteResult(PROVIDER_NAME, distance, int(duration), geometry, tuple(warnings), metadata, synthetic)
         except ProviderError:

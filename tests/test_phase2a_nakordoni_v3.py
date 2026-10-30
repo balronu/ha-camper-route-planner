@@ -8,6 +8,7 @@ from custom_components.camper_route_planner.providers.nakordoni_v3 import (
     NakordoniRouteAdapterV3,
     V3_ROUTE_ENDPOINT,
     build_v3_motorhome_parameters,
+    normalize_fuel_plan,
 )
 from custom_components.camper_route_planner.providers.nakordoni_motorhome import provider_error_from_payload
 
@@ -37,6 +38,48 @@ def payload(**changes):
 
 
 class Phase2ANakordoniV3Tests(unittest.TestCase):
+    def test_fuel_plan_parameters_are_opt_in_and_composable(self):
+        plain = build_v3_motorhome_parameters(request())
+        self.assertNotIn("fuel_plan", plain.get("include", ""))
+        self.assertNotIn("tank_l", plain)
+        enabled = request(
+            poi_parking=True,
+            poi_fuel=True,
+            fuel_plan_enabled=True,
+            fuel_plan_tank_l=90,
+            fuel_plan_consumption_l100=10.5,
+            fuel_plan_start_fuel_pct=100,
+            fuel_plan_reserve_pct=15,
+        )
+        values = build_v3_motorhome_parameters(enabled)
+        self.assertEqual(values["include"], "parking,fuel,fuel_plan")
+        self.assertEqual(values["fuel"], "diesel")
+        self.assertEqual(values["tank_l"], 90)
+        self.assertEqual(values["consumption_l100"], 10.5)
+        self.assertEqual(values["start_fuel_pct"], 100)
+        self.assertEqual(values["reserve_pct"], 15)
+
+    def test_fuel_plan_is_optional_and_normalized_without_affecting_route(self):
+        adapter = NakordoniRouteAdapterV3()
+        result = adapter.normalize_response(payload(), request=request())
+        self.assertIsNone(result.metadata["fuel_plan"])
+        body = payload()
+        body["data"]["fuel_plan"] = {
+            "stops": [{"km_from_start": 250, "litres": 42, "station": {"name": "Safe Fuel", "latitude": 48.1, "longitude": 11.5}, "est_cost_eur": 73.5}],
+            "total_litres": 42,
+            "total_est_cost": 73.5,
+            "total_currency": "EUR",
+            "fuel_left_at_destination_pct": 18,
+            "warnings": [{"code": "estimate", "message": "Estimated only"}],
+        }
+        result = adapter.normalize_response(body, request=request(fuel_plan_enabled=True, fuel_plan_tank_l=90, fuel_plan_consumption_l100=10.5))
+        self.assertEqual(result.distance_m, 123000)
+        self.assertEqual(result.metadata["fuel_plan"]["stops"][0]["km_from_start"], 250.0)
+        self.assertEqual(result.metadata["fuel_plan"]["total_currency"], "EUR")
+
+    def test_invalid_fuel_plan_stops_are_omitted(self):
+        normalized = normalize_fuel_plan({"stops": [{"km_from_start": None, "litres": 10}, {"km_from_start": 100, "litres": 10, "below_reserve": True}]})
+        self.assertEqual(len(normalized["stops"]), 1)
     def test_v3_endpoint_is_separate_and_v2_facade_unchanged(self):
         self.assertEqual(V3_ROUTE_ENDPOINT, "https://nakordoni.eu/api/v3/data/truck-route")
         self.assertEqual(NakordoniRouteAdapterV2().endpoint, "https://nakordoni.eu/api/v2/data/truck-route")

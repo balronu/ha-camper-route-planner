@@ -76,6 +76,8 @@ def validate_motorhome_profile(profile: Any) -> None:
 
 def build_motorhome_parameters(request: RouteRequest) -> dict[str, Any]:
     """Build only the documented motorhome request fields."""
+    if request.fuel_plan_enabled:
+        raise ValidationError("fuel planning requires the NaKordoni v3 provider")
     validate_motorhome_profile(request.vehicle)
     parameters: dict[str, Any] = {
         "from": f"{request.origin.latitude},{request.origin.longitude}",

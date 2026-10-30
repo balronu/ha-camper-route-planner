@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import math
 import secrets
 from typing import Any
 
@@ -298,6 +299,26 @@ class RuntimeData:
             raise ValueError("poi_parking and poi_fuel must be boolean")
         if poi_fuel_type != "diesel":
             raise ValueError("only diesel POIs are currently supported")
+        fuel_plan_enabled = data.get("fuel_plan_enabled", False)
+        if not isinstance(fuel_plan_enabled, bool):
+            raise ValueError("fuel_plan_enabled must be boolean")
+        def _optional_number(name: str) -> float | None:
+            value = data.get(name)
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                raise ValueError(f"{name} must be numeric")
+            try:
+                number = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{name} must be numeric") from exc
+            if not math.isfinite(number):
+                raise ValueError(f"{name} must be finite")
+            return number
+        fuel_plan_tank_l = _optional_number("fuel_plan_tank_l") if fuel_plan_enabled else None
+        fuel_plan_consumption_l100 = _optional_number("fuel_plan_consumption_l100") if fuel_plan_enabled else None
+        fuel_plan_start_fuel_pct = _optional_number("fuel_plan_start_fuel_pct") if fuel_plan_enabled else 100.0
+        fuel_plan_reserve_pct = _optional_number("fuel_plan_reserve_pct") if fuel_plan_enabled else 15.0
         request = RouteRequest(
             RouteWaypoint.from_dict(data["origin"]), RouteWaypoint.from_dict(data["destination"]), profile,
             tuple(RouteWaypoint.from_dict(item) for item in data.get("via", [])),
@@ -305,6 +326,11 @@ class RuntimeData:
             depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
             arrive_at=_time("arrive_at"),
             poi_parking=poi_parking, poi_fuel=poi_fuel, poi_fuel_type=poi_fuel_type,
+            fuel_plan_enabled=fuel_plan_enabled,
+            fuel_plan_tank_l=fuel_plan_tank_l,
+            fuel_plan_consumption_l100=fuel_plan_consumption_l100,
+            fuel_plan_start_fuel_pct=fuel_plan_start_fuel_pct,
+            fuel_plan_reserve_pct=fuel_plan_reserve_pct,
         )
         self._pending_request_diagnostic = None
         self._last_request_error = None

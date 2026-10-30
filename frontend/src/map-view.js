@@ -15,6 +15,7 @@ const CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-res
 const CRP_LEAFLET_POI_MARKERS = Symbol("camper-route-planner-leaflet-poi-markers");
 const CRP_LEAFLET_POI_DATA = Symbol("camper-route-planner-leaflet-poi-data");
 const CRP_LEAFLET_POI_ZOOM_HANDLER = Symbol("camper-route-planner-leaflet-poi-zoom-handler");
+const CRP_LEAFLET_FUEL_PLAN_MARKERS = Symbol("camper-route-planner-leaflet-fuel-plan-markers");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -22,7 +23,7 @@ function svgElement(name, attributes = {}) {
   return element;
 }
 
-export function renderGeometryMap(container, route, labels, pois = {}) {
+export function renderGeometryMap(container, route, labels, pois = {}, fuelPlan = null) {
   container.replaceChildren();
   container.className = "crp-map";
   const points = route?.geometry?.points || [];
@@ -51,6 +52,16 @@ export function renderGeometryMap(container, route, labels, pois = {}) {
     const projectedPoi = project(item);
     const marker = svgElement("circle", { cx: projectedPoi[0], cy: projectedPoi[1], r: 6, fill: item.category === "fuel" ? "#7b1fa2" : "#1565c0", stroke: "white", "stroke-width": 2, "data-poi-id": item.id });
     marker.setAttribute("aria-label", item.name || (item.category === "fuel" ? labels.fuelStation : labels.parking));
+    svg.append(marker);
+  }
+  for (const stop of Array.isArray(fuelPlan?.stops) ? fuelPlan.stops : []) {
+    const station = stop.station || {};
+    const latitude = Number(station.latitude ?? station.lat ?? stop.latitude ?? stop.lat);
+    const longitude = Number(station.longitude ?? station.lon ?? stop.longitude ?? stop.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    const projectedFuel = project({ latitude, longitude });
+    const marker = svgElement("circle", { cx: projectedFuel[0], cy: projectedFuel[1], r: 8, fill: "#00838f", stroke: "white", "stroke-width": 3, "data-fuel-plan": "true" });
+    marker.setAttribute("aria-label", "Fuel plan");
     svg.append(marker);
   }
   container.append(svg);
@@ -84,6 +95,7 @@ export function destroyMap(container) {
     container[CRP_LEAFLET_POI_MARKERS] = null;
     container[CRP_LEAFLET_POI_DATA] = null;
     container[CRP_LEAFLET_POI_ZOOM_HANDLER] = null;
+    container[CRP_LEAFLET_FUEL_PLAN_MARKERS] = null;
   }
 }
 
@@ -207,6 +219,28 @@ function updateLeafletPoiMarkers(container, pois = {}) {
   return true;
 }
 
+function fuelPlanMarkerIcon() {
+  return L.divIcon({ className: "crp-marker crp-marker-fuel-plan", html: "<span aria-hidden=\"true\">FP</span>", iconSize: [30, 38], iconAnchor: [15, 36] });
+}
+
+function updateLeafletFuelPlanMarkers(container, plan = null) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return false;
+  for (const marker of container[CRP_LEAFLET_FUEL_PLAN_MARKERS] || []) marker.remove();
+  const markers = (Array.isArray(plan?.stops) ? plan.stops : []).flatMap((stop) => {
+    const station = stop.station || {};
+    const latitude = Number(station.latitude ?? station.lat ?? stop.latitude ?? stop.lat);
+    const longitude = Number(station.longitude ?? station.lon ?? stop.longitude ?? stop.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+    const marker = L.marker([latitude, longitude], { icon: fuelPlanMarkerIcon() });
+    const cost = stop.est_cost_eur ?? stop.est_cost;
+    marker.addTo(map).bindTooltip(`Fuel plan · ${Number(stop.km_from_start).toFixed(1)} km · ${Number(stop.litres).toFixed(1)} l${cost == null ? "" : ` · ${Number(cost).toFixed(2)} EUR (estimate)`}`);
+    return [marker];
+  });
+  container[CRP_LEAFLET_FUEL_PLAN_MARKERS] = markers;
+  return true;
+}
+
 function updateLeafletRoute(container, route, points = []) {
   const map = container?.[CRP_LEAFLET_MAP];
   if (!map) return false;
@@ -245,6 +279,22 @@ export function fitMapToRoute(container, points = [], route = null, force = true
   return true;
 }
 
+/** Capture the user-controlled Leaflet view before the card DOM is rebuilt. */
+export function captureMapView(container) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map) return null;
+  const center = map.getCenter();
+  return { latitude: center.lat, longitude: center.lng, zoom: map.getZoom() };
+}
+
+/** Restore a previously captured view without fitting the route or moving it. */
+export function restoreMapView(container, view) {
+  const map = container?.[CRP_LEAFLET_MAP];
+  if (!map || !view || !Number.isFinite(view.latitude) || !Number.isFinite(view.longitude) || !Number.isFinite(view.zoom)) return false;
+  map.setView([view.latitude, view.longitude], view.zoom, { animate: false });
+  return true;
+}
+
 function scheduleMapFit(container, points, route, force) {
   if (!force) return;
   const fit = () => fitMapToRoute(container, points, route, true);
@@ -264,6 +314,7 @@ export function updateMapPoints(container, points, labels = {}, options = {}) {
   updateLeafletBorderMarkers(container, options.borderCrossings || []);
   updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
   updateLeafletPoiMarkers(container, options.pois || {});
+  updateLeafletFuelPlanMarkers(container, options.fuelPlan || null);
   scheduleMapFit(container, validPoints, options.route, Boolean(options.fitBounds));
   return true;
 }
@@ -300,7 +351,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
       clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
       container[CRP_LEAFLET_TILE_TIMER] = null;
       destroyMap(container);
-      renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute });
+      renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute }, options.pois || {}, options.fuelPlan || null);
       onTileError();
     };
     layer.on("tileload", () => {
@@ -323,6 +374,7 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
     updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
     updateLeafletPoiMarkers(container, options.pois || {});
+    updateLeafletFuelPlanMarkers(container, options.fuelPlan || null);
     if (options.fitBounds) {
       scheduleMapFit(container, points, route, true);
     } else if (!route && points.length === 1) {
@@ -341,5 +393,5 @@ export function renderMap(container, route, mapConfig, labels, onTileError = () 
   const emptyMessage = mapConfig?.provider === "carto"
     ? (labels.mapUnavailable || labels.noRoute)
     : (mapConfig ? labels.noRoute : (labels.mapLoading || labels.noRoute));
-    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {});
+    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {}, options.fuelPlan || null);
 }
