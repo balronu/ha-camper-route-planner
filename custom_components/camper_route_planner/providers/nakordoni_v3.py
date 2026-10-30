@@ -189,6 +189,7 @@ def _response_shape_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
     geometry = route.get("geometry") if isinstance(route, dict) else None
     geometry_shape: dict[str, Any] = {"type": _safe_field_type(geometry)}
     if isinstance(geometry, dict):
+        geometry_shape["coordinates_present"] = "coordinates" in geometry
         coordinates = geometry.get("coordinates")
         geometry_shape["keys"] = sorted(str(key) for key in geometry.keys())[:20]
         geometry_shape["coordinates_type"] = _safe_field_type(coordinates)
@@ -237,7 +238,11 @@ def _response_shape_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
 def _parser_exception_diagnostic(exc: Exception) -> dict[str, Any]:
     """Return bounded exception metadata without source lines or response values."""
     frames = traceback.extract_tb(exc.__traceback__)
-    frame = frames[-1] if frames else None
+    parser_frames = [
+        item for item in frames
+        if item.filename.rsplit("/", 1)[-1] == "nakordoni_v3.py" and item.name != "<genexpr>"
+    ]
+    frame = parser_frames[-1] if parser_frames else (frames[-1] if frames else None)
     message = str(exc).strip()
     if len(message) > 160 or _COORDINATE_LIKE.search(message) or re.search(r"(?i)(bearer|authorization|api[_-]?key)", message):
         message = "redacted"
