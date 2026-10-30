@@ -51,6 +51,38 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
         self.assertNotIn("crew", values)
         self.assertNotIn("driven_since_break_min", values)
 
+    def test_route_normalization_accepts_all_poi_request_combinations(self):
+        """A valid route is independent of optional POI response presence."""
+        adapter = NakordoniRouteAdapterV3()
+        for options, expected_parameters in (
+            ({}, {}),
+            ({"poi_parking": True}, {"include": "parking"}),
+            ({"poi_fuel": True}, {"include": "fuel", "fuel": "diesel"}),
+            ({"poi_parking": True, "poi_fuel": True}, {"include": "parking,fuel", "fuel": "diesel"}),
+        ):
+            with self.subTest(options=options):
+                route_request = request(**options)
+                result = adapter.normalize_response(payload(), request=route_request)
+                self.assertEqual(result.distance_m, 123000)
+                self.assertEqual(result.duration_s, 7200)
+                self.assertEqual(result.metadata["pois"]["requested"], [*expected_parameters.get("include", "").split(",")] if expected_parameters else [])
+                parameters = build_v3_motorhome_parameters(route_request)
+                for key, value in expected_parameters.items():
+                    self.assertEqual(parameters[key], value)
+                for key in ("include", "fuel"):
+                    if key not in expected_parameters:
+                        self.assertNotIn(key, parameters)
+
+    def test_route_normalization_accepts_empty_or_absent_optional_poi_lists(self):
+        adapter = NakordoniRouteAdapterV3()
+        for poi_data in ({"parkings": [], "fuel_stations": []}, {}):
+            with self.subTest(poi_data=poi_data):
+                body = payload()
+                body["data"].update(poi_data)
+                result = adapter.normalize_response(body, request=request(poi_parking=True, poi_fuel=True))
+                self.assertEqual(result.distance_m, 123000)
+                self.assertEqual(result.metadata["pois"], {"requested": ["parking", "fuel"], "parking": [], "fuel": []})
+
     def test_builder_rejects_non_motorhome_and_missing_safety_value(self):
         with self.assertRaises(ValidationError):
             build_v3_motorhome_parameters(request(vehicle=VehicleProfile("car", "Car", "car", 1.8, 1.8, 4.2, 1800, "petrol")))
