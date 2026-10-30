@@ -93,6 +93,41 @@ export function formatDuration(durationS, language) {
   return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
 }
 
+export function normalizeFuelPlan(value) {
+  if (!value || typeof value !== "object") return null;
+  const number = (raw, minimum = 0) => raw != null && raw !== "" && typeof raw !== "boolean" && Number.isFinite(Number(raw)) && Number(raw) >= minimum ? Number(raw) : null;
+  const result = {};
+  for (const key of ["tank_l", "consumption_l100", "start_fuel_pct", "reserve_pct", "total_litres", "total_est_cost", "fuel_left_at_destination_pct"]) {
+    const parsed = number(value[key]);
+    if (parsed != null) result[key] = parsed;
+  }
+  if (typeof value.total_currency === "string" && value.total_currency.trim()) result.total_currency = value.total_currency.trim().slice(0, 16);
+  result.stops = Array.isArray(value.stops) ? value.stops.flatMap((stop) => {
+    if (!stop || typeof stop !== "object") return [];
+    const km = number(stop.km_from_start), litres = number(stop.litres);
+    if (km == null || litres == null) return [];
+    const item = { km_from_start: km, litres };
+    if (stop.station && typeof stop.station === "object") item.station = { ...stop.station };
+    for (const key of ["est_price_per_l", "est_cost", "est_cost_eur", "fuel_left_on_arrival_pct"]) {
+      const parsed = number(stop[key]);
+      if (parsed != null) item[key] = parsed;
+    }
+    if (typeof stop.price_updated_at === "string") item.price_updated_at = stop.price_updated_at.slice(0, 64);
+    if (stop.below_reserve === true) item.below_reserve = true;
+    return item.station || item.below_reserve ? [item] : [];
+  }) : [];
+  result.warnings = Array.isArray(value.warnings) ? value.warnings.flatMap((warning) => {
+    if (typeof warning === "string" && warning.trim()) return [{ message: warning.trim().slice(0, 256) }];
+    if (!warning || typeof warning !== "object") return [];
+    const item = {};
+    for (const key of ["code", "message"]) if (typeof warning[key] === "string") item[key] = warning[key].slice(0, 256);
+    const km = number(warning.km_from_start);
+    if (km != null) item.km_from_start = km;
+    return Object.keys(item).length ? [item] : [];
+  }).slice(0, 20) : [];
+  return result;
+}
+
 export function normalizeServiceResponse(response) {
   const payload = response?.response || response || {};
   return {
@@ -104,6 +139,7 @@ export function normalizeServiceResponse(response) {
     created_at: payload.created_at || new Date().toISOString(),
     geometry: payload.geometry || null,
     metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    fuel_plan: normalizeFuelPlan(payload.fuel_plan || payload.metadata?.fuel_plan),
     beta: Boolean(payload.beta),
     attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
     origin: payload.origin || null,
@@ -171,6 +207,11 @@ export function normalizeRouteOptions(options = {}) {
     poi_parking: source.poi_parking === true,
     poi_fuel: source.poi_fuel === true,
     poi_fuel_type: source.poi_fuel_type === "diesel" ? "diesel" : "diesel",
+    fuel_plan_enabled: source.fuel_plan_enabled === true,
+    fuel_plan_tank_l: source.fuel_plan_tank_l ?? "",
+    fuel_plan_consumption_l100: source.fuel_plan_consumption_l100 ?? "",
+    fuel_plan_start_fuel_pct: source.fuel_plan_start_fuel_pct ?? 100,
+    fuel_plan_reserve_pct: source.fuel_plan_reserve_pct ?? 15,
   };
 }
 

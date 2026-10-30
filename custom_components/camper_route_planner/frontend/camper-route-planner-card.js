@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.15; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.16; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13976,6 +13976,25 @@
       poiFuelStation: "Tankstelle",
       poiNoData: "Keine POI-Daten f\xFCr diese Route verf\xFCgbar.",
       poiDistance: "ab Routenstart",
+      fuelPlan: "Intelligente Tankplanung",
+      fuelPlanEnable: "Intelligente Tankplanung aktivieren",
+      fuelPlanTank: "Tankgr\xF6\xDFe (Liter)",
+      fuelPlanConsumption: "Verbrauch (l/100 km)",
+      fuelPlanStart: "Startf\xFCllstand",
+      fuelPlanReserve: "Tankreserve (%)",
+      fuelPlanFuelType: "Kraftstoffart",
+      fuelPlanProviderNotice: "NaKordoni liefert ausschlie\xDFlich gesch\xE4tzte Tankstopps und Kosten; das Fahrzeugprofil wird nicht ver\xE4ndert.",
+      fuelPlanMissing: "F\xFCr diese Route wurde kein vollst\xE4ndiger Fuel Plan geliefert; die g\xFCltige Route bleibt erhalten.",
+      fuelPlanEstimate: "Sch\xE4tzung",
+      fuelPlanStops: "Tankstopps",
+      fuelPlanLitres: "Geplante Tankmenge",
+      fuelPlanCost: "Gesch\xE4tzte Gesamtkosten",
+      fuelPlanArrival: "Restf\xFCllstand am Ziel",
+      fuelPlanStop: "Tankstopp",
+      fuelPlanNoPrice: "Keine Preisangabe",
+      fuelPlanNoStops: "Keine validierten Tankstopps geliefert.",
+      fuelPlanWarnings: "Anbieterhinweise",
+      fuelPlanInvalid: "Fuel-Plan-Werte pr\xFCfen: Tank 20\u20131.500 l, Verbrauch 3\u201360 l/100 km, Start 5\u2013100 %, Reserve 5\u201350 % und kleiner als der Startf\xFCllstand.",
       vehicleKind: { motorhome: "Wohnmobil", truck: "Lkw", car: "Pkw" },
       fuelType: { diesel: "Diesel", petrol: "Benzin", electric: "Elektro", hybrid: "Hybrid", other: "Sonstige" },
       fuelLevelUnit: "F\xFCllstandseinheit",
@@ -14180,6 +14199,25 @@
       poiFuelStation: "Fuel station",
       poiNoData: "No POI data is available for this route.",
       poiDistance: "from route start",
+      fuelPlan: "Intelligent fuel planning",
+      fuelPlanEnable: "Enable intelligent fuel planning",
+      fuelPlanTank: "Tank capacity (litres)",
+      fuelPlanConsumption: "Consumption (l/100 km)",
+      fuelPlanStart: "Starting fuel level",
+      fuelPlanReserve: "Tank reserve (%)",
+      fuelPlanFuelType: "Fuel type",
+      fuelPlanProviderNotice: "NaKordoni returns estimated stops and costs only; the vehicle profile is not changed.",
+      fuelPlanMissing: "No complete fuel plan was returned for this route; the valid route is retained.",
+      fuelPlanEstimate: "Estimate",
+      fuelPlanStops: "Fuel stops",
+      fuelPlanLitres: "Planned fuel",
+      fuelPlanCost: "Estimated total cost",
+      fuelPlanArrival: "Fuel at destination",
+      fuelPlanStop: "Fuel stop",
+      fuelPlanNoPrice: "No price estimate",
+      fuelPlanNoStops: "No validated fuel stops were returned.",
+      fuelPlanWarnings: "Provider warnings",
+      fuelPlanInvalid: "Check fuel-plan values: tank 20\u20131,500 l, consumption 3\u201360 l/100 km, start 5\u2013100%, reserve 5\u201350% and below the starting level.",
       vehicleKind: { motorhome: "Motorhome", truck: "Truck", car: "Car" },
       fuelType: { diesel: "Diesel", petrol: "Petrol", electric: "Electric", hybrid: "Hybrid", other: "Other" },
       fuelLevelUnit: "Fuel level unit",
@@ -14331,6 +14369,40 @@
     const minutes = Math.round(value % 3600 / 60);
     return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
   }
+  function normalizeFuelPlan(value) {
+    if (!value || typeof value !== "object") return null;
+    const number = (raw, minimum = 0) => raw != null && raw !== "" && typeof raw !== "boolean" && Number.isFinite(Number(raw)) && Number(raw) >= minimum ? Number(raw) : null;
+    const result = {};
+    for (const key of ["tank_l", "consumption_l100", "start_fuel_pct", "reserve_pct", "total_litres", "total_est_cost", "fuel_left_at_destination_pct"]) {
+      const parsed = number(value[key]);
+      if (parsed != null) result[key] = parsed;
+    }
+    if (typeof value.total_currency === "string" && value.total_currency.trim()) result.total_currency = value.total_currency.trim().slice(0, 16);
+    result.stops = Array.isArray(value.stops) ? value.stops.flatMap((stop) => {
+      if (!stop || typeof stop !== "object") return [];
+      const km = number(stop.km_from_start), litres = number(stop.litres);
+      if (km == null || litres == null) return [];
+      const item = { km_from_start: km, litres };
+      if (stop.station && typeof stop.station === "object") item.station = { ...stop.station };
+      for (const key of ["est_price_per_l", "est_cost", "est_cost_eur", "fuel_left_on_arrival_pct"]) {
+        const parsed = number(stop[key]);
+        if (parsed != null) item[key] = parsed;
+      }
+      if (typeof stop.price_updated_at === "string") item.price_updated_at = stop.price_updated_at.slice(0, 64);
+      if (stop.below_reserve === true) item.below_reserve = true;
+      return item.station || item.below_reserve ? [item] : [];
+    }) : [];
+    result.warnings = Array.isArray(value.warnings) ? value.warnings.flatMap((warning) => {
+      if (typeof warning === "string" && warning.trim()) return [{ message: warning.trim().slice(0, 256) }];
+      if (!warning || typeof warning !== "object") return [];
+      const item = {};
+      for (const key of ["code", "message"]) if (typeof warning[key] === "string") item[key] = warning[key].slice(0, 256);
+      const km = number(warning.km_from_start);
+      if (km != null) item.km_from_start = km;
+      return Object.keys(item).length ? [item] : [];
+    }).slice(0, 20) : [];
+    return result;
+  }
   function normalizeServiceResponse(response) {
     const payload = response?.response || response || {};
     return {
@@ -14342,6 +14414,7 @@
       created_at: payload.created_at || (/* @__PURE__ */ new Date()).toISOString(),
       geometry: payload.geometry || null,
       metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+      fuel_plan: normalizeFuelPlan(payload.fuel_plan || payload.metadata?.fuel_plan),
       beta: Boolean(payload.beta),
       attribution_url: payload.attribution_url || payload.metadata?.attribution_url || null,
       origin: payload.origin || null,
@@ -14407,7 +14480,12 @@
       arrive_at: source.arrive_at || "",
       poi_parking: source.poi_parking === true,
       poi_fuel: source.poi_fuel === true,
-      poi_fuel_type: source.poi_fuel_type === "diesel" ? "diesel" : "diesel"
+      poi_fuel_type: source.poi_fuel_type === "diesel" ? "diesel" : "diesel",
+      fuel_plan_enabled: source.fuel_plan_enabled === true,
+      fuel_plan_tank_l: source.fuel_plan_tank_l ?? "",
+      fuel_plan_consumption_l100: source.fuel_plan_consumption_l100 ?? "",
+      fuel_plan_start_fuel_pct: source.fuel_plan_start_fuel_pct ?? 100,
+      fuel_plan_reserve_pct: source.fuel_plan_reserve_pct ?? 15
     };
   }
   var PROVIDER_ALIASES = {
@@ -14593,12 +14671,13 @@
   var CRP_LEAFLET_POI_MARKERS = Symbol("camper-route-planner-leaflet-poi-markers");
   var CRP_LEAFLET_POI_DATA = Symbol("camper-route-planner-leaflet-poi-data");
   var CRP_LEAFLET_POI_ZOOM_HANDLER = Symbol("camper-route-planner-leaflet-poi-zoom-handler");
+  var CRP_LEAFLET_FUEL_PLAN_MARKERS = Symbol("camper-route-planner-leaflet-fuel-plan-markers");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
     return element;
   }
-  function renderGeometryMap(container, route, labels, pois = {}) {
+  function renderGeometryMap(container, route, labels, pois = {}, fuelPlan = null) {
     container.replaceChildren();
     container.className = "crp-map";
     const points = route?.geometry?.points || [];
@@ -14627,6 +14706,16 @@
       const projectedPoi = project(item);
       const marker = svgElement("circle", { cx: projectedPoi[0], cy: projectedPoi[1], r: 6, fill: item.category === "fuel" ? "#7b1fa2" : "#1565c0", stroke: "white", "stroke-width": 2, "data-poi-id": item.id });
       marker.setAttribute("aria-label", item.name || (item.category === "fuel" ? labels.fuelStation : labels.parking));
+      svg.append(marker);
+    }
+    for (const stop of Array.isArray(fuelPlan?.stops) ? fuelPlan.stops : []) {
+      const station = stop.station || {};
+      const latitude = Number(station.latitude ?? station.lat ?? stop.latitude ?? stop.lat);
+      const longitude = Number(station.longitude ?? station.lon ?? stop.longitude ?? stop.lon);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+      const projectedFuel = project({ latitude, longitude });
+      const marker = svgElement("circle", { cx: projectedFuel[0], cy: projectedFuel[1], r: 8, fill: "#00838f", stroke: "white", "stroke-width": 3, "data-fuel-plan": "true" });
+      marker.setAttribute("aria-label", "Fuel plan");
       svg.append(marker);
     }
     container.append(svg);
@@ -14672,6 +14761,7 @@
       container[CRP_LEAFLET_POI_MARKERS] = null;
       container[CRP_LEAFLET_POI_DATA] = null;
       container[CRP_LEAFLET_POI_ZOOM_HANDLER] = null;
+      container[CRP_LEAFLET_FUEL_PLAN_MARKERS] = null;
     }
   }
   function markerIcon(target) {
@@ -14789,6 +14879,26 @@
     }
     return true;
   }
+  function fuelPlanMarkerIcon() {
+    return import_leaflet.default.divIcon({ className: "crp-marker crp-marker-fuel-plan", html: '<span aria-hidden="true">FP</span>', iconSize: [30, 38], iconAnchor: [15, 36] });
+  }
+  function updateLeafletFuelPlanMarkers(container, plan = null) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map) return false;
+    for (const marker of container[CRP_LEAFLET_FUEL_PLAN_MARKERS] || []) marker.remove();
+    const markers = (Array.isArray(plan?.stops) ? plan.stops : []).flatMap((stop) => {
+      const station = stop.station || {};
+      const latitude = Number(station.latitude ?? station.lat ?? stop.latitude ?? stop.lat);
+      const longitude = Number(station.longitude ?? station.lon ?? stop.longitude ?? stop.lon);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+      const marker = import_leaflet.default.marker([latitude, longitude], { icon: fuelPlanMarkerIcon() });
+      const cost = stop.est_cost_eur ?? stop.est_cost;
+      marker.addTo(map).bindTooltip(`Fuel plan \xB7 ${Number(stop.km_from_start).toFixed(1)} km \xB7 ${Number(stop.litres).toFixed(1)} l${cost == null ? "" : ` \xB7 ${Number(cost).toFixed(2)} EUR (estimate)`}`);
+      return [marker];
+    });
+    container[CRP_LEAFLET_FUEL_PLAN_MARKERS] = markers;
+    return true;
+  }
   function updateLeafletRoute(container, route, points = []) {
     const map = container?.[CRP_LEAFLET_MAP];
     if (!map) return false;
@@ -14822,6 +14932,18 @@
     else map.fitBounds(import_leaflet.default.latLngBounds(coordinates), { padding: [32, 32], maxZoom: 15, animate: false });
     return true;
   }
+  function captureMapView(container) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map) return null;
+    const center = map.getCenter();
+    return { latitude: center.lat, longitude: center.lng, zoom: map.getZoom() };
+  }
+  function restoreMapView(container, view) {
+    const map = container?.[CRP_LEAFLET_MAP];
+    if (!map || !view || !Number.isFinite(view.latitude) || !Number.isFinite(view.longitude) || !Number.isFinite(view.zoom)) return false;
+    map.setView([view.latitude, view.longitude], view.zoom, { animate: false });
+    return true;
+  }
   function scheduleMapFit(container, points, route, force) {
     if (!force) return;
     const fit = () => fitMapToRoute(container, points, route, true);
@@ -14839,6 +14961,7 @@
     updateLeafletBorderMarkers(container, options.borderCrossings || []);
     updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
     updateLeafletPoiMarkers(container, options.pois || {});
+    updateLeafletFuelPlanMarkers(container, options.fuelPlan || null);
     scheduleMapFit(container, validPoints, options.route, Boolean(options.fitBounds));
     return true;
   }
@@ -14873,7 +14996,7 @@
         clearTimeout(container[CRP_LEAFLET_TILE_TIMER]);
         container[CRP_LEAFLET_TILE_TIMER] = null;
         destroyMap(container);
-        renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute });
+        renderGeometryMap(container, route, { ...labels, emptyMessage: labels.mapUnavailable || labels.noRoute }, options.pois || {}, options.fuelPlan || null);
         onTileError();
       };
       layer.on("tileload", () => {
@@ -14895,6 +15018,7 @@
       updateLeafletBorderMarkers(container, options.borderCrossings || []);
       updateLeafletRestrictionMarkers(container, options.restrictionItems || []);
       updateLeafletPoiMarkers(container, options.pois || {});
+      updateLeafletFuelPlanMarkers(container, options.fuelPlan || null);
       if (options.fitBounds) {
         scheduleMapFit(container, points, route, true);
       } else if (!route && points.length === 1) {
@@ -14909,7 +15033,7 @@
       return;
     }
     const emptyMessage = mapConfig?.provider === "carto" ? labels.mapUnavailable || labels.noRoute : mapConfig ? labels.noRoute : labels.mapLoading || labels.noRoute;
-    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {});
+    renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {}, options.fuelPlan || null);
   }
 
   // src/poi-utils.js
@@ -31636,9 +31760,26 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (!requested.size) return "";
     const optionList = (category, selected) => (POI_INTERVALS[category] || []).map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${translate2(category === "fuel" ? `poiInterval.${value}` : `poiParkingInterval.${value}`)}</option>`).join("");
     const custom = (category) => state.poiDisplay[`${category}Interval`] === "custom" ? `<label>${translate2("poiCustomDistance")}<input type="number" min="1" max="5000" step="1" data-poi-display="${category}Custom" value="${escapeHtml(state.poiDisplay[`${category}Custom`])}"></label>` : "";
-    return `<div class="poi-display"><b>${translate2("poiDisplay")}</b><p class="subtle">${translate2("poiDisplayLocal")}</p>${requested.has("fuel") ? `<label><input type="checkbox" data-poi-display="fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelInterval")}<select data-poi-display="fuelInterval">${optionList("fuel", state.poiDisplay.fuelInterval)}</select></label>${custom("fuel")}` : ""}${requested.has("parking") ? `<label><input type="checkbox" data-poi-display="parking"> <span>${translate2("showParking")}</span></label><label>${translate2("poiParkingInterval")}<select data-poi-display="parkingInterval">${optionList("parking", state.poiDisplay.parkingInterval)}</select></label>${custom("parking")}` : ""}</div>`;
+    const controls = (category, intervalKey) => state.poiDisplay[category] ? `<label>${translate2(intervalKey)}<select data-poi-display="${category}Interval">${optionList(category, state.poiDisplay[`${category}Interval`])}</select></label>${custom(category)}` : "";
+    return `<div class="poi-display"><b>${translate2("poiDisplay")}</b><p class="subtle">${translate2("poiDisplayLocal")}</p>${requested.has("fuel") ? `<label><input type="checkbox" data-poi-display="fuel"> <span>${translate2("showFuel")}</span></label>${controls("fuel", "poiFuelInterval")}` : ""}${requested.has("parking") ? `<label><input type="checkbox" data-poi-display="parking"> <span>${translate2("showParking")}</span></label>${controls("parking", "poiParkingInterval")}` : ""}</div>`;
   }
-  function renderFuelPlan(result, profile, fuelValues, translate2, language) {
+  function renderProviderFuelPlan(result, translate2, language) {
+    const plan = normalizeFuelPlan(result?.fuel_plan || result?.metadata?.fuel_plan);
+    const requested = result?.route_options?.fuel_plan_enabled === true || result?.metadata?.request_options?.fuel_plan_enabled === true;
+    if (!requested && !plan) return "";
+    if (!plan) return `<section class="route-details fuel-plan-result"><h3>${translate2("fuelPlan")}</h3><p class="subtle">${translate2("fuelPlanMissing")}</p></section>`;
+    const number = (value, digits = 1) => value == null || !Number.isFinite(Number(value)) ? "\u2014" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(Number(value));
+    const money = (value, currency = "EUR") => value == null ? translate2("fuelPlanNoPrice") : `${number(value, 2)} ${currency}`;
+    const stops = plan.stops.map((stop) => {
+      const station = stop.station || {};
+      const price = stop.est_price_per_l == null ? translate2("fuelPlanNoPrice") : `${number(stop.est_price_per_l, 3)} \u20AC/l`;
+      const cost = stop.est_cost_eur ?? stop.est_cost;
+      return `<li><b>${escapeHtml(station.name || translate2("fuelPlanStop"))}</b><small>${number(stop.km_from_start)} km \xB7 ${number(stop.litres)} l \xB7 ${translate2("fuelPlanEstimate")}: ${escapeHtml(price)} \xB7 ${escapeHtml(money(cost, plan.total_currency || "EUR"))}</small></li>`;
+    }).join("");
+    const warnings = plan.warnings.length ? `<div class="notice"><b>${translate2("fuelPlanWarnings")}</b><ul>${plan.warnings.map((item) => `<li>${escapeHtml(item.message || item.code || "")}</li>`).join("")}</ul></div>` : "";
+    return `<section class="route-details fuel-plan-result"><h3>${translate2("fuelPlan")}</h3><p class="subtle">${translate2("fuelPlanEstimate")}</p><div class="metrics"><div><b>${plan.stops.length}</b><span>${translate2("fuelPlanStops")}</span></div><div><b>${number(plan.total_litres)} l</b><span>${translate2("fuelPlanLitres")}</span></div><div><b>${escapeHtml(money(plan.total_est_cost, plan.total_currency || "EUR"))}</b><span>${translate2("fuelPlanCost")}</span></div><div><b>${number(plan.fuel_left_at_destination_pct)} %</b><span>${translate2("fuelPlanArrival")}</span></div></div>${stops ? `<ul>${stops}</ul>` : `<p class="subtle">${translate2("fuelPlanNoStops")}</p>`}${warnings}</section>`;
+  }
+  function renderFuelPlan(result, profile, fuelValues, routeOptions, translate2, language) {
     const enteredFuelValues = Object.fromEntries(Object.entries(fuelValues || {}).filter(([, value]) => value !== "" && value != null));
     const plan = calculateFuelPlan(result?.distance_m, { ...profile || {}, ...enteredFuelValues });
     const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? "\u2014" : new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
@@ -31650,7 +31791,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const consumptionText = profile?.consumption_l_per_100km == null ? translate2("fuelNotCalculable") : `${number(Number(profile.consumption_l_per_100km))} l/100 km`;
     const validation = plan.invalidPrice ? `<p class="error" role="alert">${translate2("fuelPriceInvalid")}</p>` : plan.invalidTankData ? `<p class="error" role="alert">${translate2("fuelInputInvalid")}</p>` : "";
     const planningNotice = plan.deficit > 0 ? `<p class="fuel-planning-notice notice">${translate2("fuelRefuelRequired")} ${number(plan.deficit)} l</p>` : plan.deficit == null ? `<p class="subtle">${translate2("fuelDataMissing")}</p>` : "";
-    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div><div data-fuel-validation>${validation}</div><div class="metrics"><div><b data-fuel-total>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b data-fuel-range>${range2}</b><span>${translate2("availableRange")}</span></div><div><b data-fuel-cost>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div></div><div data-fuel-planning>${planningNotice}</div></details>`;
+    const fuelPlanEnabled = routeOptions?.fuel_plan_enabled === true;
+    const reserve = routeOptions?.fuel_plan_reserve_pct ?? 15;
+    const startPercent = mode === "percent" ? Number(fuelValues?.fuel_level_pct) : profile?.tank_capacity_l > 0 && fuelValues?.fuel_level_l !== "" ? Number(fuelValues.fuel_level_l) / Number(profile.tank_capacity_l) * 100 : routeOptions?.fuel_plan_start_fuel_pct ?? 100;
+    return `<details class="route-details fuel-range" open><summary><h3>${translate2("fuelRange")}</h3></summary><div class="fuel-profile-facts"><span><b>${tankText}</b><small>${translate2("tankCapacity")}</small></span><span><b>${consumptionText}</b><small>${translate2("consumption")}</small></span></div><div class="fuel-input-grid"><label class="fuel-input">${translate2("fuelLevelUnit")}<select data-fuel-mode><option value="liters" ${mode === "liters" ? "selected" : ""}>${translate2("fuelLevelLiters")}</option><option value="percent" ${mode === "percent" ? "selected" : ""}>${translate2("fuelLevelPercent")}</option></select></label>${input(activeField, mode === "percent" ? translate2("fuelLevelPercent") : translate2("fuelLevelLiters"), mode === "percent" ? "0\u2013100" : "0,0")}${fuelPlanEnabled ? `<label class="fuel-input">${translate2("fuelPlanReserve")}<input type="number" min="5" max="50" step="0.1" data-route-option="fuel_plan_reserve_pct" value="${escapeHtml(reserve)}"></label>` : input("diesel_price_per_l", translate2("dieselPrice"), "2,16")}</div><label><input type="checkbox" data-route-option="fuel_plan_enabled" ${fuelPlanEnabled ? "checked" : ""}> <span>${translate2("fuelPlanEnable")}</span></label>${fuelPlanEnabled ? `<p class="subtle">${translate2("fuelPlanStart")}: ${Number.isFinite(startPercent) ? number(startPercent, 1) : "\u2014"} % \xB7 ${translate2("fuelPlanProviderNotice")}</p>` : ""}<div data-fuel-validation>${validation}</div><div class="metrics"><div><b data-fuel-total>${plan.totalLiters == null ? translate2("fuelNotCalculable") : `${number(plan.totalLiters)} l`}</b><span>${translate2("estimatedFuel")}</span></div><div><b data-fuel-range>${range2}</b><span>${translate2("availableRange")}</span></div>${fuelPlanEnabled ? "" : `<div><b data-fuel-cost>${plan.cost == null ? translate2("fuelNotCalculable") : `${number(plan.cost, 2)} \u20AC`}</b><span>${translate2("estimatedCost")}</span></div>`}</div><div data-fuel-planning>${planningNotice}</div></details>`;
   }
   var CamperRoutePlannerCardEditor = class extends HTMLElement {
     setConfig(config) {
@@ -31700,7 +31844,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, poiDisplay: defaultPoiDisplay(), result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel", fuel_plan_enabled: false, fuel_plan_tank_l: "", fuel_plan_consumption_l100: "", fuel_plan_start_fuel_pct: 100, fuel_plan_reserve_pct: 15 }, poiDisplay: defaultPoiDisplay(), result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -32053,6 +32197,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
       try {
         if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
         const routeOptions = normalizeRouteOptions(this._state.routeOptions);
+        const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId) || {};
+        if (routeOptions.fuel_plan_enabled) {
+          const tank = normalizeDecimalInput(routeOptions.fuel_plan_tank_l === "" ? profile.tank_capacity_l : routeOptions.fuel_plan_tank_l, { minimum: 20, maximum: 1500 });
+          const consumption = normalizeDecimalInput(routeOptions.fuel_plan_consumption_l100 === "" ? profile.consumption_l_per_100km : routeOptions.fuel_plan_consumption_l100, { minimum: 3, maximum: 60 });
+          const start = normalizeDecimalInput(routeOptions.fuel_plan_start_fuel_pct, { minimum: 5, maximum: 100 });
+          const reserve = normalizeDecimalInput(routeOptions.fuel_plan_reserve_pct, { minimum: 5, maximum: 50 });
+          if (!tank.valid || !tank.present || !consumption.valid || !consumption.present || !start.valid || !reserve.valid || reserve.value >= start.value) throw new Error(t(language, "fuelPlanInvalid"));
+          const enteredPct = normalizeDecimalInput(this._state.fuelValues?.fuel_level_pct, { minimum: 5, maximum: 100 });
+          const enteredLitres = normalizeDecimalInput(this._state.fuelValues?.fuel_level_l, { minimum: 0 });
+          const derivedStart = enteredPct.present && enteredPct.valid ? enteredPct.value : enteredLitres.present && enteredLitres.valid && tank.value > 0 ? enteredLitres.value / tank.value * 100 : start.value;
+          if (!Number.isFinite(derivedStart) || derivedStart < 5 || derivedStart > 100 || reserve.value >= derivedStart) throw new Error(t(language, "fuelPlanInvalid"));
+          routeOptions.fuel_plan_tank_l = tank.value;
+          routeOptions.fuel_plan_consumption_l100 = consumption.value;
+          routeOptions.fuel_plan_start_fuel_pct = derivedStart;
+          routeOptions.fuel_plan_reserve_pct = reserve.value;
+        }
         for (const field of ["depart_at", "arrive_at"]) {
           if (routeOptions[field]) {
             const normalized = localDateTimeToIso(routeOptions[field]);
@@ -32064,6 +32224,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
           if (["depart_at", "arrive_at"].includes(field)) return Boolean(value);
           if (field === "poi_parking" || field === "poi_fuel") return value === true;
           if (field === "poi_fuel_type") return routeOptions.poi_fuel === true;
+          if (field === "fuel_plan_enabled") return value === true;
+          if (["fuel_plan_tank_l", "fuel_plan_consumption_l100", "fuel_plan_start_fuel_pct", "fuel_plan_reserve_pct"].includes(field)) return routeOptions.fuel_plan_enabled === true;
           return true;
         }));
         const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...this._state.diagnosticToken ? { diagnostic_token: this._state.diagnosticToken } : {}, ...requestOptions });
@@ -32413,7 +32575,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]);
         this._state.profileId = route.profile_id || this._state.profileId;
         this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) };
-        this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) };
+        const savedRouteOptions = { ...route.metadata?.request_options || {}, ...route.route_options || {} };
+        this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(savedRouteOptions) };
         this._state.result = normalizeServiceResponse(route);
         const requested = requestedPoiCategories(this._state.result.metadata?.pois || {});
         this._state.poiDisplay = { ...this._state.poiDisplay, parking: requested.has("parking"), fuel: requested.has("fuel"), expanded: false };
@@ -32661,7 +32824,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const inputState = this.captureInputState();
       const viewState = this._pendingViewState || this.captureViewState();
       this._pendingViewState = null;
-      const oldMap = this.shadowRoot?.querySelector(".map-section > .crp-map");
+      const oldMap = this.shadowRoot?.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map");
+      const oldMapView = oldMap ? captureMapView(oldMap) : null;
       const oldPopupMap = this.shadowRoot?.querySelector(".map-popup > .crp-map");
       destroyMap(oldPopupMap);
       const preserveMap = Boolean(oldMap?.classList.contains("leaflet-container") && this._state.mapConfig?.provider === "carto" && this._state.mapConfig?.status === "configured");
@@ -32712,7 +32876,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       });
       const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
       const poiSelection = result && !this._state.resultStale ? this.poiSelection(result) : null;
-      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2, poiSelection, this._state.poiDisplay.expanded, language) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
+      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2, poiSelection, this._state.poiDisplay.expanded, language) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderProviderFuelPlan(result, translate2, language)}${renderFuelPlan(result, profile, this._state.fuelValues, this._state.routeOptions, translate2, language)}`);
       if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${translate2("staleRoute")}</p>`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
@@ -32756,11 +32920,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate2("geocodingAttribution")}</a>`);
       const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait"), parking: translate2("poiParking"), fuelStation: translate2("poiFuelStation") };
       const activeMapRoute = this.currentMapRoute();
-      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute ? this.visiblePois(activeMapRoute) : {}, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute ? this.visiblePois(activeMapRoute) : {}, fuelPlan: activeMapRoute?.fuel_plan || activeMapRoute?.metadata?.fuel_plan || null, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
       const mapHost = this.shadowRoot.querySelector(".map-host");
       if (preserveMap) {
-        mapHost.append(oldMap);
+        mapHost.replaceWith(oldMap);
         updateMapPoints(oldMap, mapOptions.points, mapLabels, mapOptions);
+        if (!mapOptions.fitBounds && oldMapView) restoreMapView(oldMap, oldMapView);
       } else {
         renderMap(mapHost, activeMapRoute, this._state.mapConfig, mapLabels, () => {
           this._state.mapError = translate2("mapTileError");
@@ -32955,7 +33120,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
   };
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions,.export-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,.export-actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.route-options{margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-options summary{cursor:pointer;min-height:28px}.option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.option-grid label{display:grid;gap:4px;min-width:0}.avoid-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px}.avoid-options label{display:flex;align-items:center;gap:8px;min-height:42px;line-height:1.25;overflow-wrap:anywhere}.avoid-options input{flex:0 0 auto;min-width:22px;min-height:22px}.fuel-profile-facts,.fuel-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.fuel-profile-facts span{display:grid;gap:2px;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.fuel-input{display:grid;gap:4px;min-width:0;line-height:1.25}.fuel-input input{width:100%}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1;min-width:0}.actions>*{flex:1 1 auto;min-width:0}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
-  var POI_STYLES = `.poi-options{display:grid;gap:8px;margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.poi-options label{display:flex;align-items:center;gap:8px;min-height:40px;line-height:1.25}.poi-options input{flex:0 0 auto;min-width:22px;min-height:22px}.poi-options select{max-width:220px}.poi-display{display:grid;gap:8px;margin-top:8px;padding:10px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.poi-display label{display:flex;align-items:center;gap:8px;min-height:38px}.poi-display input[type=number]{max-width:160px}.route-pois{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-pois-heading{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.route-pois ul{display:grid;gap:0;margin:0;padding:0;list-style:none}.route-poi{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.route-poi:first-child{border-top:0}.route-poi small{display:block;overflow-wrap:anywhere}.poi-badge{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;color:#fff;font-weight:700;background:#1565c0}.route-poi-fuel .poi-badge{background:#7b1fa2}.crp-marker-poi-cluster span{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#455a64;color:#fff;border:3px solid #fff;box-shadow:0 2px 5px #0008;font-size:.78rem;font-weight:700}`;
+  var POI_STYLES = `.poi-options{display:grid;gap:8px;margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.poi-options label{display:flex;align-items:center;gap:8px;min-height:40px;line-height:1.25}.poi-options input{flex:0 0 auto;min-width:22px;min-height:22px}.poi-options select{max-width:220px}.poi-display{display:grid;gap:8px;margin-top:8px;padding:10px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.poi-display label{display:flex;align-items:center;gap:8px;min-height:38px}.poi-display input[type=number]{max-width:160px}.route-pois{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-pois-heading{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.route-pois ul{display:grid;gap:0;margin:0;padding:0;list-style:none}.route-poi{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.route-poi:first-child{border-top:0}.route-poi small{display:block;overflow-wrap:anywhere}.poi-badge{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;color:#fff;font-weight:700;background:#1565c0}.route-poi-fuel .poi-badge{background:#7b1fa2}.crp-marker-poi-cluster span{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#455a64;color:#fff;border:3px solid #fff;box-shadow:0 2px 5px #0008;font-size:.78rem;font-weight:700}.crp-marker-fuel-plan span{background:#00838f;font-size:.65rem}.fuel-plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.fuel-plan-grid label{display:grid;gap:4px}.fuel-plan-result li{padding:8px 0;border-top:1px solid var(--divider-color,#ddd);list-style:none}.fuel-plan-result ul{padding:0;margin:0}.fuel-plan-result li small{display:block}`;
   var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.stations-panel{grid-column:1/-1;border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}.stations-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.stations-list{display:grid}.station-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 0;border-top:1px solid var(--divider-color,#ddd)}.station-row:first-child{border-top:0}.station-position{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--secondary-background-color,#f5f5f5);font-weight:700}.station-copy{display:grid;gap:3px;min-width:0}.station-copy b{font-weight:700;overflow-wrap:anywhere}.station-copy small{font-weight:400}.station-role{color:var(--secondary-text-color);font-size:.78rem}.station-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.station-actions button{min-height:36px;padding:6px 9px}.station-editor{grid-column:2/-1;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.station-editor-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.station-editor-actions button{min-width:100px}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-narrow) .station-row{grid-template-columns:auto minmax(0,1fr)}:host(.crp-narrow) .station-actions{grid-column:2;justify-content:flex-start}:host(.crp-narrow) .station-editor{grid-column:1/-1}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);

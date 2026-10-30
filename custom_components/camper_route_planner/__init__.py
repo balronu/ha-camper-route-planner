@@ -37,6 +37,11 @@ try:
         vol.Optional("poi_parking", default=False): cv.boolean,
         vol.Optional("poi_fuel", default=False): cv.boolean,
         vol.Optional("poi_fuel_type", default="diesel"): vol.In({"diesel"}),
+        vol.Optional("fuel_plan_enabled", default=False): cv.boolean,
+        vol.Optional("fuel_plan_tank_l"): vol.All(vol.Coerce(float), vol.Range(min=20, max=1500)),
+        vol.Optional("fuel_plan_consumption_l100"): vol.All(vol.Coerce(float), vol.Range(min=3, max=60)),
+        vol.Optional("fuel_plan_start_fuel_pct", default=100): vol.All(vol.Coerce(float), vol.Range(min=5, max=100)),
+        vol.Optional("fuel_plan_reserve_pct", default=15): vol.All(vol.Coerce(float), vol.Range(min=5, max=50)),
         vol.Optional("diagnostic_token"): cv.string,
     })
 

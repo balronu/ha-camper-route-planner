@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const bundle = await readFile(new URL("../dist/camper-route-planner-card.js", import.meta.url), "utf8");
 const pixel = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
-const route = { route_id: "portugal", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 95820, geometry: { points: [{ latitude: 49.294307, longitude: 7.051867 }, { latitude: 38.878187, longitude: -6.970111 }, { latitude: 38.722252, longitude: -9.139337 }, { latitude: 41.313533, longitude: -8.722957 }, { latitude: 41.3619, longitude: -8.6718 }] }, profile_id: "test", origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" }, destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" }, waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 38.722252, longitude: -9.139337, label: "Lissabon" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }], route_options: {}, warnings: [], metadata: { pois: { requested: ["parking"], parking: [{ id: "saved-p1", category: "parking", name: "Saved parking", latitude: 40, longitude: -8, km_from_start: 210 }], fuel: [] } } };
+const route = { route_id: "portugal", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 95820, geometry: { points: [{ latitude: 49.294307, longitude: 7.051867 }, { latitude: 38.878187, longitude: -6.970111 }, { latitude: 38.722252, longitude: -9.139337 }, { latitude: 41.313533, longitude: -8.722957 }, { latitude: 41.3619, longitude: -8.6718 }] }, profile_id: "test", origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" }, destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" }, waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 38.722252, longitude: -9.139337, label: "Lissabon" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }], route_options: {}, warnings: [], metadata: { request_options: { poi_parking: true }, pois: { requested: ["parking"], parking: [{ id: "saved-p1", category: "parking", name: "Saved parking", latitude: 40, longitude: -8, km_from_start: 210 }], fuel: [] } } };
 const otherRoute = { ...route, route_id: "other", geometry: { points: [{ latitude: 52, longitude: 13 }, { latitude: 48, longitude: 11 }, { latitude: 46, longitude: 8 }] }, origin: { latitude: 52, longitude: 13, label: "Berlin" }, destination: { latitude: 46, longitude: 8, label: "Alps" }, waypoints: [], metadata: {} };
 const legacyPoiRoute = { ...otherRoute, route_id: "legacy-pois", metadata: { pois: { parking: [{ id: "legacy-p", category: "parking", latitude: 48, longitude: 11, km_from_start: 100 }], fuel: [] } } };
 const server = createServer((request, response) => {
@@ -29,14 +29,18 @@ for (const viewport of contexts) {
   await page.evaluate((tileUrl) => {
     const card = document.querySelector("camper-route-planner-card");
     card.setConfig({ entry_id: "test-entry" });
+    let calculateCalls = 0;
+    let lastCalculateRequest;
     card.hass = { language: "en", connection: {}, user: { is_admin: true }, callWS: async (message) => {
       if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3, width_m: 2, length_m: 7, gross_weight_kg: 3500, vehicle_kind: "motorhome", fuel_type: "diesel" }] };
       if (message.type.endsWith("/list_routes")) return { routes: [] };
       if (message.type.endsWith("/map_config")) return { provider: "carto", status: "configured", tile_url: tileUrl, tile_attribution: "Fixture" };
+      if (message.type === "call_service") { calculateCalls += 1; lastCalculateRequest = message.service_data; return { response: globalThis.__savedRoute }; }
       if (message.type.endsWith("/load_route")) return { route: message.route_id === "other" ? globalThis.__otherRoute : message.route_id === "legacy-pois" ? globalThis.__legacyPoiRoute : globalThis.__savedRoute };
       return {};
     }};
     globalThis.__crpRoute = card;
+    globalThis.__crpCalculate = { get calls() { return calculateCalls; }, get request() { return lastCalculateRequest; } };
   }, `http://127.0.0.1:${port}/tiles/{z}/{x}/{y}.png`);
   await page.evaluate(([saved, alternate, legacy]) => { globalThis.__savedRoute = saved; globalThis.__otherRoute = alternate; globalThis.__legacyPoiRoute = legacy; }, [route, otherRoute, legacyPoiRoute]);
   await page.locator("details.route-planner-shell").waitFor();
@@ -56,11 +60,21 @@ for (const viewport of contexts) {
   });
   assert.deepEqual(visible, { routeInBounds: true, lineVisible: true, lineWithinMap: true }, `saved route is actually visible after loading on ${viewport.label}`);
   assert.equal(await page.locator(".route-pois .route-poi").count(), 1, `saved route POIs load without a provider request on ${viewport.label}`);
+  await page.evaluate(() => globalThis.__crpRoute.calculate());
+  await page.waitForFunction(() => globalThis.__crpCalculate.calls === 1);
+  assert.equal(await page.evaluate(() => globalThis.__crpCalculate.request.poi_parking), true, `saved route request metadata is restored for the first recalculation on ${viewport.label}`);
+  assert.equal(await page.locator(".route-pois .route-poi").count(), 1, `POIs remain visible immediately after the first recalculation on ${viewport.label}`);
   const beforePan = await page.evaluate(() => { const host = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"); const symbol = Object.getOwnPropertySymbols(host).find((item) => String(item).includes("leaflet-map")); return host[symbol].getCenter(); });
   await page.evaluate(() => { const host = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"); const symbol = Object.getOwnPropertySymbols(host).find((item) => String(item).includes("leaflet-map")); host[symbol].panBy([100, 0], { animate: false }); });
   await page.waitForTimeout(80);
   const afterPan = await page.evaluate(() => { const host = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"); const symbol = Object.getOwnPropertySymbols(host).find((item) => String(item).includes("leaflet-map")); return host[symbol].getCenter(); });
   assert.notDeepEqual(afterPan, beforePan, `manual map movement is not immediately overridden on ${viewport.label}`);
+  await page.locator('input[data-poi-display="parking"]').uncheck();
+  assert.equal(await page.locator('select[data-poi-display="parkingInterval"]').count(), 0, `disabled POI category hides its local interval on ${viewport.label}`);
+  await page.locator('input[data-poi-display="parking"]').check();
+  assert.equal(await page.locator('select[data-poi-display="parkingInterval"]').inputValue(), "100", `disabled POI category restores its interval on ${viewport.label}`);
+  const afterLocalFilter = await page.evaluate(() => { const host = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"); const symbol = Object.getOwnPropertySymbols(host).find((item) => String(item).includes("leaflet-map")); return host[symbol].getCenter(); });
+  assert.ok(Math.abs(afterLocalFilter.lat - afterPan.lat) < 1e-9 && Math.abs(afterLocalFilter.lng - afterPan.lng) < 1e-9, `local POI display keeps the manual map focus on ${viewport.label}`);
   await page.evaluate(() => globalThis.__crpRoute.loadRoute("other"));
   await page.waitForFunction(() => globalThis.__crpRoute._state.origin?.latitude === 52);
   await page.waitForTimeout(180);

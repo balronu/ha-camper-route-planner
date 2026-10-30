@@ -15,11 +15,13 @@ travel documents together.
 > This integration is a planning tool, not a replacement for a dedicated
 > motorhome navigation device.
 >
-> **v0.1.6-beta.15** is available as an optional POI/UX preview release. It
-> separates POI request and display state, protects historical routes without
-> reliable POI request metadata, and distributes long POI lists across the
-> complete route. v0.1.5 remains the current Stable version.
+> **v0.1.6-beta.16** is available as a bug-fix preview for saved POI request
+> restoration and local map view preservation. It builds on the Beta 15
+> POI/UX preview. v0.1.5 remains the current Stable version.
 > v0.1.5 remains the current Stable version for production use.
+> Beta.16 also adds optional NaKordoni v3 intelligent fuel planning in the
+> existing “Fuel & range” section; it is disabled by default and returns
+> estimates only, clearly marked as such.
 
 [Deutsche Version](README.md) · [Documentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
@@ -93,7 +95,7 @@ Route Planner as a **Custom Repository**:
 1. In HACS, open **Integrations → ⋮ → Custom repositories**.
 2. Add `balronu/ha-camper-route-planner` with category **Integration**.
 3. For production use, install the regular Stable version `v0.1.5`.
-   `v0.1.6-beta.15` is intended for testing through pre-releases or the release
+   `v0.1.6-beta.16` is intended for testing through pre-releases or the release
    ZIP. Restart Home Assistant when prompted.
 4. Set up the integration under **Settings → Devices & services**, then add
    the Lovelace card to your dashboard.
@@ -128,7 +130,7 @@ catalog inclusion is not assumed.
 - [v0.1.6-beta.12 release notes](docs/releases/v0.1.6-beta.12.md)
 - [v0.1.6-beta.13 release notes](docs/releases/v0.1.6-beta.13.md)
 - [v0.1.6-beta.14 release notes](docs/releases/v0.1.6-beta.14.md)
-- [v0.1.6-beta.15 release notes](docs/releases/v0.1.6-beta.15.md)
+- [v0.1.6-beta.16 release notes](docs/releases/v0.1.6-beta.16.md)
 - [NaKordoni POI concept](docs/NAKORDONI-POI-CONCEPT.md)
 
 ## License

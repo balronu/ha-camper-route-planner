@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeFuelPlan, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -28,7 +28,7 @@ test("developer diagnostics are disabled by default and opt in per card", () => 
 });
 
 test("optional route times omit null values but preserve valid values", () => {
-  assert.deepEqual(normalizeRouteOptions({ depart_at: null, arrive_at: null }), { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" });
+  assert.deepEqual(normalizeRouteOptions({ depart_at: null, arrive_at: null }), { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel", fuel_plan_enabled: false, fuel_plan_tank_l: "", fuel_plan_consumption_l100: "", fuel_plan_start_fuel_pct: 100, fuel_plan_reserve_pct: 15 });
   assert.equal(normalizeRouteOptions({ depart_at: "2026-10-29T08:00:00+02:00" }).depart_at, "2026-10-29T08:00:00+02:00");
   assert.equal(normalizeServiceResponse({ route_options: { depart_at: null } }).route_options.depart_at, "");
 });
@@ -39,6 +39,20 @@ test("formatters and service response normalization handle mock data", () => {
   const result = normalizeServiceResponse({ response: { provider: "mock", distance_m: 12000, duration_s: 3660, warnings: ["synthetic"], synthetic: true } });
   assert.equal(result.synthetic, true);
   assert.deepEqual(result.warnings, ["synthetic"]);
+});
+
+test("fuel-plan normalization keeps optional estimates safe and bounded", () => {
+  const result = normalizeFuelPlan({
+    total_litres: 42,
+    total_est_cost: 73.5,
+    total_currency: "EUR",
+    stops: [{ km_from_start: 250, litres: 42, station: { name: "Safe Fuel", latitude: 48.1, longitude: 11.5 }, est_cost_eur: 73.5 }, { km_from_start: null, litres: 1 }],
+    warnings: ["Estimated only", { code: "reserve", message: "Check reserve" }]
+  });
+  assert.equal(result.stops.length, 1);
+  assert.equal(result.total_currency, "EUR");
+  assert.equal(result.warnings.length, 2);
+  assert.equal(normalizeFuelPlan({ stops: [{ km_from_start: null, litres: 1 }] }).stops.length, 0);
 });
 
 test("datetime-local values become explicit offsets without changing the selected wall clock", () => {

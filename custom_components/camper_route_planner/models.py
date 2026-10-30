@@ -205,6 +205,11 @@ class RouteRequest:
     poi_parking: bool = False
     poi_fuel: bool = False
     poi_fuel_type: str = "diesel"
+    fuel_plan_enabled: bool = False
+    fuel_plan_tank_l: float | None = None
+    fuel_plan_consumption_l100: float | None = None
+    fuel_plan_start_fuel_pct: float = 100
+    fuel_plan_reserve_pct: float = 15
 
     def __post_init__(self) -> None:
         if len(self.waypoints) > 5:
@@ -223,9 +228,20 @@ class RouteRequest:
             raise ValidationError("unsupported route option")
         if self.poi_fuel_type != "diesel":
             raise ValidationError("only diesel POIs are currently supported")
+        if not isinstance(self.fuel_plan_enabled, bool):
+            raise ValidationError("fuel_plan_enabled must be boolean")
+        if self.fuel_plan_enabled:
+            if self.fuel_plan_tank_l is None or not math.isfinite(self.fuel_plan_tank_l) or not 20 <= self.fuel_plan_tank_l <= 1500:
+                raise ValidationError("fuel_plan_tank_l must be between 20 and 1500")
+            if self.fuel_plan_consumption_l100 is None or not math.isfinite(self.fuel_plan_consumption_l100) or not 3 <= self.fuel_plan_consumption_l100 <= 60:
+                raise ValidationError("fuel_plan_consumption_l100 must be between 3 and 60")
+            if not 5 <= self.fuel_plan_start_fuel_pct <= 100:
+                raise ValidationError("fuel_plan_start_fuel_pct must be between 5 and 100")
+            if not 5 <= self.fuel_plan_reserve_pct <= 50 or self.fuel_plan_reserve_pct >= self.fuel_plan_start_fuel_pct:
+                raise ValidationError("fuel_plan_reserve_pct must be below start fuel and between 5 and 50")
 
     def cache_key(self) -> str:
-        return repr((self.origin, self.destination, self.vehicle.as_dict(), self.waypoints, self.alternatives, self.traffic, self.geometry_format, self.depart_at, self.arrive_at, self.avoid, self.route_type, self.poi_parking, self.poi_fuel, self.poi_fuel_type))
+        return repr((self.origin, self.destination, self.vehicle.as_dict(), self.waypoints, self.alternatives, self.traffic, self.geometry_format, self.depart_at, self.arrive_at, self.avoid, self.route_type, self.poi_parking, self.poi_fuel, self.poi_fuel_type, self.fuel_plan_enabled, self.fuel_plan_tank_l, self.fuel_plan_consumption_l100, self.fuel_plan_start_fuel_pct, self.fuel_plan_reserve_pct))
 
 
 @dataclass(frozen=True, slots=True)
