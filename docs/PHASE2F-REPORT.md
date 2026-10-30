@@ -30,9 +30,9 @@ Tag, Release und HACS-Installation bleiben ausdrücklich aus.
 |---|---|
 | `assets/logo.svg` / `.png` | PASS – 1200 × 300 |
 | `assets/icon.svg` / `.png` | PASS – 512 × 512 |
-| `assets/social-preview.png` | PASS – 1280 × 640 |
-| `assets/screenshots/desktop.png` | PASS – echte Chromium-Karte, 1280 × 1123 |
-| `assets/screenshots/mobile.png` | PASS – echte Chromium-Karte, 448 × 1465 |
+| `assets/social-preview.png` | Retired in the Beta.16 presentation cleanup; no longer shipped |
+| `assets/screenshots/desktop.png` | Retired from the public presentation; historical browser evidence remains under `docs/` |
+| `assets/screenshots/mobile.png` | Retired from the public presentation; historical browser evidence remains under `docs/` |
 
 Die Screenshots zeigen Mock-Routing und den SVG-/Kartenfallback; sie stellen
 keine produktive Wohnmobilnavigation dar.

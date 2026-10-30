@@ -25,8 +25,11 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 
 [English version](README.en.md) · [Dokumentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
-![Desktop](assets/screenshots/desktop.png)
-![Mobil](assets/screenshots/mobile.png)
+![Camper Route Planner – Übersicht der veröffentlichten Funktionen und Fahrzeugdaten](docs/images/camper-route-planner-overview.png)
+
+> **Designvisualisierung:** Die Grafik stellt die veröffentlichten Funktionen
+> konzeptionell dar und ist kein echter Home-Assistant-Screenshot. Fahrzeug-
+> und Funktionsangaben wurden gegen Beta.16 geprüft.
 
 ## Für deine Reiseplanung
 
@@ -37,8 +40,9 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
   Ankunftszeiten.
 - **NaKordoni-Routing:** Nutze den sichtbaren NaKordoni-Provider mit deinen
   eigenen Zugangsdaten oder den Offline-Mock für Tests.
-- **Karte und Reiseübersicht:** Sieh Route, Entfernung, Fahrzeit, Hinweise,
-  Grenzübergänge und verfügbare Mautinformationen direkt in Home Assistant.
+- **Interaktive Karte:** Sieh Route, Entfernung, Fahrzeit, Hinweise,
+  Grenzübergänge, verfügbare Mautinformationen sowie Parkplätze und
+  Tankstellen entlang der Route direkt in Home Assistant.
 - **Gespeicherte Routen:** Speichere Planungen, lade sie später wieder und
   berechne sie mit den gespeicherten Eingaben neu. Wenn sich Eingaben ändern
   oder eine Neuberechnung fehlschlägt, wird ein vorhandenes Ergebnis als
@@ -46,8 +50,9 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 - **Reiseunterlagen:** Exportiere Route, Track oder beides als GPX und erzeuge
   einen PDF-Reiseplan. Eine Route kann außerdem an Apple Maps, Google Maps
   oder OpenStreetMap übergeben werden.
-- **Kraftstoffplanung:** Berechne auf Basis deiner Fahrzeugdaten Reichweite,
-  Verbrauch, Kosten und möglichen zusätzlichen Kraftstoffbedarf.
+- **Kraftstoff & Reichweite:** Berechne auf Basis deiner Fahrzeugdaten
+  Reichweite, Verbrauch und lokale Kosten. Beta.16 ergänzt optional die
+  intelligente NaKordoni-v3-Tankplanung mit klar gekennzeichneten Schätzungen.
 - **Smartphone und Tablet:** Die Lovelace-Karte ist für Desktop- und mobile
   Home-Assistant-Dashboards ausgelegt.
 
@@ -89,7 +94,8 @@ vertrauenswürdige Supportkanäle geteilt werden.
 - Der NaKordoni-Wohnmobilpfad kann beim Anbieter weiterhin als Beta-Profil
   geführt werden. Es gibt keinen stillen Wechsel auf Truck-Routing und keinen
   automatischen Mock-Fallback bei Providerfehlern.
-- Die Kraftstoffplanung ist eine lokale Rechenhilfe. Tankstopps werden nicht
+- Die Kraftstoffplanung ist eine lokale Rechenhilfe. Die optionale intelligente
+  Tankplanung liefert providerbasierte Schätzungen; Tankstopps werden nicht
   automatisch gebucht oder als verbindliche Reiseanweisung ausgegeben.
 
 ## Installation

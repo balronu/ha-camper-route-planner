@@ -25,8 +25,11 @@ travel documents together.
 
 [Deutsche Version](README.md) · [Documentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
-![Desktop](assets/screenshots/desktop.png)
-![Mobile](assets/screenshots/mobile.png)
+![Camper Route Planner – overview of published features and vehicle data](docs/images/camper-route-planner-overview.png)
+
+> **Design visualisation:** This graphic presents the published features
+> conceptually; it is not a real Home Assistant screenshot. Vehicle and
+> feature details were checked against Beta.16.
 
 ## Built for motorhome trip planning
 
@@ -36,16 +39,18 @@ travel documents together.
   types, avoidance options, and optional departure or arrival times.
 - **NaKordoni routing:** Use the visible NaKordoni provider with your own
   credentials, or the offline mock for tests.
-- **Map and trip overview:** See the route, distance, duration, notices, border
-  crossings, and available toll information in Home Assistant.
+- **Interactive map:** See the route, distance, duration, notices, border
+  crossings, available toll information, parking, and fuel stations directly
+  in Home Assistant.
 - **Saved routes:** Save plans, load them later, and recalculate them from the
   stored inputs. If inputs change or recalculation fails, an existing result is
   marked as outdated.
 - **Travel documents:** Export a route, track, or combined GPX file and create
   a PDF travel plan. Routes can also be handed off to Apple Maps, Google Maps,
   or OpenStreetMap.
-- **Fuel planning:** Estimate range, consumption, cost, and potential extra fuel
-  needs from your vehicle data.
+- **Fuel & range:** Estimate range, consumption, and local costs from your
+  vehicle data. Beta.16 optionally adds NaKordoni v3 intelligent fuel planning
+  with clearly labelled estimates.
 - **Phone and tablet friendly:** The Lovelace card is designed for desktop and
   mobile Home Assistant dashboards.
 
@@ -84,8 +89,9 @@ should only be shared through trusted support channels.
 - The NaKordoni motorhome path may still be labelled a beta profile by the
   provider. There is no silent switch to truck routing and no automatic mock
   fallback on provider errors.
-- Fuel planning is a local estimate. Tank stops are not booked automatically or
-  presented as binding travel instructions.
+- Fuel planning is a local estimate. Optional intelligent fuel planning adds
+  provider estimates; tank stops are not booked automatically or presented as
+  binding travel instructions.
 
 ## Installation
 
