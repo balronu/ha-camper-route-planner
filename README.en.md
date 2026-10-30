@@ -10,18 +10,14 @@ Camper Route Planner combines a clear Lovelace card with the routing technology
 of [NaKordoni](https://nakordoni.eu), keeping route planning, vehicle data, and
 travel documents together.
 
-> **v0.1.5 Stable** is published. The Stable version passed automated checks
-> and was successfully verified with a real NaKordoni v3 route calculation.
+> **v0.1.6 Stable** is published. The Stable version passed the automated
+> release gates and includes tested route planning, POI filters, custom
+> distance intervals, and optional intelligent fuel planning.
 > This integration is a planning tool, not a replacement for a dedicated
 > motorhome navigation device.
 >
-> **v0.1.6-beta.17** is available as a bug-fix preview for saved POI request
-> restoration and local map view preservation. It builds on the Beta 15
-> POI/UX preview. v0.1.5 remains the current Stable version.
-> v0.1.5 remains the current Stable version for production use.
-> Beta.17 also adds optional NaKordoni v3 intelligent fuel planning in the
-> existing “Fuel & range” section; it is disabled by default and returns
-> estimates only, clearly marked as such.
+> The current Stable uses NaKordoni as its routing provider; technical
+> exchange with the NaKordoni team is not a formal partnership or certification.
 
 [Deutsche Version](README.md) · [Documentation](docs/) · [Releases](https://github.com/balronu/ha-camper-route-planner/releases)
 
@@ -94,9 +90,9 @@ Route Planner as a **Custom Repository**:
 
 1. In HACS, open **Integrations → ⋮ → Custom repositories**.
 2. Add `balronu/ha-camper-route-planner` with category **Integration**.
-3. For production use, install the regular Stable version `v0.1.5`.
-   `v0.1.6-beta.17` is intended for testing through pre-releases or the release
-   ZIP. Restart Home Assistant when prompted.
+3. For production use, install Stable version `v0.1.6`. Earlier beta versions
+   remain available as historical pre-releases. Restart Home Assistant when
+   prompted.
 4. Set up the integration under **Settings → Devices & services**, then add
    the Lovelace card to your dashboard.
 
@@ -116,6 +112,7 @@ catalog inclusion is not assumed.
 - [Security and privacy](docs/SECURITY-AND-PRIVACY.md)
 - [Technical architecture](docs/ARCHITECTURE.md)
 - [v0.1.5 release notes](docs/releases/v0.1.5.md)
+- [v0.1.6 release notes](docs/releases/v0.1.6.md)
 - [v0.1.6-beta.1 release notes](docs/releases/v0.1.6-beta.1.md)
 - [v0.1.6-beta.2 release notes](docs/releases/v0.1.6-beta.2.md)
 - [v0.1.6-beta.3 release notes](docs/releases/v0.1.6-beta.3.md)
@@ -130,7 +127,6 @@ catalog inclusion is not assumed.
 - [v0.1.6-beta.12 release notes](docs/releases/v0.1.6-beta.12.md)
 - [v0.1.6-beta.13 release notes](docs/releases/v0.1.6-beta.13.md)
 - [v0.1.6-beta.14 release notes](docs/releases/v0.1.6-beta.14.md)
-- [v0.1.6-beta.17 release notes](docs/releases/v0.1.6-beta.17.md)
 - [v0.1.6-beta.16 release notes](docs/releases/v0.1.6-beta.16.md)
 - [NaKordoni POI concept](docs/NAKORDONI-POI-CONCEPT.md)
 
