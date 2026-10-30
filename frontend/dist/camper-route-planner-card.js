@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.13; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.14; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13951,6 +13951,17 @@
       poiFuelType: "Kraftstoff",
       poiDiesel: "Diesel",
       poiNextCalculation: "Die Auswahl wird bei der n\xE4chsten bewussten Routenberechnung ber\xFCcksichtigt.",
+      poiDisplay: "Anzeige geladener POIs",
+      poiDisplayLocal: "Anzeigeauswahl arbeitet lokal ohne neue Anfrage.",
+      poiInterval: "Tankstellenfilter",
+      "poiInterval.all": "Alle Tankstellen",
+      "poiInterval.250": "Alle 250 km",
+      "poiInterval.500": "Alle 500 km",
+      "poiInterval.750": "Alle 750 km",
+      "poiInterval.range": "Nach Reichweite",
+      poiMore: "Mehr anzeigen",
+      poiFilteredCount: "Gefiltert",
+      poiIntervalGaps: "Keine geeignete Tankstelle im Suchfenster",
       poiParking: "Parkplatz",
       poiFuelStation: "Tankstelle",
       poiNoData: "Keine POI-Daten f\xFCr diese Route verf\xFCgbar.",
@@ -14134,6 +14145,17 @@
       poiFuelType: "Fuel",
       poiDiesel: "Diesel",
       poiNextCalculation: "The selection is applied with the next deliberate route calculation.",
+      poiDisplay: "Display loaded POIs",
+      poiDisplayLocal: "This display selection is local and does not request a new route.",
+      poiInterval: "Fuel-station filter",
+      "poiInterval.all": "All fuel stations",
+      "poiInterval.250": "Every 250 km",
+      "poiInterval.500": "Every 500 km",
+      "poiInterval.750": "Every 750 km",
+      "poiInterval.range": "By range",
+      poiMore: "Show more",
+      poiFilteredCount: "Filtered",
+      poiIntervalGaps: "No suitable fuel station in the search window",
       poiParking: "Parking",
       poiFuelStation: "Fuel station",
       poiNoData: "No POI data is available for this route.",
@@ -14825,6 +14847,63 @@
     const emptyMessage = mapConfig?.provider === "carto" ? labels.mapUnavailable || labels.noRoute : mapConfig ? labels.noRoute : labels.mapLoading || labels.noRoute;
     renderGeometryMap(container, { geometry: { points: points.length >= 2 ? points : geometry } }, { ...labels, emptyMessage }, options.pois || {});
   }
+
+  // src/poi-utils.js
+  var CATEGORIES = ["parking", "fuel"];
+  var DEFAULT_WINDOW_KM = 75;
+  function requestedPoiCategories(pois = {}) {
+    return new Set((Array.isArray(pois.requested) ? pois.requested : []).filter((item) => CATEGORIES.includes(item)));
+  }
+  function allAvailable(pois, display) {
+    const requested = requestedPoiCategories(pois);
+    return CATEGORIES.flatMap((category) => requested.has(category) && display[category] !== false && Array.isArray(pois[category]) ? pois[category].map((item) => ({ ...item, category })) : []);
+  }
+  function reachableRangeKm({ tankCapacity, consumption, fuelLevel, reserve, rangeKm } = {}) {
+    if (Number.isFinite(Number(rangeKm))) return Number(rangeKm);
+    const tank = Number(tankCapacity);
+    const rate = Number(consumption);
+    const level = Number(fuelLevel);
+    const safety = Number(reserve || 0);
+    if (![tank, rate, level, safety].every(Number.isFinite) || tank <= 0 || rate <= 0 || level < 0 || level > tank || safety < 0 || safety >= tank) return null;
+    return Math.max(0, (level - safety) * 100 / rate);
+  }
+  function intervalItems(items, intervalKm, routeDistanceKm, windowKm = DEFAULT_WINDOW_KM) {
+    const interval = Number(intervalKm);
+    const distance = Number(routeDistanceKm);
+    if (!Number.isFinite(interval) || interval <= 0 || !Number.isFinite(distance) || distance <= 0) return { items: [], gaps: [] };
+    const targets = [];
+    for (let target = interval; target < distance; target += interval) targets.push(target);
+    const selected = [];
+    const gaps = [];
+    for (const target of targets) {
+      const candidates = items.filter((item) => Math.abs(Number(item.km_from_start) - target) <= windowKm).sort((a, b) => {
+        const targetDelta = Math.abs(Number(a.km_from_start) - target) - Math.abs(Number(b.km_from_start) - target);
+        return targetDelta || Number(a.distance_from_route_km ?? Infinity) - Number(b.distance_from_route_km ?? Infinity) || Number(a.price ?? Infinity) - Number(b.price ?? Infinity);
+      });
+      if (!candidates.length) gaps.push(target);
+      else selected.push(...candidates);
+    }
+    return { items: [...new Map(selected.map((item) => [item.id, item])).values()], gaps };
+  }
+  function selectPoiItems(pois = {}, { display = {}, interval = "all", routeDistanceM, fuelPlan = {} } = {}) {
+    const available = allAvailable(pois, display).sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start) || String(a.id).localeCompare(String(b.id)));
+    const routeDistanceKm = Number(routeDistanceM) / 1e3;
+    let selected = available;
+    let gaps = [];
+    if (interval !== "all") {
+      const categories = new Set(available.map((item) => item.category));
+      const all = [];
+      for (const category of categories) {
+        const categoryItems = available.filter((item) => item.category === category);
+        const result = interval === "range" ? intervalItems(categoryItems, reachableRangeKm(fuelPlan), routeDistanceKm) : intervalItems(categoryItems, Number(interval), routeDistanceKm);
+        all.push(...result.items);
+        gaps.push(...result.gaps.map((km) => ({ category, km })));
+      }
+      selected = all.sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start));
+    }
+    return { items: selected, gaps, availableCount: available.length, requested: [...requestedPoiCategories(pois)] };
+  }
+  var POI_INTERVALS = ["all", "250", "500", "750", "range"];
 
   // src/leaflet-css.js
   var LEAFLET_CSS = `/* required styles */
@@ -31438,18 +31517,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const trafficLabel = translate2(`trafficMode.${trafficMode}`);
     return `<details class="route-details restrictions" open><summary><h3>${translate2("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(trafficLabel.startsWith("trafficMode.") ? translate2("trafficMode.off") : trafficLabel)}</p>${groups}${notes}</details>`;
   }
-  function renderPois(result, translate2) {
+  function renderPois(result, translate2, selection, expanded = false) {
     const pois = result?.metadata?.pois;
     if (!pois || typeof pois !== "object") return "";
-    const items = [...Array.isArray(pois.parking) ? pois.parking : [], ...Array.isArray(pois.fuel) ? pois.fuel : []].sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start));
-    if (!items.length) return pois.requested?.length ? `<section class="route-pois"><h3>${translate2("alongRoute")}</h3><p class="subtle">${translate2("poiNoData")}</p></section>` : "";
-    const rows = items.map((item) => {
+    const items = selection?.items || [];
+    const availableCount = selection?.availableCount || 0;
+    if (!requestedPoiCategories(pois).size) return "";
+    if (!items.length) return `<section class="route-pois"><h3>${translate2("alongRoute")}</h3><p class="subtle">${translate2("poiNoData")}</p></section>`;
+    const visible = expanded ? items : items.slice(0, 15);
+    const rows = visible.map((item) => {
       const category = item.category === "fuel" ? translate2("poiFuelStation") : translate2("poiParking");
       const prices = Array.isArray(item.prices) ? item.prices.map((price) => `${price.price} ${price.currency}/${price.fuel_type}`).join(", ") : "";
       const details = [item.brand, item.country, item.distance_from_route_km != null ? `${item.distance_from_route_km} km ab Route` : "", prices].filter(Boolean).join(" \xB7 ");
       return `<li class="route-poi route-poi-${escapeHtml(item.category || "parking")}" data-poi-id="${escapeHtml(item.id || "")}"><span class="poi-badge" aria-hidden="true">${item.category === "fuel" ? "F" : "P"}</span><span><b>${escapeHtml(item.name || category)}</b><small>${escapeHtml(category)} \xB7 ${escapeHtml(Number(item.km_from_start).toFixed(1))} km ${translate2("poiDistance")}${details ? ` \xB7 ${escapeHtml(details)}` : ""}</small></span></li>`;
     }).join("");
-    return `<section class="route-pois"><h3>${translate2("alongRoute")}</h3><ul>${rows}</ul></section>`;
+    const more = items.length > visible.length ? `<button type="button" data-action="poi-more">${translate2("poiMore")} (${items.length - visible.length})</button>` : expanded && availableCount > items.length ? `<p class="subtle">${translate2("poiFilteredCount")} ${items.length}/${availableCount}</p>` : "";
+    const gaps = selection?.gaps?.length ? `<p class="notice">${translate2("poiIntervalGaps")}: ${selection.gaps.map((gap) => `${Math.round(gap.km)} km`).join(", ")}</p>` : "";
+    return `<section class="route-pois"><div class="route-pois-heading"><h3>${translate2("alongRoute")}</h3><span class="subtle">${items.length}/${availableCount}</span></div><ul>${rows}</ul>${more}${gaps}</section>`;
   }
   function renderFuelPlan(result, profile, fuelValues, translate2, language) {
     const enteredFuelValues = Object.fromEntries(Object.entries(fuelValues || {}).filter(([, value]) => value !== "" && value != null));
@@ -31513,7 +31597,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, poiDisplay: { parking: false, fuel: false, interval: "all", expanded: false }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -31880,6 +31964,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         }));
         const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...this._state.diagnosticToken ? { diagnostic_token: this._state.diagnosticToken } : {}, ...requestOptions });
         this._state.result = normalizeServiceResponse(payload);
+        const requested = requestedPoiCategories(this._state.result.metadata?.pois || {});
+        this._state.poiDisplay = { ...this._state.poiDisplay, parking: requested.has("parking"), fuel: requested.has("fuel"), expanded: false };
         this._state.requestDiagnosticsArmed = false;
         this._state.diagnosticToken = "";
         this._state.diagnosticCopyStatus = "";
@@ -32225,6 +32311,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) };
         this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) };
         this._state.result = normalizeServiceResponse(route);
+        const requested = requestedPoiCategories(this._state.result.metadata?.pois || {});
+        this._state.poiDisplay = { ...this._state.poiDisplay, parking: requested.has("parking"), fuel: requested.has("fuel"), expanded: false };
         this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
         this._fitMapOnNextRender = !this._state.resultStale;
         this._dashboardFitPending = !this._state.resultStale;
@@ -32347,6 +32435,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
     currentMapRoute() {
       return this._state.result && !this._state.resultStale ? this._state.result : null;
+    }
+    poiSelection(result = this._state.result) {
+      const pois = result?.metadata?.pois || {};
+      const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId) || {};
+      const fuelPlan = calculateFuelPlan(1, { ...profile, ...this._state.fuelValues });
+      return selectPoiItems(pois, { display: this._state.poiDisplay, interval: this._state.poiDisplay.interval, routeDistanceM: result?.distance_m, fuelPlan: { rangeKm: fuelPlan.rangeKm } });
+    }
+    visiblePois(result = this._state.result) {
+      const selection = this.poiSelection(result);
+      return { requested: selection.requested, parking: selection.items.filter((item) => item.category === "parking"), fuel: selection.items.filter((item) => item.category === "fuel") };
     }
     mapPoints() {
       return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point));
@@ -32494,7 +32592,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       legacyGrid?.replaceWith(this.htmlNodes(`<section class="stations-panel"><div class="stations-heading"><h3>${translate2("stations")}</h3><span class="subtle">${translate2("stationsHint")}</span></div><div class="stations-list">${stations.map((station, index) => this.renderStation(station, index, translate2, stations.length)).join("")}</div><button type="button" data-action="add-station" ${stations.length >= 7 ? "disabled" : ""}>\uFF0B ${translate2("addWaypoint")}</button></section>`)[0]);
       const optionAnchor = this.shadowRoot.querySelector(".map-section");
       optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate2("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate2("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate2("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate2("avoidTunnels")}</span></label></div></details>`);
-      optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate2("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate2("poiDiesel")}</option></select></label><p class="subtle">${translate2("poiNextCalculation")}</p></div>`);
+      optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate2("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate2("poiDiesel")}</option></select></label><p class="subtle">${translate2("poiNextCalculation")}</p>${result && requestedPoiCategories(result.metadata?.pois || {}).size ? `<div class="poi-display"><b>${translate2("poiDisplay")}</b><label><input type="checkbox" data-poi-display="parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-poi-display="fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiInterval")}<select data-poi-display="interval">${POI_INTERVALS.map((value) => `<option value="${value}">${translate2(`poiInterval.${value}`)}</option>`).join("")}</select></label><p class="subtle">${translate2("poiDisplayLocal")}</p></div>` : ""}</div>`);
       if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate2("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate2("requestDiagnosticsArmed")}</span>` : ""}</div>`);
       if (diagnosticsVisible && requestDiagnostic) {
         const diagnosticText = JSON.stringify(requestDiagnostic, null, 2);
@@ -32509,7 +32607,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         else input.value = key === "depart_at" || key === "arrive_at" ? isoDateTimeToLocalInput(this._state.routeOptions[key]) : this._state.routeOptions[key] ?? "";
       });
       const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
-      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
+      const poiSelection = result && !this._state.resultStale ? this.poiSelection(result) : null;
+      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2, poiSelection, this._state.poiDisplay.expanded) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
       if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${translate2("staleRoute")}</p>`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
@@ -32553,7 +32652,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate2("geocodingAttribution")}</a>`);
       const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait"), parking: translate2("poiParking"), fuelStation: translate2("poiFuelStation") };
       const activeMapRoute = this.currentMapRoute();
-      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute?.metadata?.pois || {}, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute ? this.visiblePois(activeMapRoute) : {}, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
       const mapHost = this.shadowRoot.querySelector(".map-host");
       if (preserveMap) {
         mapHost.append(oldMap);
@@ -32631,6 +32730,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
         if (!key.startsWith("poi_")) this._state.resultStale = Boolean(this._state.result);
         this.render();
       }));
+      this.shadowRoot.querySelectorAll("[data-poi-display]").forEach((input) => {
+        const key = input.dataset.poiDisplay;
+        if (input.type === "checkbox") input.checked = this._state.poiDisplay[key] === true;
+        else input.value = this._state.poiDisplay[key] || "all";
+        input.addEventListener("change", () => {
+          this._state.poiDisplay = { ...this._state.poiDisplay, [key]: input.type === "checkbox" ? input.checked : input.value, expanded: false };
+          this.render();
+        });
+      });
+      this.shadowRoot.querySelector('button[data-action="poi-more"]')?.addEventListener("click", () => {
+        this._state.poiDisplay = { ...this._state.poiDisplay, expanded: true };
+        this.render();
+      });
       this.shadowRoot.querySelectorAll("button[data-action=edit-station]").forEach((button) => button.addEventListener("click", () => this.beginStationEdit(Number(button.dataset.index))));
       this.shadowRoot.querySelectorAll("button[data-action=apply-edit]").forEach((button) => button.addEventListener("click", () => this.applyStationEdit()));
       this.shadowRoot.querySelectorAll("button[data-action=cancel-edit]").forEach((button) => button.addEventListener("click", () => this.cancelStationEdit()));

@@ -72,6 +72,13 @@ for (const viewport of [{ width: 1280, height: 900, label: "Windows/Chromium" },
   assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel, fuelType: globalThis.__poiState.request.poi_fuel_type })), { calls: 3, parking: true, fuel: true, fuelType: "diesel" }, `both POI categories are sent with the deliberate route request on ${viewport.label}`);
   assert.equal(await page.locator(".route-poi").count(), 2, `POI list is rendered on ${viewport.label}`);
   assert.equal(await page.locator(".map-section .crp-marker-poi").count(), 2, `normal map renders both POI categories on ${viewport.label}`);
+  const callsBeforeDisplay = await page.evaluate(() => globalThis.__poiState.calls);
+  await page.locator('input[data-poi-display="parking"]').uncheck();
+  assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, list: [...document.querySelector("camper-route-planner-card").shadowRoot.querySelectorAll(".route-poi")].map((item) => item.className), markers: document.querySelector("camper-route-planner-card").shadowRoot.querySelectorAll(".crp-marker-poi").length })), { calls: callsBeforeDisplay, list: ["route-poi route-poi-fuel"], markers: 1 }, `local parking display filter does not request or move the route on ${viewport.label}`);
+  await page.locator('select[data-poi-display="interval"]').selectOption("500");
+  assert.equal(await page.evaluate(() => globalThis.__poiState.calls), callsBeforeDisplay, `local interval filter does not request routing on ${viewport.label}`);
+  await page.locator('select[data-poi-display="interval"]').selectOption("all");
+  await page.locator('input[data-poi-display="parking"]').check();
   await page.locator('button[data-action="open-map-popup"]').click();
   await page.locator(".map-popup").waitFor();
   await page.waitForTimeout(120);

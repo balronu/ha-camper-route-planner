@@ -80,11 +80,12 @@ def normalize_pois(data: dict[str, Any], *, requested: tuple[str, ...] = (), rou
     normalized_route_distance = _number(route_distance_m, minimum=0, maximum=float("inf"))
     route_km = normalized_route_distance / 1000 if normalized_route_distance is not None else None
 
-    def records(category: str, source: Any) -> list[dict[str, Any]]:
-        if not isinstance(source, list):
-            return []
-        output: list[dict[str, Any]] = []
-        for raw in source[:MAX_POIS_PER_CATEGORY]:
+    def records(category: str, source: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        provider_count = len(source) if isinstance(source, list) else 0
+        if category not in requested or not isinstance(source, list):
+            return [], {"provider_count": provider_count, "normalized_count": 0, "selected_count": 0}
+        normalized: list[dict[str, Any]] = []
+        for raw in source:
             if not isinstance(raw, dict):
                 continue
             coordinates = _coordinates(raw)
@@ -127,11 +128,32 @@ def normalize_pois(data: dict[str, Any], *, requested: tuple[str, ...] = (), rou
                 updated = _text(raw.get("price_updated_at"), maximum=64)
                 if updated:
                     item["price_updated_at"] = updated
-            output.append(item)
-        return sorted(output, key=lambda entry: (entry["km_from_start"], entry["id"]))
+            normalized.append(item)
+        normalized.sort(key=lambda entry: (entry["km_from_start"], entry["id"]))
+        if len(normalized) <= MAX_POIS_PER_CATEGORY:
+            selected = normalized
+        else:
+            # Keep coverage over the whole route instead of retaining only the
+            # first 50 provider records, which made long routes appear to end
+            # at an arbitrary distance.
+            indexes = {round(index * (len(normalized) - 1) / (MAX_POIS_PER_CATEGORY - 1)) for index in range(MAX_POIS_PER_CATEGORY)}
+            selected = [normalized[index] for index in sorted(indexes)]
+        return selected, {"provider_count": provider_count, "normalized_count": len(normalized), "selected_count": len(selected)}
+
+    parking, parking_diagnostics = records("parking", data.get("parkings"))
+    fuel, fuel_diagnostics = records("fuel", data.get("fuel_stations"))
+    def range_diagnostic(items: list[dict[str, Any]]) -> dict[str, float | None]:
+        values = [float(item["km_from_start"]) for item in items]
+        return {"min_km": min(values) if values else None, "max_km": max(values) if values else None}
 
     return {
         "requested": list(requested),
-        "parking": records("parking", data.get("parkings")),
-        "fuel": records("fuel", data.get("fuel_stations")),
+        "parking": parking,
+        "fuel": fuel,
+        "diagnostics": {
+            "parking": {**parking_diagnostics, **range_diagnostic(parking)},
+            "fuel": {**fuel_diagnostics, **range_diagnostic(fuel)},
+            "route_distance_km": route_km,
+            "limit_per_category": MAX_POIS_PER_CATEGORY,
+        },
     }

@@ -81,7 +81,9 @@ class Phase2ANakordoniV3Tests(unittest.TestCase):
                 body["data"].update(poi_data)
                 result = adapter.normalize_response(body, request=request(poi_parking=True, poi_fuel=True))
                 self.assertEqual(result.distance_m, 123000)
-                self.assertEqual(result.metadata["pois"], {"requested": ["parking", "fuel"], "parking": [], "fuel": []})
+                self.assertEqual(result.metadata["pois"]["requested"], ["parking", "fuel"])
+                self.assertEqual(result.metadata["pois"]["parking"], [])
+                self.assertEqual(result.metadata["pois"]["fuel"], [])
 
     def test_builder_rejects_non_motorhome_and_missing_safety_value(self):
         with self.assertRaises(ValidationError):

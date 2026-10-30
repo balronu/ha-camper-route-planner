@@ -38,6 +38,16 @@ class Beta9PoiTests(unittest.TestCase):
         self.assertEqual(pois["parking"][0]["name"], "Route rest area")
         self.assertEqual(pois["fuel"][0]["prices"][0]["price"], 1.89)
         self.assertEqual(len(pois["parking"]), 1)
+        self.assertEqual(pois["diagnostics"]["parking"]["provider_count"], 2)
+        self.assertEqual(pois["diagnostics"]["parking"]["selected_count"], 1)
+
+    def test_unrequested_provider_arrays_are_never_exposed(self):
+        result = NakordoniRouteAdapterV3().normalize_response(response(), request=request())
+        pois = result.metadata["pois"]
+        self.assertEqual(pois["requested"], [])
+        self.assertEqual(pois["parking"], [])
+        self.assertEqual(pois["fuel"], [])
+        self.assertEqual(pois["diagnostics"]["parking"]["provider_count"], 2)
 
     def test_missing_pois_do_not_break_valid_route(self):
         body = response()
@@ -45,7 +55,9 @@ class Beta9PoiTests(unittest.TestCase):
         body["data"].pop("fuel_stations")
         result = NakordoniRouteAdapterV3().normalize_response(body, request=request(poi_parking=True))
         self.assertEqual(result.geometry.points[-1].longitude, -8)
-        self.assertEqual(result.metadata["pois"], {"requested": ["parking"], "parking": [], "fuel": []})
+        self.assertEqual(result.metadata["pois"]["requested"], ["parking"])
+        self.assertEqual(result.metadata["pois"]["parking"], [])
+        self.assertEqual(result.metadata["pois"]["fuel"], [])
 
     def test_long_valid_route_without_pois_does_not_divide_none(self):
         body = response()
@@ -54,11 +66,24 @@ class Beta9PoiTests(unittest.TestCase):
         body["data"].pop("fuel_stations")
         result = NakordoniRouteAdapterV3().normalize_response(body, request=request())
         self.assertEqual(result.distance_m, 1_500_000)
-        self.assertEqual(result.metadata["pois"], {"requested": [], "parking": [], "fuel": []})
+        self.assertEqual(result.metadata["pois"]["requested"], [])
+        self.assertEqual(result.metadata["pois"]["parking"], [])
+        self.assertEqual(result.metadata["pois"]["fuel"], [])
 
     def test_invalid_optional_route_distance_is_ignored_safely(self):
         normalized = normalize_pois({}, requested=(), route_distance_m=None)
-        self.assertEqual(normalized, {"requested": [], "parking": [], "fuel": []})
+        self.assertEqual(normalized["requested"], [])
+        self.assertEqual(normalized["parking"], [])
+        self.assertEqual(normalized["fuel"], [])
+
+    def test_many_pois_are_evenly_selected_over_the_route(self):
+        data = {"parkings": [{"id": f"p{index}", "lat": 45, "lon": index / 100, "km_from_start": index * 20} for index in range(100)]}
+        normalized = normalize_pois(data, requested=("parking",), route_distance_m=2_000_000)
+        selected = normalized["parking"]
+        self.assertEqual(len(selected), 50)
+        self.assertLess(selected[1]["km_from_start"], 100)
+        self.assertGreater(selected[-1]["km_from_start"], 1900)
+        self.assertEqual(normalized["diagnostics"]["parking"]["normalized_count"], 100)
 
     def test_normalizer_does_not_invent_prices_or_vehicle_suitability(self):
         normalized = normalize_pois({"fuel_stations": [{"name": "No price", "lat": 44, "lon": -1, "km_from_start": 1}]}, requested=("fuel",))
