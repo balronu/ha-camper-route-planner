@@ -52,6 +52,7 @@ class RuntimeData:
         self.usage_transport = None
         self._diagnostic_counts = {"v2": 0, "v3": 0}
         self._request_diagnostic_token: str | None = None
+        self._pending_request_diagnostic: dict[str, Any] | None = None
         self._last_request_error: dict[str, Any] | None = None
 
     @classmethod
@@ -133,6 +134,13 @@ class RuntimeData:
     def disarm_request_diagnostics(self) -> None:
         """Revoke an armed request diagnostic without retaining request data."""
         self._request_diagnostic_token = None
+
+    def get_request_diagnostic(self) -> dict[str, Any] | None:
+        """Return and consume the pending admin-only failed-request report."""
+        diagnostic = self._pending_request_diagnostic
+        self._pending_request_diagnostic = None
+        self._last_request_error = None
+        return diagnostic
 
     def _consume_request_diagnostics(self, token: Any) -> bool:
         """Consume the arm before any await so parallel calls cannot reuse it."""
@@ -227,6 +235,40 @@ class RuntimeData:
         attempts = int(attempts) if isinstance(attempts, (int, float)) and attempts >= 1 else 1
         self._diagnostic_counts[api_version] = self._diagnostic_counts.get(api_version, 0) + attempts
 
+    @staticmethod
+    def _provider_error_diagnostic(snapshot: dict[str, Any], exc: ProviderError) -> dict[str, Any]:
+        details = exc.details if isinstance(exc.details, dict) else {}
+        transport = details.get("transport") if isinstance(details.get("transport"), dict) else {}
+        restriction_hits = details.get("restriction_hits")
+        restriction_codes = [
+            hit.get("code")
+            for hit in restriction_hits[:20]
+            if isinstance(hit, dict) and isinstance(hit.get("code"), str)
+        ] if isinstance(restriction_hits, list) else []
+        safe_transport = {
+            key: transport.get(key)
+            for key in ("status", "content_type", "response_type", "response_length", "elapsed_s", "attempts")
+            if key in transport
+        }
+        return {
+            "request": snapshot,
+            "response": {
+                "api_version": snapshot.get("api_version"),
+                "waypoint_count": len(snapshot.get("coordinates", {}).get("waypoints", [])),
+                "http_status": exc.status if exc.status is not None else transport.get("status"),
+                "content_type": transport.get("content_type"),
+                "response_type": transport.get("response_type"),
+                "response_length": transport.get("response_length"),
+                "elapsed_s": transport.get("elapsed_s"),
+                "attempts": transport.get("attempts"),
+                "error_code": exc.code,
+                "retryable": exc.retryable,
+                "restriction_codes": restriction_codes,
+                "restriction_count": details.get("restriction_count", len(restriction_hits) if isinstance(restriction_hits, list) else 0),
+                "transport": safe_transport,
+            },
+        }
+
     async def async_calculate_service(self, data: dict[str, Any]) -> dict[str, Any]:
         profiles = {profile.profile_id: profile for profile in self.store.profiles()}
         profile = profiles.get(data["profile_id"])
@@ -250,6 +292,8 @@ class RuntimeData:
             depart_at=_time("depart_at"), avoid=tuple(avoid), route_type=data.get("route_type", "fastest"),
             arrive_at=_time("arrive_at"),
         )
+        self._pending_request_diagnostic = None
+        self._last_request_error = None
         diagnostic_snapshot = self._request_snapshot(request) if self._consume_request_diagnostics(data.get("diagnostic_token")) else None
         try:
             result = await self.coordinator.async_calculate_manual(
@@ -260,6 +304,7 @@ class RuntimeData:
             details = exc.details if isinstance(exc.details, dict) else {}
             self._record_diagnostic(api_version=api_version, metadata={"transport": details.get("transport")})
             if diagnostic_snapshot:
+                self._pending_request_diagnostic = self._provider_error_diagnostic(diagnostic_snapshot, exc)
                 transport = details.get("transport") if isinstance(details.get("transport"), dict) else {}
                 self._last_request_error = {
                     "api_version": api_version,
@@ -278,6 +323,7 @@ class RuntimeData:
             raise
         api_version = str(result.metadata.get("api_version") or ("v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"))
         self._record_diagnostic(api_version=api_version, metadata=result.metadata)
+        self._pending_request_diagnostic = None
         self._last_request_error = None
         return {
             "provider": result.provider, "synthetic": result.synthetic, "distance_m": result.distance_m,

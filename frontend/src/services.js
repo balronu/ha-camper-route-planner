@@ -21,6 +21,10 @@ export function disarmRequestDiagnostics(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/disarm_request_diagnostics", ...data });
 }
 
+export function getRequestDiagnostic(hass, data) {
+  return callWebsocket(hass, { type: "camper_route_planner/get_request_diagnostic", ...data });
+}
+
 export async function exportGpx(hass, data) {
   return callWebsocket(hass, { type: "camper_route_planner/export_gpx", ...data });
 }

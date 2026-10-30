@@ -102,6 +102,13 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertEqual(diagnostic["last_request_error"]["waypoint_count"], 1)
         self.assertNotIn("40.0", str(diagnostic))
         self.assertNotIn("must not be shown", str(diagnostic))
+        report = runtime.get_request_diagnostic()
+        self.assertEqual(report["response"]["error_code"], "provider_down")
+        self.assertEqual(report["response"]["http_status"], 502)
+        self.assertEqual(report["response"]["waypoint_count"], 1)
+        self.assertEqual(report["response"]["response_type"], "json")
+        self.assertIsNone(runtime.get_request_diagnostic())
+        self.assertIsNone(runtime.diagnostics()["last_request_error"])
 
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
@@ -120,6 +127,23 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertNotIn("Authorization", str(snapshot))
         self.assertNotIn("KKKK", str(snapshot))
         self.assertIsNone(runtime.diagnostics()["last_operation"])
+
+    def test_restriction_rejection_report_keeps_only_safe_codes(self):
+        response = route_payload()
+        response["data"]["route"]["legal"] = False
+        response["data"]["route"]["restriction_hits"] = [
+            {"code": "HEIGHT", "description": "bridge at 48.123456, 11.654321", "segment_index": 4},
+            {"code": "WEIGHT", "description": "weight limit", "waypoint_index": 1},
+        ]
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        report = runtime.get_request_diagnostic()
+        self.assertEqual(report["response"]["error_code"], "route_restrictions_unresolved")
+        self.assertEqual(report["response"]["restriction_codes"], ["HEIGHT", "WEIGHT"])
+        self.assertNotIn("48.123456", str(report))
+        self.assertNotIn("bridge at", str(report))
 
     def test_request_diagnostic_arm_is_consumed_on_failed_call(self):
         runtime = self.runtime({"ok": False, "status": 503, "error": {"code": "busy", "message": "busy"}, "transport": {"attempts": 1, "status": 503}})
