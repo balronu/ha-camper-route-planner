@@ -8,7 +8,7 @@ const pixel = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
 const pois = {
   requested: ["parking", "fuel"],
   parking: [{ id: "p1", category: "parking", name: "Aire de repos", latitude: 49.5, longitude: 7.5, km_from_start: 100, country: "DE" }],
-  fuel: [{ id: "f1", category: "fuel", name: "Diesel Station", latitude: 50.5, longitude: 8.5, km_from_start: 500, brand: "Fixture Fuel", country: "DE", prices: [{ fuel_type: "diesel", price: 1.79, currency: "EUR" }] }],
+  fuel: [{ id: "f1", category: "fuel", name: "Diesel Station", latitude: 49.55, longitude: 7.55, km_from_start: 500, brand: "Fixture Fuel", country: "DE", prices: [{ fuel_type: "diesel", price: 1.79, currency: "EUR" }] }],
 };
 const route = { provider: "mock", distance_m: 2474700, duration_s: 95820, warnings: [], geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 52, longitude: 10 }, { latitude: 55, longitude: 14 }] }, metadata: { pois } };
 const server = createServer((request, response) => {
