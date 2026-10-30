@@ -2,6 +2,7 @@ import { languageOf, t } from "./localization.js";
 import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
 import { armRequestDiagnostics, callWebsocket, calculateRoute, deliverGpxExport, disarmRequestDiagnostics, estimateTollsV2, exportGpx, geocode, getRequestDiagnostic, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, fitMapToRoute, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
+import { POI_INTERVALS, requestedPoiCategories, selectPoiItems } from "./poi-utils.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "./toll-display.js";
 import { createTravelPlanPdf, downloadPdf, pdfFileName } from "./pdf-export.js";
@@ -110,18 +111,23 @@ function renderRestrictions(result, translate) {
   return `<details class="route-details restrictions" open><summary><h3>${translate("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(trafficLabel.startsWith("trafficMode.") ? translate("trafficMode.off") : trafficLabel)}</p>${groups}${notes}</details>`;
 }
 
-function renderPois(result, translate) {
+function renderPois(result, translate, selection, expanded = false) {
   const pois = result?.metadata?.pois;
   if (!pois || typeof pois !== "object") return "";
-  const items = [...(Array.isArray(pois.parking) ? pois.parking : []), ...(Array.isArray(pois.fuel) ? pois.fuel : [])].sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start));
-  if (!items.length) return pois.requested?.length ? `<section class="route-pois"><h3>${translate("alongRoute")}</h3><p class="subtle">${translate("poiNoData")}</p></section>` : "";
-  const rows = items.map((item) => {
+  const items = selection?.items || [];
+  const availableCount = selection?.availableCount || 0;
+  if (!requestedPoiCategories(pois).size) return "";
+  if (!items.length) return `<section class="route-pois"><h3>${translate("alongRoute")}</h3><p class="subtle">${translate("poiNoData")}</p></section>`;
+  const visible = expanded ? items : items.slice(0, 15);
+  const rows = visible.map((item) => {
     const category = item.category === "fuel" ? translate("poiFuelStation") : translate("poiParking");
     const prices = Array.isArray(item.prices) ? item.prices.map((price) => `${price.price} ${price.currency}/${price.fuel_type}`).join(", ") : "";
     const details = [item.brand, item.country, item.distance_from_route_km != null ? `${item.distance_from_route_km} km ab Route` : "", prices].filter(Boolean).join(" · ");
     return `<li class="route-poi route-poi-${escapeHtml(item.category || "parking")}" data-poi-id="${escapeHtml(item.id || "")}"><span class="poi-badge" aria-hidden="true">${item.category === "fuel" ? "F" : "P"}</span><span><b>${escapeHtml(item.name || category)}</b><small>${escapeHtml(category)} · ${escapeHtml(Number(item.km_from_start).toFixed(1))} km ${translate("poiDistance")}${details ? ` · ${escapeHtml(details)}` : ""}</small></span></li>`;
   }).join("");
-  return `<section class="route-pois"><h3>${translate("alongRoute")}</h3><ul>${rows}</ul></section>`;
+  const more = items.length > visible.length ? `<button type="button" data-action="poi-more">${translate("poiMore")} (${items.length - visible.length})</button>` : expanded && availableCount > items.length ? `<p class="subtle">${translate("poiFilteredCount")} ${items.length}/${availableCount}</p>` : "";
+  const gaps = selection?.gaps?.length ? `<p class="notice">${translate("poiIntervalGaps")}: ${selection.gaps.map((gap) => `${Math.round(gap.km)} km`).join(", ")}</p>` : "";
+  return `<section class="route-pois"><div class="route-pois-heading"><h3>${translate("alongRoute")}</h3><span class="subtle">${items.length}/${availableCount}</span></div><ul>${rows}</ul>${more}${gaps}</section>`;
 }
 
 function renderFuelPlan(result, profile, fuelValues, translate, language) {
@@ -167,7 +173,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = normalizeConfig();
-    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, poiDisplay: { parking: false, fuel: false, interval: "all", expanded: false }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._cardExpanded = false;
     this._connection = null;
     this._reverseTimers = new Map();
@@ -510,6 +516,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
       }));
       const payload = await calculateRoute(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId, origin: this._state.origin, destination: this._state.destination, via: this._state.waypoints, route_name: this._state.routeName, force_refresh: forceRefresh, ...(this._state.diagnosticToken ? { diagnostic_token: this._state.diagnosticToken } : {}), ...requestOptions });
       this._state.result = normalizeServiceResponse(payload);
+      const requested = requestedPoiCategories(this._state.result.metadata?.pois || {});
+      this._state.poiDisplay = { ...this._state.poiDisplay, parking: requested.has("parking"), fuel: requested.has("fuel"), expanded: false };
       this._state.requestDiagnosticsArmed = false;
       this._state.diagnosticToken = "";
       this._state.diagnosticCopyStatus = "";
@@ -842,7 +850,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
 
   async loadRoute(routeId) {
     const generation = ++this._routeStateGeneration;
-    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); if (generation !== this._routeStateGeneration) return; const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]); this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point)); this._fitMapOnNextRender = !this._state.resultStale; this._dashboardFitPending = !this._state.resultStale;
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); if (generation !== this._routeStateGeneration) return; const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]); this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); const requested = requestedPoiCategories(this._state.result.metadata?.pois || {}); this._state.poiDisplay = { ...this._state.poiDisplay, parking: requested.has("parking"), fuel: requested.has("fuel"), expanded: false }; this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point)); this._fitMapOnNextRender = !this._state.resultStale; this._dashboardFitPending = !this._state.resultStale;
       // A loaded route is authoritative for every coordinate. Prevent the
       // current DOM values from being captured as drafts by render() before
       // the newly loaded inputs are restored; this is especially important
@@ -937,6 +945,18 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   currentMapRoute() { return this._state.result && !this._state.resultStale ? this._state.result : null; }
+
+  poiSelection(result = this._state.result) {
+    const pois = result?.metadata?.pois || {};
+    const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId) || {};
+    const fuelPlan = calculateFuelPlan(1, { ...profile, ...this._state.fuelValues });
+    return selectPoiItems(pois, { display: this._state.poiDisplay, interval: this._state.poiDisplay.interval, routeDistanceM: result?.distance_m, fuelPlan: { rangeKm: fuelPlan.rangeKm } });
+  }
+
+  visiblePois(result = this._state.result) {
+    const selection = this.poiSelection(result);
+    return { requested: selection.requested, parking: selection.items.filter((item) => item.category === "parking"), fuel: selection.items.filter((item) => item.category === "fuel") };
+  }
 
   mapPoints() { return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point)); }
 
@@ -1069,12 +1089,13 @@ export class CamperRoutePlannerCard extends HTMLElement {
     legacyGrid?.replaceWith(this.htmlNodes(`<section class="stations-panel"><div class="stations-heading"><h3>${translate("stations")}</h3><span class="subtle">${translate("stationsHint")}</span></div><div class="stations-list">${stations.map((station, index) => this.renderStation(station, index, translate, stations.length)).join("")}</div><button type="button" data-action="add-station" ${stations.length >= 7 ? "disabled" : ""}>＋ ${translate("addWaypoint")}</button></section>`)[0]);
     const optionAnchor = this.shadowRoot.querySelector(".map-section");
     optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate("routeOptions")}</h3></summary><div class="option-grid"><label>${translate("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate("trafficMode.off")}</option><option value="live">${translate("trafficMode.live")}</option><option value="forecast">${translate("trafficMode.forecast")}</option></select></label><label>${translate("routeType")}<select data-route-option="route_type"><option value="fastest">${translate("fastest")}</option><option value="eco">${translate("eco")}</option></select></label><label>${translate("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate("avoidTunnels")}</span></label></div></details>`);
-    optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate("showFuel")}</span></label><label>${translate("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate("poiDiesel")}</option></select></label><p class="subtle">${translate("poiNextCalculation")}</p></div>`);
+    optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate("showFuel")}</span></label><label>${translate("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate("poiDiesel")}</option></select></label><p class="subtle">${translate("poiNextCalculation")}</p>${result && requestedPoiCategories(result.metadata?.pois || {}).size ? `<div class="poi-display"><b>${translate("poiDisplay")}</b><label><input type="checkbox" data-poi-display="parking"> <span>${translate("showParking")}</span></label><label><input type="checkbox" data-poi-display="fuel"> <span>${translate("showFuel")}</span></label><label>${translate("poiInterval")}<select data-poi-display="interval">${POI_INTERVALS.map((value) => `<option value="${value}">${translate(`poiInterval.${value}`)}</option>`).join("")}</select></label><p class="subtle">${translate("poiDisplayLocal")}</p></div>` : ""}</div>`);
     if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate("requestDiagnosticsArmed")}</span>` : ""}</div>`);
     if (diagnosticsVisible && requestDiagnostic) { const diagnosticText = JSON.stringify(requestDiagnostic, null, 2); const requestId = requestDiagnostic.response?.request_id; const requestIdLine = requestId ? `<p class="subtle"><strong>${translate("requestId")}</strong>: <code>${escapeHtml(String(requestId))}</code></p>` : ""; this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate("requestDiagnosticsResult")}</summary><p class="subtle">${translate("requestDiagnosticsPrivacy")}</p>${requestIdLine}<button type="button" data-action="copy-diagnostics">${translate("requestDiagnosticsCopy")}</button>${this._state.diagnosticCopyStatus ? `<p class="subtle" role="status">${escapeHtml(this._state.diagnosticCopyStatus)}</p>` : ""}<textarea data-diagnostic-copy readonly rows="10" aria-label="${translate("requestDiagnosticsResult")}">${escapeHtml(diagnosticText)}</textarea></details>`); }
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => { const key = input.dataset.routeOption; if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value); else if (input.type === "checkbox") input.checked = this._state.routeOptions[key] === true; else input.value = key === "depart_at" || key === "arrive_at" ? isoDateTimeToLocalInput(this._state.routeOptions[key]) : this._state.routeOptions[key] ?? ""; });
     const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
-    fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate) : ""}${result ? renderRestrictions(result, translate) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate, language)}`);
+    const poiSelection = result && !this._state.resultStale ? this.poiSelection(result) : null;
+    fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate, poiSelection, this._state.poiDisplay.expanded) : ""}${result ? renderRestrictions(result, translate) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate, language)}`);
     if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${translate("staleRoute")}</p>`);
     this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
       const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
@@ -1121,7 +1142,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait"), parking: translate("poiParking"), fuelStation: translate("poiFuelStation") };
     const activeMapRoute = this.currentMapRoute();
-    const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute?.metadata?.pois || {}, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...(activeMapRoute?.metadata?.restriction_hits || []), ...(activeMapRoute?.metadata?.low_emission_zones_on_route || [])], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+    const mapOptions = { points: this.mapPoints(), route: activeMapRoute, pois: activeMapRoute ? this.visiblePois(activeMapRoute) : {}, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...(activeMapRoute?.metadata?.restriction_hits || []), ...(activeMapRoute?.metadata?.low_emission_zones_on_route || [])], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
     const mapHost = this.shadowRoot.querySelector(".map-host");
     if (preserveMap) {
       mapHost.append(oldMap);
@@ -1201,6 +1222,16 @@ export class CamperRoutePlannerCard extends HTMLElement {
       if (!key.startsWith("poi_")) this._state.resultStale = Boolean(this._state.result);
       this.render();
     }));
+    this.shadowRoot.querySelectorAll("[data-poi-display]").forEach((input) => {
+      const key = input.dataset.poiDisplay;
+      if (input.type === "checkbox") input.checked = this._state.poiDisplay[key] === true;
+      else input.value = this._state.poiDisplay[key] || "all";
+      input.addEventListener("change", () => {
+        this._state.poiDisplay = { ...this._state.poiDisplay, [key]: input.type === "checkbox" ? input.checked : input.value, expanded: false };
+        this.render();
+      });
+    });
+    this.shadowRoot.querySelector('button[data-action="poi-more"]')?.addEventListener("click", () => { this._state.poiDisplay = { ...this._state.poiDisplay, expanded: true }; this.render(); });
     this.shadowRoot.querySelectorAll("button[data-action=edit-station]").forEach((button) => button.addEventListener("click", () => this.beginStationEdit(Number(button.dataset.index))));
     this.shadowRoot.querySelectorAll("button[data-action=apply-edit]").forEach((button) => button.addEventListener("click", () => this.applyStationEdit()));
     this.shadowRoot.querySelectorAll("button[data-action=cancel-edit]").forEach((button) => button.addEventListener("click", () => this.cancelStationEdit()));
