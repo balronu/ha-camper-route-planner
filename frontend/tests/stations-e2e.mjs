@@ -24,6 +24,8 @@ await page.evaluate(() => {
     if (message.type.endsWith("/list_profiles")) return { provider: "mock", profiles: [{ profile_id: "test", name: "Test motorhome", height_m: 3.2, width_m: 2.3, length_m: 7.5, gross_weight_kg: 4000, vehicle_kind: "motorhome", fuel_type: "diesel", tank_capacity_l: 100, consumption_l_per_100km: 10 }] };
     if (message.type.endsWith("/list_routes")) return { routes: [] };
     if (message.type.endsWith("/map_config")) return { provider: "none", status: "not_configured" };
+    if (message.type.endsWith("/load_route")) return { route: { route_id: "saved", name: "Portugal", provider: "mock", distance_m: 2474700, duration_s: 95820, geometry: { points: [{ latitude: 49.294307, longitude: 7.051867 }, { latitude: 41.3619, longitude: -8.6718 }] }, profile_id: "test", origin: { latitude: 49.294307, longitude: 7.051867, label: "Sulzbach/Saar" }, destination: { latitude: 41.3619, longitude: -8.6718, label: "Gondifelos" }, waypoints: [{ latitude: 38.878187, longitude: -6.970111, label: "Badajoz" }, { latitude: 41.313533, longitude: -8.722957, label: "Mindelo" }], route_options: {}, warnings: [], metadata: {} } };
+    if (message.type.endsWith("/tracker_position")) { await new Promise((resolve) => { globalThis.__releaseTracker = resolve; }); return { available: true, point: { latitude: 47.3769, longitude: 8.5417, label: "tracker" } }; }
     if (message.type.endsWith("/geocode")) return { configured: true, results: [{ label: "Badajoz", latitude: 38.878187, longitude: -6.970111 }] };
     if (message.type.endsWith("/reverse_geocode")) return { configured: false, address: "" };
     if (message.type === "call_service") { calls += 1; request = message.service_data; return { response: { provider: "mock", synthetic: true, distance_m: 1234, duration_s: 3600, geometry: { points: [{ latitude: 49, longitude: 7 }, { latitude: 50, longitude: 8 }] }, warnings: [] } }; }
@@ -34,6 +36,19 @@ await page.evaluate(() => {
 await page.locator("details.route-planner-shell").waitFor();
 await page.locator("summary.route-planner-summary").click();
 await page.locator(".stations-panel").waitFor();
+
+await page.evaluate(() => globalThis.__crp.card.loadRoute("saved"));
+await page.waitForFunction(() => globalThis.__crp.card._state.result?.distance_m === 2474700);
+await page.evaluate(() => globalThis.__releaseTracker?.());
+await page.waitForTimeout(50);
+assert.equal(await page.evaluate(() => globalThis.__crp.card._state.origin.address), "Sulzbach/Saar", "a late tracker response cannot overwrite the origin of a loaded saved route");
+assert.deepEqual(await page.evaluate(() => globalThis.__crp.card._state.stations.map((station) => [station.address, station.latitude, station.longitude])), [
+  ["Sulzbach/Saar", 49.294307, 7.051867],
+  ["Badajoz", 38.878187, -6.970111],
+  ["Mindelo", 41.313533, -8.722957],
+  ["Gondifelos", 41.3619, -8.6718],
+], "loading a saved route restores stations in the same order as its route result");
+assert.equal(await page.locator(".crp-map svg").count(), 1, "a loaded current route is drawn on the dashboard map");
 
 const seed = [
   { latitude: 49.294307, longitude: 7.051867, address: "Sulzbach/Saar" },
@@ -86,6 +101,12 @@ const request = await page.evaluate(() => globalThis.__crp.request);
 assert.deepEqual(request.via.map((point) => point.address), ["Sulzbach/Saar", "Badajoz", "Gondifelos"], "API via order follows the station order");
 assert.equal(request.origin.address, "Badajoz");
 assert.equal(request.destination.address, "Mindelo");
+
+const loadedPath = await page.locator(".crp-map svg path").getAttribute("d");
+await page.evaluate(() => { const card = globalThis.__crp.card; const destination = card._state.stations.at(-1); destination.latitude = 40; destination.longitude = -7; card.syncLegacyPoints(); card._state.resultStale = true; card.render(); });
+assert.notEqual(await page.locator(".crp-map svg path").getAttribute("d"), loadedPath, "a changed station state removes the old route geometry from the dashboard map");
+await page.evaluate(() => globalThis.__crp.card.setConfig({ entry_id: "new-empty-entry" }));
+assert.equal(await page.evaluate(() => globalThis.__crp.card._state.result), null, "a new route entry starts without the previous result");
 
 await page.close();
 await browser.close();

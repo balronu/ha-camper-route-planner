@@ -31464,6 +31464,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._mapPopupOpen = false;
       this._mapPopupReturnFocus = null;
       this._bodyOverflowBeforeMapPopup = null;
+      this._routeStateGeneration = 0;
     }
     ensureStations() {
       const legacy = [this._state.origin, ...this._state.waypoints, this._state.destination].map(stationPoint);
@@ -31622,9 +31623,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const changed = entryChanged || next.title !== this._config.title || next.show_developer_diagnostics !== this._config.show_developer_diagnostics;
       const diagnosticsDisabled = this._config.show_developer_diagnostics && !next.show_developer_diagnostics;
       this._config = next;
+      if (entryChanged) this.resetRouteState();
       if (diagnosticsDisabled) this.disableDeveloperDiagnostics();
       if (changed && this._hass && entryChanged) this.loadData();
       else this.render();
+    }
+    resetRouteState() {
+      this._routeStateGeneration += 1;
+      this._state.origin = { latitude: "", longitude: "", label: "" };
+      this._state.destination = { latitude: "", longitude: "", label: "" };
+      this._state.waypoints = [];
+      this._state.stations = [];
+      this._state.result = null;
+      this._state.resultStale = false;
+      this._state.originManual = false;
+      this._state.error = "";
+      this._state.trackerError = "";
+      this._inputDrafts.clear();
+      this._preserveInputDraftKeys.clear();
+      this._editStationId = null;
+      this._editDraft = null;
+      this._editError = "";
     }
     isDeveloperDiagnosticsVisible() {
       return this._config.show_developer_diagnostics === true && this._hass?.user?.is_admin === true;
@@ -31668,6 +31687,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
     async loadData() {
       if (!this._hass) return;
+      const generation = this._routeStateGeneration;
       this._state.error = "";
       try {
         const selection = await this.discoverEntry();
@@ -31683,6 +31703,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
           callWebsocket(this._hass, { type: "camper_route_planner/list_routes", entry_id: entryId }),
           callWebsocket(this._hass, { type: "camper_route_planner/map_config", entry_id: entryId })
         ]);
+        if (generation !== this._routeStateGeneration) return;
         this._config = { ...this._config, entry_id: entryId };
         this._state.profiles = Array.isArray(profiles?.profiles) ? profiles.profiles : [];
         this._state.provider = String(profiles?.provider || this._state.provider || "");
@@ -31690,7 +31711,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.mapConfig = mapConfig || { provider: "none", status: "not_configured" };
         if (!this._state.profileId && this._state.profiles[0]) this._state.profileId = this._state.profiles[0].profile_id;
         this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
-        if (this._state.profileId && !this._state.originManual) this.useTrackerLocation(false);
+        if (this._state.profileId && !this._state.originManual && !this._state.result) this.useTrackerLocation(false, generation);
       } catch (error2) {
         this._state.error = error2.message || t(languageOf(this._hass), "providerUnavailable");
       }
@@ -31860,10 +31881,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._state.busy = false;
       this.render();
     }
-    async useTrackerLocation(showErrors = true) {
+    async useTrackerLocation(showErrors = true, generation = this._routeStateGeneration) {
       if (!this._config.entry_id || !this._state.profileId) return;
       try {
         const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
+        if (generation !== this._routeStateGeneration) return;
         if (response?.available && response.point && isValidWaypoint(response.point)) {
           this._state.origin = response.point;
           const stations = this.ensureStations();
@@ -32115,8 +32137,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.render();
     }
     async loadRoute(routeId) {
+      const generation = ++this._routeStateGeneration;
       try {
         const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId });
+        if (generation !== this._routeStateGeneration) return;
         const route = response.route;
         this._state.origin = validOrEmptyWaypoint(route.origin);
         this._state.destination = validOrEmptyWaypoint(route.destination);
@@ -32241,7 +32265,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const map = this.shadowRoot?.querySelector(".crp-map");
       if (!map) return;
       const translate2 = (key) => t(languageOf(this._hass), key);
-      updateMapPoints(map, this.mapPoints(), { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") }, { route: this._state.result, fitBounds: false, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
+      updateMapPoints(map, this.mapPoints(), { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") }, { route: this.currentMapRoute(), fitBounds: false, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
+    }
+    currentMapRoute() {
+      return this._state.result && !this._state.resultStale ? this._state.result : null;
     }
     mapPoints() {
       return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point));
@@ -32427,13 +32454,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate2("geocodingAttribution")}</a>`);
       const mapLabels = { noRoute: translate2("noRoute"), mapLoading: translate2("mapLoading"), mapUnavailable: translate2("mapUnavailable"), geometryFallback: translate2("geometryFallback"), start: translate2("start"), destination: translate2("destination"), waypoint: translate2("waypoint"), previewLine: translate2("previewLine"), borderCrossing: translate2("borderName"), borderNoWait: translate2("borderNoWait") };
-      const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], restrictionItems: [...result?.metadata?.restriction_hits || [], ...result?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+      const activeMapRoute = this.currentMapRoute();
+      const mapOptions = { points: this.mapPoints(), route: activeMapRoute, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...activeMapRoute?.metadata?.restriction_hits || [], ...activeMapRoute?.metadata?.low_emission_zones_on_route || []], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
       const mapHost = this.shadowRoot.querySelector(".map-host");
       if (preserveMap) {
         mapHost.append(oldMap);
         updateMapPoints(oldMap, mapOptions.points, mapLabels, mapOptions);
       } else {
-        renderMap(mapHost, result, this._state.mapConfig, mapLabels, () => {
+        renderMap(mapHost, activeMapRoute, this._state.mapConfig, mapLabels, () => {
           this._state.mapError = translate2("mapTileError");
           this._state.mapConfig = { ...this._state.mapConfig || {}, status: "invalid" };
           this.render();
@@ -32441,7 +32469,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       if (this._mapPopupOpen) {
         const popupHost = this.shadowRoot.querySelector(".map-popup-host");
-        renderMap(popupHost, result, this._state.mapConfig, mapLabels, () => {
+        renderMap(popupHost, activeMapRoute, this._state.mapConfig, mapLabels, () => {
         }, { ...mapOptions, fitBounds: true });
       }
       const popupStyle = document.createElement("style");
@@ -32511,7 +32539,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelectorAll("button[data-action=open-map-popup]").forEach((button) => button.addEventListener("click", () => this.openMapPopup()));
       this.shadowRoot.querySelectorAll("button[data-action=close-map-popup]").forEach((button) => button.addEventListener("click", () => this.closeMapPopup()));
       this.shadowRoot.querySelectorAll("button[data-action=fit-map-popup]").forEach((button) => button.addEventListener("click", () => {
-        fitMapToRoute(this.shadowRoot?.querySelector(".map-popup > .crp-map"), this.mapPoints(), this._state.result, true);
+        fitMapToRoute(this.shadowRoot?.querySelector(".map-popup > .crp-map"), this.mapPoints(), this.currentMapRoute(), true);
       }));
       this.shadowRoot.querySelectorAll(".map-popup").forEach((popup) => popup.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
