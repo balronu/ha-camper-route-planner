@@ -13,6 +13,8 @@ const CRP_LEAFLET_ROUTE = Symbol("camper-route-planner-leaflet-route");
 const CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
 const CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-restriction-markers");
 const CRP_LEAFLET_POI_MARKERS = Symbol("camper-route-planner-leaflet-poi-markers");
+const CRP_LEAFLET_POI_DATA = Symbol("camper-route-planner-leaflet-poi-data");
+const CRP_LEAFLET_POI_ZOOM_HANDLER = Symbol("camper-route-planner-leaflet-poi-zoom-handler");
 
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
@@ -80,6 +82,8 @@ export function destroyMap(container) {
     container[CRP_LEAFLET_BORDER_MARKERS] = null;
     container[CRP_LEAFLET_RESTRICTION_MARKERS] = null;
     container[CRP_LEAFLET_POI_MARKERS] = null;
+    container[CRP_LEAFLET_POI_DATA] = null;
+    container[CRP_LEAFLET_POI_ZOOM_HANDLER] = null;
   }
 }
 
@@ -151,17 +155,55 @@ function poiMarkerIcon(category) {
   return L.divIcon({ className: `crp-marker crp-marker-poi crp-marker-poi-${category}`, html: `<span aria-hidden="true" style="background:${color}">${glyph}</span>`, iconSize: [24, 32], iconAnchor: [12, 30] });
 }
 
+function poiClusterIcon(count) {
+  return L.divIcon({ className: "crp-marker crp-marker-poi-cluster", html: `<span aria-label="${count} POIs">${count}</span>`, iconSize: [34, 34], iconAnchor: [17, 17] });
+}
+
+function clusterPoiItems(map, items) {
+  const clusters = [];
+  const threshold = 6 / (2 ** Math.max(0, map.getZoom() - 5));
+  for (const item of items) {
+    const latitude = Number(item.latitude), longitude = Number(item.longitude);
+    const cluster = clusters.find((candidate) => Math.abs(latitude - candidate.latitude) <= threshold && Math.abs(longitude - candidate.longitude) <= threshold);
+    if (cluster) {
+      cluster.items.push(item);
+      cluster.latitude = cluster.items.reduce((sum, current) => sum + Number(current.latitude), 0) / cluster.items.length;
+      cluster.longitude = cluster.items.reduce((sum, current) => sum + Number(current.longitude), 0) / cluster.items.length;
+    } else clusters.push({ latitude, longitude, items: [item] });
+  }
+  return clusters;
+}
+
 function updateLeafletPoiMarkers(container, pois = {}) {
   const map = container?.[CRP_LEAFLET_MAP];
   if (!map) return false;
   for (const marker of container[CRP_LEAFLET_POI_MARKERS] || []) marker.remove();
-  const markers = [...(pois.parking || []), ...(pois.fuel || [])].filter((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))).map((item) => {
+  const items = [...(pois.parking || []), ...(pois.fuel || [])].filter((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude)));
+  const markers = clusterPoiItems(map, items).map((cluster) => {
+    if (cluster.items.length > 1) {
+      const center = [cluster.latitude, cluster.longitude];
+      const marker = L.marker(center, { icon: poiClusterIcon(cluster.items.length), keyboard: true });
+      marker.addTo(map).bindTooltip(`${cluster.items.length} POIs`).on("click", () => map.setView(center, Math.min(map.getZoom() + 2, map.getMaxZoom() || 19), { animate: true }));
+      return marker;
+    }
+    const item = cluster.items[0];
     const marker = L.marker([Number(item.latitude), Number(item.longitude)], { icon: poiMarkerIcon(item.category) });
     const distance = item.km_from_start == null ? "" : ` · ${Number(item.km_from_start).toFixed(1)} km`;
     marker.addTo(map).bindTooltip(`${item.name || (item.category === "fuel" ? "Fuel station" : "Parking")}${distance}`);
     return marker;
   });
   container[CRP_LEAFLET_POI_MARKERS] = markers;
+  container[CRP_LEAFLET_POI_DATA] = pois;
+  if (!container[CRP_LEAFLET_POI_ZOOM_HANDLER]) {
+    let scheduled = false;
+    container[CRP_LEAFLET_POI_ZOOM_HANDLER] = () => {
+      if (scheduled) return;
+      scheduled = true;
+      const refresh = () => { scheduled = false; updateLeafletPoiMarkers(container, container[CRP_LEAFLET_POI_DATA] || {}); };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(refresh); else setTimeout(refresh, 0);
+    };
+    map.on("zoomend", container[CRP_LEAFLET_POI_ZOOM_HANDLER]);
+  }
   return true;
 }
 

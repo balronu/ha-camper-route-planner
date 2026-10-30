@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.14; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.15; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13959,9 +13959,19 @@
       "poiInterval.500": "Alle 500 km",
       "poiInterval.750": "Alle 750 km",
       "poiInterval.range": "Nach Reichweite",
+      "poiInterval.custom": "Eigener Abstand",
+      poiFuelInterval: "Tankstellenfilter",
+      poiParkingInterval: "Parkplatzfilter",
+      poiAllParking: "Alle Parkpl\xE4tze",
+      "poiParkingInterval.all": "Alle Parkpl\xE4tze",
+      "poiParkingInterval.100": "Alle 100 km",
+      "poiParkingInterval.250": "Alle 250 km",
+      "poiParkingInterval.500": "Alle 500 km",
+      "poiParkingInterval.custom": "Eigener Abstand",
+      poiCustomDistance: "Eigener Abstand (km)",
       poiMore: "Mehr anzeigen",
       poiFilteredCount: "Gefiltert",
-      poiIntervalGaps: "Keine geeignete Tankstelle im Suchfenster",
+      poiIntervalGaps: "Keine geeigneten POIs im Suchfenster",
       poiParking: "Parkplatz",
       poiFuelStation: "Tankstelle",
       poiNoData: "Keine POI-Daten f\xFCr diese Route verf\xFCgbar.",
@@ -14153,9 +14163,19 @@
       "poiInterval.500": "Every 500 km",
       "poiInterval.750": "Every 750 km",
       "poiInterval.range": "By range",
+      "poiInterval.custom": "Custom spacing",
+      poiFuelInterval: "Fuel-station filter",
+      poiParkingInterval: "Parking filter",
+      poiAllParking: "All parking",
+      "poiParkingInterval.all": "All parking",
+      "poiParkingInterval.100": "Every 100 km",
+      "poiParkingInterval.250": "Every 250 km",
+      "poiParkingInterval.500": "Every 500 km",
+      "poiParkingInterval.custom": "Custom spacing",
+      poiCustomDistance: "Custom spacing (km)",
       poiMore: "Show more",
       poiFilteredCount: "Filtered",
-      poiIntervalGaps: "No suitable fuel station in the search window",
+      poiIntervalGaps: "No suitable POIs in the search window",
       poiParking: "Parking",
       poiFuelStation: "Fuel station",
       poiNoData: "No POI data is available for this route.",
@@ -14225,7 +14245,7 @@
     return String(language).toLowerCase().startsWith("de") ? "de" : "en";
   }
   function t(language, key) {
-    const lookup3 = (catalog) => String(key).split(".").reduce((value, part) => value?.[part], catalog);
+    const lookup3 = (catalog) => catalog?.[key] ?? String(key).split(".").reduce((value, part) => value?.[part], catalog);
     return lookup3(TRANSLATIONS[language]) || lookup3(TRANSLATIONS.en) || key;
   }
 
@@ -14571,6 +14591,8 @@
   var CRP_LEAFLET_BORDER_MARKERS = Symbol("camper-route-planner-leaflet-border-markers");
   var CRP_LEAFLET_RESTRICTION_MARKERS = Symbol("camper-route-planner-leaflet-restriction-markers");
   var CRP_LEAFLET_POI_MARKERS = Symbol("camper-route-planner-leaflet-poi-markers");
+  var CRP_LEAFLET_POI_DATA = Symbol("camper-route-planner-leaflet-poi-data");
+  var CRP_LEAFLET_POI_ZOOM_HANDLER = Symbol("camper-route-planner-leaflet-poi-zoom-handler");
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS("http://www.w3.org/2000/svg", name);
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -14648,6 +14670,8 @@
       container[CRP_LEAFLET_BORDER_MARKERS] = null;
       container[CRP_LEAFLET_RESTRICTION_MARKERS] = null;
       container[CRP_LEAFLET_POI_MARKERS] = null;
+      container[CRP_LEAFLET_POI_DATA] = null;
+      container[CRP_LEAFLET_POI_ZOOM_HANDLER] = null;
     }
   }
   function markerIcon(target) {
@@ -14712,17 +14736,57 @@
     const color = category === "fuel" ? "#7b1fa2" : "#1565c0";
     return import_leaflet.default.divIcon({ className: `crp-marker crp-marker-poi crp-marker-poi-${category}`, html: `<span aria-hidden="true" style="background:${color}">${glyph}</span>`, iconSize: [24, 32], iconAnchor: [12, 30] });
   }
+  function poiClusterIcon(count) {
+    return import_leaflet.default.divIcon({ className: "crp-marker crp-marker-poi-cluster", html: `<span aria-label="${count} POIs">${count}</span>`, iconSize: [34, 34], iconAnchor: [17, 17] });
+  }
+  function clusterPoiItems(map, items) {
+    const clusters = [];
+    const threshold = 6 / 2 ** Math.max(0, map.getZoom() - 5);
+    for (const item of items) {
+      const latitude = Number(item.latitude), longitude = Number(item.longitude);
+      const cluster = clusters.find((candidate) => Math.abs(latitude - candidate.latitude) <= threshold && Math.abs(longitude - candidate.longitude) <= threshold);
+      if (cluster) {
+        cluster.items.push(item);
+        cluster.latitude = cluster.items.reduce((sum2, current) => sum2 + Number(current.latitude), 0) / cluster.items.length;
+        cluster.longitude = cluster.items.reduce((sum2, current) => sum2 + Number(current.longitude), 0) / cluster.items.length;
+      } else clusters.push({ latitude, longitude, items: [item] });
+    }
+    return clusters;
+  }
   function updateLeafletPoiMarkers(container, pois = {}) {
     const map = container?.[CRP_LEAFLET_MAP];
     if (!map) return false;
     for (const marker of container[CRP_LEAFLET_POI_MARKERS] || []) marker.remove();
-    const markers = [...pois.parking || [], ...pois.fuel || []].filter((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))).map((item) => {
+    const items = [...pois.parking || [], ...pois.fuel || []].filter((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude)));
+    const markers = clusterPoiItems(map, items).map((cluster) => {
+      if (cluster.items.length > 1) {
+        const center = [cluster.latitude, cluster.longitude];
+        const marker2 = import_leaflet.default.marker(center, { icon: poiClusterIcon(cluster.items.length), keyboard: true });
+        marker2.addTo(map).bindTooltip(`${cluster.items.length} POIs`).on("click", () => map.setView(center, Math.min(map.getZoom() + 2, map.getMaxZoom() || 19), { animate: true }));
+        return marker2;
+      }
+      const item = cluster.items[0];
       const marker = import_leaflet.default.marker([Number(item.latitude), Number(item.longitude)], { icon: poiMarkerIcon(item.category) });
       const distance = item.km_from_start == null ? "" : ` \xB7 ${Number(item.km_from_start).toFixed(1)} km`;
       marker.addTo(map).bindTooltip(`${item.name || (item.category === "fuel" ? "Fuel station" : "Parking")}${distance}`);
       return marker;
     });
     container[CRP_LEAFLET_POI_MARKERS] = markers;
+    container[CRP_LEAFLET_POI_DATA] = pois;
+    if (!container[CRP_LEAFLET_POI_ZOOM_HANDLER]) {
+      let scheduled = false;
+      container[CRP_LEAFLET_POI_ZOOM_HANDLER] = () => {
+        if (scheduled) return;
+        scheduled = true;
+        const refresh = () => {
+          scheduled = false;
+          updateLeafletPoiMarkers(container, container[CRP_LEAFLET_POI_DATA] || {});
+        };
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(refresh);
+        else setTimeout(refresh, 0);
+      };
+      map.on("zoomend", container[CRP_LEAFLET_POI_ZOOM_HANDLER]);
+    }
     return true;
   }
   function updateLeafletRoute(container, route, points = []) {
@@ -14851,6 +14915,11 @@
   // src/poi-utils.js
   var CATEGORIES = ["parking", "fuel"];
   var DEFAULT_WINDOW_KM = 75;
+  var MAX_INTERVAL_CANDIDATES = 3;
+  var POI_INTERVALS = {
+    fuel: ["all", "250", "500", "750", "range", "custom"],
+    parking: ["all", "100", "250", "500", "custom"]
+  };
   function requestedPoiCategories(pois = {}) {
     return new Set((Array.isArray(pois.requested) ? pois.requested : []).filter((item) => CATEGORIES.includes(item)));
   }
@@ -14859,51 +14928,58 @@
     return CATEGORIES.flatMap((category) => requested.has(category) && display[category] !== false && Array.isArray(pois[category]) ? pois[category].map((item) => ({ ...item, category })) : []);
   }
   function reachableRangeKm({ tankCapacity, consumption, fuelLevel, reserve, rangeKm } = {}) {
-    if (Number.isFinite(Number(rangeKm))) return Number(rangeKm);
-    const tank = Number(tankCapacity);
-    const rate = Number(consumption);
-    const level = Number(fuelLevel);
-    const safety = Number(reserve || 0);
+    if (Number.isFinite(Number(rangeKm)) && Number(rangeKm) > 0) return Number(rangeKm);
+    const tank = Number(tankCapacity), rate = Number(consumption), level = Number(fuelLevel), safety = Number(reserve || 0);
     if (![tank, rate, level, safety].every(Number.isFinite) || tank <= 0 || rate <= 0 || level < 0 || level > tank || safety < 0 || safety >= tank) return null;
     return Math.max(0, (level - safety) * 100 / rate);
   }
+  function comparablePrice(item) {
+    if (Number.isFinite(Number(item?.price))) return Number(item.price);
+    const prices = Array.isArray(item?.prices) ? item.prices.map((price) => Number(price?.price)).filter(Number.isFinite) : [];
+    return prices.length ? Math.min(...prices) : Infinity;
+  }
   function intervalItems(items, intervalKm, routeDistanceKm, windowKm = DEFAULT_WINDOW_KM) {
-    const interval = Number(intervalKm);
-    const distance = Number(routeDistanceKm);
+    const interval = Number(intervalKm), distance = Number(routeDistanceKm);
     if (!Number.isFinite(interval) || interval <= 0 || !Number.isFinite(distance) || distance <= 0) return { items: [], gaps: [] };
     const targets = [];
-    for (let target = interval; target < distance; target += interval) targets.push(target);
-    const selected = [];
-    const gaps = [];
+    for (let target = interval; target <= distance; target += interval) targets.push(target);
+    const selected = [], gaps = [];
     for (const target of targets) {
       const candidates = items.filter((item) => Math.abs(Number(item.km_from_start) - target) <= windowKm).sort((a, b) => {
         const targetDelta = Math.abs(Number(a.km_from_start) - target) - Math.abs(Number(b.km_from_start) - target);
-        return targetDelta || Number(a.distance_from_route_km ?? Infinity) - Number(b.distance_from_route_km ?? Infinity) || Number(a.price ?? Infinity) - Number(b.price ?? Infinity);
-      });
+        return targetDelta || Number(a.distance_from_route_km ?? Infinity) - Number(b.distance_from_route_km ?? Infinity) || comparablePrice(a) - comparablePrice(b);
+      }).slice(0, MAX_INTERVAL_CANDIDATES);
       if (!candidates.length) gaps.push(target);
       else selected.push(...candidates);
     }
     return { items: [...new Map(selected.map((item) => [item.id, item])).values()], gaps };
   }
-  function selectPoiItems(pois = {}, { display = {}, interval = "all", routeDistanceM, fuelPlan = {} } = {}) {
+  function intervalFor(category, options) {
+    const selected = (options.intervals || {})[category] ?? options.interval ?? "all";
+    if (selected !== "custom") return selected;
+    const custom = Number((options.customIntervals || {})[category] ?? options.customInterval);
+    return Number.isFinite(custom) && custom > 0 ? String(custom) : "all";
+  }
+  function selectPoiItems(pois = {}, options = {}) {
+    const { display = {}, routeDistanceM, fuelPlan = {} } = options;
     const available = allAvailable(pois, display).sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start) || String(a.id).localeCompare(String(b.id)));
     const routeDistanceKm = Number(routeDistanceM) / 1e3;
-    let selected = available;
-    let gaps = [];
-    if (interval !== "all") {
-      const categories = new Set(available.map((item) => item.category));
-      const all = [];
-      for (const category of categories) {
-        const categoryItems = available.filter((item) => item.category === category);
-        const result = interval === "range" ? intervalItems(categoryItems, reachableRangeKm(fuelPlan), routeDistanceKm) : intervalItems(categoryItems, Number(interval), routeDistanceKm);
-        all.push(...result.items);
-        gaps.push(...result.gaps.map((km) => ({ category, km })));
+    const selected = [], gaps = [];
+    for (const category of CATEGORIES) {
+      const categoryItems = available.filter((item) => item.category === category);
+      if (!categoryItems.length) continue;
+      const interval = intervalFor(category, options);
+      if (interval === "all") {
+        selected.push(...categoryItems);
+        continue;
       }
-      selected = all.sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start));
+      const result = interval === "range" ? intervalItems(categoryItems, reachableRangeKm(fuelPlan), routeDistanceKm) : intervalItems(categoryItems, Number(interval), routeDistanceKm);
+      selected.push(...result.items);
+      gaps.push(...result.gaps.map((km) => ({ category, km })));
     }
-    return { items: selected, gaps, availableCount: available.length, requested: [...requestedPoiCategories(pois)] };
+    const byCategory = Object.fromEntries(CATEGORIES.map((category) => [category, { available: available.filter((item) => item.category === category).length, selected: selected.filter((item) => item.category === category).length }]));
+    return { items: selected.sort((a, b) => Number(a.km_from_start) - Number(b.km_from_start) || String(a.id).localeCompare(String(b.id))), gaps, availableCount: available.length, byCategory, requested: [...requestedPoiCategories(pois)] };
   }
-  var POI_INTERVALS = ["all", "250", "500", "750", "range"];
 
   // src/leaflet-css.js
   var LEAFLET_CSS = `/* required styles */
@@ -31430,6 +31506,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
   var FUEL_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l", "fuel_level_mode"];
   var emptyFuelValues = () => ({ fuel_level_l: "", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "", fuel_level_mode: "liters" });
   var fuelStorageKey = (entryId, profileId) => `camper-route-planner:fuel:${String(entryId)}:${String(profileId)}`;
+  var poiDisplayStorageKey = (entryId) => `camper-route-planner:poi-display:${String(entryId)}`;
+  var defaultPoiDisplay = () => ({ parking: false, fuel: false, fuelInterval: "500", parkingInterval: "100", fuelCustom: "400", parkingCustom: "100", expanded: false });
+  function readPoiDisplay(entryId) {
+    const empty = defaultPoiDisplay();
+    try {
+      const stored = JSON.parse(globalThis.localStorage?.getItem(poiDisplayStorageKey(entryId)) || "null");
+      if (stored && typeof stored === "object") return { ...empty, ...Object.fromEntries(Object.keys(empty).filter((key) => key !== "expanded").map((key) => [key, stored[key] ?? empty[key]])) };
+    } catch (_error) {
+    }
+    return empty;
+  }
+  function writePoiDisplay(entryId, values2) {
+    try {
+      globalThis.localStorage?.setItem(poiDisplayStorageKey(entryId), JSON.stringify(Object.fromEntries(Object.entries(values2).filter(([key]) => key !== "expanded"))));
+    } catch (_error) {
+    }
+  }
   function readFuelValues(entryId, profile) {
     const empty = emptyFuelValues();
     if (!profile?.profile_id) return empty;
@@ -31517,7 +31610,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const trafficLabel = translate2(`trafficMode.${trafficMode}`);
     return `<details class="route-details restrictions" open><summary><h3>${translate2("trafficRestrictions")}</h3></summary><p class="subtle">${escapeHtml(trafficLabel.startsWith("trafficMode.") ? translate2("trafficMode.off") : trafficLabel)}</p>${groups}${notes}</details>`;
   }
-  function renderPois(result, translate2, selection, expanded = false) {
+  function renderPois(result, translate2, selection, expanded = false, language = "en") {
     const pois = result?.metadata?.pois;
     if (!pois || typeof pois !== "object") return "";
     const items = selection?.items || [];
@@ -31527,13 +31620,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const visible = expanded ? items : items.slice(0, 15);
     const rows = visible.map((item) => {
       const category = item.category === "fuel" ? translate2("poiFuelStation") : translate2("poiParking");
-      const prices = Array.isArray(item.prices) ? item.prices.map((price) => `${price.price} ${price.currency}/${price.fuel_type}`).join(", ") : "";
+      const prices = Array.isArray(item.prices) ? item.prices.map((price) => {
+        const value = Number(price?.price);
+        return Number.isFinite(value) ? `${new Intl.NumberFormat(language, { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value)} ${price.currency || "EUR"}/${price.fuel_type || "diesel"}` : "";
+      }).filter(Boolean).join(", ") : "";
       const details = [item.brand, item.country, item.distance_from_route_km != null ? `${item.distance_from_route_km} km ab Route` : "", prices].filter(Boolean).join(" \xB7 ");
       return `<li class="route-poi route-poi-${escapeHtml(item.category || "parking")}" data-poi-id="${escapeHtml(item.id || "")}"><span class="poi-badge" aria-hidden="true">${item.category === "fuel" ? "F" : "P"}</span><span><b>${escapeHtml(item.name || category)}</b><small>${escapeHtml(category)} \xB7 ${escapeHtml(Number(item.km_from_start).toFixed(1))} km ${translate2("poiDistance")}${details ? ` \xB7 ${escapeHtml(details)}` : ""}</small></span></li>`;
     }).join("");
     const more = items.length > visible.length ? `<button type="button" data-action="poi-more">${translate2("poiMore")} (${items.length - visible.length})</button>` : expanded && availableCount > items.length ? `<p class="subtle">${translate2("poiFilteredCount")} ${items.length}/${availableCount}</p>` : "";
     const gaps = selection?.gaps?.length ? `<p class="notice">${translate2("poiIntervalGaps")}: ${selection.gaps.map((gap) => `${Math.round(gap.km)} km`).join(", ")}</p>` : "";
     return `<section class="route-pois"><div class="route-pois-heading"><h3>${translate2("alongRoute")}</h3><span class="subtle">${items.length}/${availableCount}</span></div><ul>${rows}</ul>${more}${gaps}</section>`;
+  }
+  function renderPoiDisplayControls(result, translate2, state) {
+    const requested = requestedPoiCategories(result?.metadata?.pois || {});
+    if (!requested.size) return "";
+    const optionList = (category, selected) => (POI_INTERVALS[category] || []).map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${translate2(category === "fuel" ? `poiInterval.${value}` : `poiParkingInterval.${value}`)}</option>`).join("");
+    const custom = (category) => state.poiDisplay[`${category}Interval`] === "custom" ? `<label>${translate2("poiCustomDistance")}<input type="number" min="1" max="5000" step="1" data-poi-display="${category}Custom" value="${escapeHtml(state.poiDisplay[`${category}Custom`])}"></label>` : "";
+    return `<div class="poi-display"><b>${translate2("poiDisplay")}</b><p class="subtle">${translate2("poiDisplayLocal")}</p>${requested.has("fuel") ? `<label><input type="checkbox" data-poi-display="fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelInterval")}<select data-poi-display="fuelInterval">${optionList("fuel", state.poiDisplay.fuelInterval)}</select></label>${custom("fuel")}` : ""}${requested.has("parking") ? `<label><input type="checkbox" data-poi-display="parking"> <span>${translate2("showParking")}</span></label><label>${translate2("poiParkingInterval")}<select data-poi-display="parkingInterval">${optionList("parking", state.poiDisplay.parkingInterval)}</select></label>${custom("parking")}` : ""}</div>`;
   }
   function renderFuelPlan(result, profile, fuelValues, translate2, language) {
     const enteredFuelValues = Object.fromEntries(Object.entries(fuelValues || {}).filter(([, value]) => value !== "" && value != null));
@@ -31597,7 +31700,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, poiDisplay: { parking: false, fuel: false, interval: "all", expanded: false }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "", poi_parking: false, poi_fuel: false, poi_fuel_type: "diesel" }, poiDisplay: defaultPoiDisplay(), result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -31863,6 +31966,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.provider = String(profiles?.provider || this._state.provider || "");
         this._state.routes = Array.isArray(routes?.routes) ? routes.routes : [];
         this._state.mapConfig = mapConfig || { provider: "none", status: "not_configured" };
+        this._state.poiDisplay = { ...defaultPoiDisplay(), ...readPoiDisplay(this._config.entry_id) };
         if (!this._state.profileId && this._state.profiles[0]) this._state.profileId = this._state.profiles[0].profile_id;
         this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
         if (this._state.profileId && !this._state.originManual && !this._state.result) this.useTrackerLocation(false, generation);
@@ -32440,7 +32544,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const pois = result?.metadata?.pois || {};
       const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId) || {};
       const fuelPlan = calculateFuelPlan(1, { ...profile, ...this._state.fuelValues });
-      return selectPoiItems(pois, { display: this._state.poiDisplay, interval: this._state.poiDisplay.interval, routeDistanceM: result?.distance_m, fuelPlan: { rangeKm: fuelPlan.rangeKm } });
+      return selectPoiItems(pois, { display: this._state.poiDisplay, intervals: { fuel: this._state.poiDisplay.fuelInterval, parking: this._state.poiDisplay.parkingInterval }, customIntervals: { fuel: this._state.poiDisplay.fuelCustom, parking: this._state.poiDisplay.parkingCustom }, routeDistanceM: result?.distance_m, fuelPlan: { rangeKm: fuelPlan.rangeKm } });
     }
     visiblePois(result = this._state.result) {
       const selection = this.poiSelection(result);
@@ -32592,7 +32696,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       legacyGrid?.replaceWith(this.htmlNodes(`<section class="stations-panel"><div class="stations-heading"><h3>${translate2("stations")}</h3><span class="subtle">${translate2("stationsHint")}</span></div><div class="stations-list">${stations.map((station, index) => this.renderStation(station, index, translate2, stations.length)).join("")}</div><button type="button" data-action="add-station" ${stations.length >= 7 ? "disabled" : ""}>\uFF0B ${translate2("addWaypoint")}</button></section>`)[0]);
       const optionAnchor = this.shadowRoot.querySelector(".map-section");
       optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate2("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate2("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate2("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate2("avoidTunnels")}</span></label></div></details>`);
-      optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate2("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate2("poiDiesel")}</option></select></label><p class="subtle">${translate2("poiNextCalculation")}</p>${result && requestedPoiCategories(result.metadata?.pois || {}).size ? `<div class="poi-display"><b>${translate2("poiDisplay")}</b><label><input type="checkbox" data-poi-display="parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-poi-display="fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiInterval")}<select data-poi-display="interval">${POI_INTERVALS.map((value) => `<option value="${value}">${translate2(`poiInterval.${value}`)}</option>`).join("")}</select></label><p class="subtle">${translate2("poiDisplayLocal")}</p></div>` : ""}</div>`);
+      optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="poi-options"><b>${translate2("alongRoute")}</b><label><input type="checkbox" data-route-option="poi_parking"> <span>${translate2("showParking")}</span></label><label><input type="checkbox" data-route-option="poi_fuel"> <span>${translate2("showFuel")}</span></label><label>${translate2("poiFuelType")}<select data-route-option="poi_fuel_type"><option value="diesel">${translate2("poiDiesel")}</option></select></label><p class="subtle">${translate2("poiNextCalculation")}</p>${result ? renderPoiDisplayControls(result, translate2, this._state) : ""}</div>`);
       if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate2("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate2("requestDiagnosticsArmed")}</span>` : ""}</div>`);
       if (diagnosticsVisible && requestDiagnostic) {
         const diagnosticText = JSON.stringify(requestDiagnostic, null, 2);
@@ -32608,7 +32712,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       });
       const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
       const poiSelection = result && !this._state.resultStale ? this.poiSelection(result) : null;
-      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2, poiSelection, this._state.poiDisplay.expanded) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
+      fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result && !this._state.resultStale ? renderPois(result, translate2, poiSelection, this._state.poiDisplay.expanded, language) : ""}${result ? renderRestrictions(result, translate2) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate2, language)}`);
       if (result && this._state.resultStale) this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<p class="notice" data-stale-route>${translate2("staleRoute")}</p>`);
       this.shadowRoot.querySelectorAll(".saved-row").forEach((row) => {
         const exportButton = row.querySelector('button[data-action="export"][data-mode="route"]');
@@ -32733,9 +32837,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.shadowRoot.querySelectorAll("[data-poi-display]").forEach((input) => {
         const key = input.dataset.poiDisplay;
         if (input.type === "checkbox") input.checked = this._state.poiDisplay[key] === true;
-        else input.value = this._state.poiDisplay[key] || "all";
+        else input.value = this._state.poiDisplay[key] ?? "";
         input.addEventListener("change", () => {
-          this._state.poiDisplay = { ...this._state.poiDisplay, [key]: input.type === "checkbox" ? input.checked : input.value, expanded: false };
+          let value = input.type === "checkbox" ? input.checked : input.value;
+          if (key.endsWith("Custom")) {
+            const number = Number(value);
+            value = Number.isFinite(number) && number > 0 && number <= 5e3 ? String(Math.round(number)) : this._state.poiDisplay[key] || (key.startsWith("fuel") ? "400" : "100");
+          }
+          this._state.poiDisplay = { ...this._state.poiDisplay, [key]: value, expanded: false };
+          writePoiDisplay(this._config.entry_id, this._state.poiDisplay);
           this.render();
         });
       });
@@ -32845,7 +32955,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
   };
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions,.export-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,.export-actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.route-options{margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-options summary{cursor:pointer;min-height:28px}.option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.option-grid label{display:grid;gap:4px;min-width:0}.avoid-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px}.avoid-options label{display:flex;align-items:center;gap:8px;min-height:42px;line-height:1.25;overflow-wrap:anywhere}.avoid-options input{flex:0 0 auto;min-width:22px;min-height:22px}.fuel-profile-facts,.fuel-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.fuel-profile-facts span{display:grid;gap:2px;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.fuel-input{display:grid;gap:4px;min-width:0;line-height:1.25}.fuel-input input{width:100%}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1;min-width:0}.actions>*{flex:1 1 auto;min-width:0}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
-  var POI_STYLES = `.poi-options{display:grid;gap:8px;margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.poi-options label{display:flex;align-items:center;gap:8px;min-height:40px;line-height:1.25}.poi-options input{flex:0 0 auto;min-width:22px;min-height:22px}.poi-options select{max-width:220px}.route-pois{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-pois ul{display:grid;gap:0;margin:0;padding:0;list-style:none}.route-poi{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.route-poi:first-child{border-top:0}.route-poi small{display:block;overflow-wrap:anywhere}.poi-badge{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;color:#fff;font-weight:700;background:#1565c0}.route-poi-fuel .poi-badge{background:#7b1fa2}`;
+  var POI_STYLES = `.poi-options{display:grid;gap:8px;margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.poi-options label{display:flex;align-items:center;gap:8px;min-height:40px;line-height:1.25}.poi-options input{flex:0 0 auto;min-width:22px;min-height:22px}.poi-options select{max-width:220px}.poi-display{display:grid;gap:8px;margin-top:8px;padding:10px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.poi-display label{display:flex;align-items:center;gap:8px;min-height:38px}.poi-display input[type=number]{max-width:160px}.route-pois{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-pois-heading{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.route-pois ul{display:grid;gap:0;margin:0;padding:0;list-style:none}.route-poi{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.route-poi:first-child{border-top:0}.route-poi small{display:block;overflow-wrap:anywhere}.poi-badge{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;color:#fff;font-weight:700;background:#1565c0}.route-poi-fuel .poi-badge{background:#7b1fa2}.crp-marker-poi-cluster span{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#455a64;color:#fff;border:3px solid #fff;box-shadow:0 2px 5px #0008;font-size:.78rem;font-weight:700}`;
   var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.stations-panel{grid-column:1/-1;border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}.stations-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.stations-list{display:grid}.station-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 0;border-top:1px solid var(--divider-color,#ddd)}.station-row:first-child{border-top:0}.station-position{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--secondary-background-color,#f5f5f5);font-weight:700}.station-copy{display:grid;gap:3px;min-width:0}.station-copy b{font-weight:700;overflow-wrap:anywhere}.station-copy small{font-weight:400}.station-role{color:var(--secondary-text-color);font-size:.78rem}.station-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.station-actions button{min-height:36px;padding:6px 9px}.station-editor{grid-column:2/-1;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.station-editor-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.station-editor-actions button{min-width:100px}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-narrow) .station-row{grid-template-columns:auto minmax(0,1fr)}:host(.crp-narrow) .station-actions{grid-column:2;justify-content:flex-start}:host(.crp-narrow) .station-editor{grid-column:1/-1}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
