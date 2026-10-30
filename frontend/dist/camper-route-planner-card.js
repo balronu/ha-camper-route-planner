@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.2; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.3; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -31410,6 +31410,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._searchRequestIds = /* @__PURE__ */ new Map();
       this._fitMapOnNextRender = false;
       this._pendingViewState = null;
+      this._viewScrollTracking = /* @__PURE__ */ new Map();
+      this._viewScrollListeners = /* @__PURE__ */ new Map();
       this._entryDiscoveryConnection = null;
       this._entryDiscoveryPromise = null;
     }
@@ -31808,7 +31810,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const capture = (element) => {
         if (!element || seen.has(element)) return;
         seen.add(element);
-        scrollTargets.push({ element, left: element.scrollLeft, top: element.scrollTop });
+        const tracked = this._viewScrollTracking.get(element);
+        scrollTargets.push({
+          element,
+          left: tracked?.left ?? element.scrollLeft,
+          top: tracked?.top ?? element.scrollTop
+        });
       };
       let ancestor = this.parentElement;
       while (ancestor) {
@@ -31817,6 +31824,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       capture(document.scrollingElement);
       return { activeAction, scrollTargets };
+    }
+    trackViewScrollTargets() {
+      const targets = [];
+      let ancestor = this.parentElement;
+      while (ancestor) {
+        if (ancestor.scrollHeight > ancestor.clientHeight || ancestor.scrollWidth > ancestor.clientWidth) targets.push(ancestor);
+        ancestor = ancestor.parentElement;
+      }
+      if (document.scrollingElement) targets.push(document.scrollingElement);
+      targets.forEach((element) => {
+        if (this._viewScrollListeners.has(element)) return;
+        const record = { left: element.scrollLeft, top: element.scrollTop };
+        this._viewScrollTracking.set(element, record);
+        const listener = () => {
+          record.left = element.scrollLeft;
+          record.top = element.scrollTop;
+        };
+        const eventTarget = element === document.scrollingElement ? window : element;
+        eventTarget.addEventListener("scroll", listener, { passive: true });
+        this._viewScrollListeners.set(element, listener);
+      });
     }
     restoreViewState(state) {
       if (!state) return;
@@ -32206,6 +32234,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         }, mapOptions);
       }
       this.bindEvents();
+      this.trackViewScrollTargets();
       this._fitMapOnNextRender = false;
       this.restoreInputState(inputState);
       this.restoreViewState(viewState);
