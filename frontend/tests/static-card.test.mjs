@@ -30,6 +30,9 @@ test("frontend labels the provider returned by the backend", () => {
 test("calculation errors use stable provider codes and preserve stale results", () => {
   assert.match(source, /providerErrorMessage\(error, language\)/);
   assert.match(source, /resultStale = Boolean\(this\._state\.result\)/);
+  assert.match(source, /getRequestDiagnostic\(this\._hass/);
+  assert.match(source, /requestDiagnostic = this\._state\.requestDiagnostic/);
+  assert.match(services, /camper_route_planner\/get_request_diagnostic/);
 });
 
 test("installable integration contains the same built bundle", () => {

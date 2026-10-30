@@ -1,6 +1,6 @@
 import { languageOf, t } from "./localization.js";
 import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
-import { armRequestDiagnostics, callWebsocket, calculateRoute, deliverGpxExport, disarmRequestDiagnostics, estimateTollsV2, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
+import { armRequestDiagnostics, callWebsocket, calculateRoute, deliverGpxExport, disarmRequestDiagnostics, estimateTollsV2, exportGpx, geocode, getRequestDiagnostic, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "./toll-display.js";
@@ -148,7 +148,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = normalizeConfig();
-    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+    this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
     this._cardExpanded = false;
     this._connection = null;
     this._reverseTimers = new Map();
@@ -202,6 +202,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   async disableDeveloperDiagnostics() {
     this._state.requestDiagnosticsArmed = false;
     this._state.diagnosticToken = "";
+    this._state.requestDiagnostic = null;
     this._state.diagnosticCopyStatus = "";
     if (this._state.result?.request_diagnostic) {
       this._state.result = { ...this._state.result, request_diagnostic: null };
@@ -315,7 +316,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const language = languageOf(this._hass);
     if (!isValidWaypoint(this._state.origin) || !isValidWaypoint(this._state.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point))) { this._state.error = t(language, "invalidCoordinates"); this.render(); return; }
     if (!this._state.profileId) { this._state.error = t(language, "noProfiles"); this.render(); return; }
-    this._state.busy = true; this._state.error = ""; this.render();
+    this._state.busy = true; this._state.error = ""; this._state.requestDiagnostic = null; this.render();
     try {
       if (this._state.routeOptions.alternatives && this._state.waypoints.length) throw new Error(t(language, "alternativesNoWaypoints"));
       const routeOptions = normalizeRouteOptions(this._state.routeOptions);
@@ -334,7 +335,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
       this._state.diagnosticCopyStatus = "";
       this._state.resultStale = false;
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
-    } catch (error) { this._state.requestDiagnosticsArmed = false; this._state.diagnosticToken = ""; this._state.error = providerErrorMessage(error, language); this._state.resultStale = Boolean(this._state.result); }
+    } catch (error) {
+      this._state.requestDiagnosticsArmed = false; this._state.diagnosticToken = "";
+      this._state.error = providerErrorMessage(error, language);
+      this._state.resultStale = Boolean(this._state.result);
+      if (this.isDeveloperDiagnosticsVisible()) {
+        try { this._state.requestDiagnostic = (await getRequestDiagnostic(this._hass, { entry_id: this._config.entry_id }))?.diagnostic || null; } catch (_diagnosticError) { this._state.requestDiagnostic = null; }
+      }
+    }
     this._state.busy = false; this.render();
   }
 
@@ -350,7 +358,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   async copyRequestDiagnostic() {
-    const diagnostic = this._state.result?.request_diagnostic;
+    const diagnostic = this._state.requestDiagnostic || this._state.result?.request_diagnostic;
     if (!diagnostic) return;
     const text = JSON.stringify(diagnostic, null, 2);
     try {
@@ -735,7 +743,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   renderPoint(point, target, index = 0) { const address = isValidWaypoint(point) ? (point.address || t(languageOf(this._hass), "addressUnavailable")) : ""; const coordinate = (field) => this._inputDrafts.get(`point:${target}:${index}:${field}`) ?? formatCoordinate(point[field]); return `<div class="point-row"><label>${t(languageOf(this._hass), "latitude")}<input data-point="${target}" data-index="${index}" data-field="latitude" type="number" step="any" value="${escapeHtml(coordinate("latitude"))}"></label><label>${t(languageOf(this._hass), "longitude")}<input data-point="${target}" data-index="${index}" data-field="longitude" type="number" step="any" value="${escapeHtml(coordinate("longitude"))}"></label>${target === "waypoint" ? `<button data-action="up" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveUp")}">↑</button><button data-action="down" data-index="${index}" aria-label="${t(languageOf(this._hass), "moveDown")}">↓</button><button data-action="remove" data-index="${index}">${t(languageOf(this._hass), "remove")}</button>` : ""}</div>${address ? `<small class="point-address">${escapeHtml(address)}</small>` : ""}`; }
 
   render() {
-    const language = languageOf(this._hass); const translate = (key) => t(language, key); const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId); const result = this._state.result; const diagnosticsVisible = this.isDeveloperDiagnosticsVisible();
+    const language = languageOf(this._hass); const translate = (key) => t(language, key); const profile = this._state.profiles.find((item) => item.profile_id === this._state.profileId); const result = this._state.result; const requestDiagnostic = this._state.requestDiagnostic || result?.request_diagnostic; const diagnosticsVisible = this.isDeveloperDiagnosticsVisible();
     const currentShell = this.shadowRoot?.querySelector("details.route-planner-shell");
     if (currentShell) this._cardExpanded = Boolean(currentShell.open);
     const inputState = this.captureInputState();
@@ -757,7 +765,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const optionAnchor = this.shadowRoot.querySelector(".map-section");
     optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate("routeOptions")}</h3></summary><div class="option-grid"><label>${translate("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate("trafficMode.off")}</option><option value="live">${translate("trafficMode.live")}</option><option value="forecast">${translate("trafficMode.forecast")}</option></select></label><label>${translate("routeType")}<select data-route-option="route_type"><option value="fastest">${translate("fastest")}</option><option value="eco">${translate("eco")}</option></select></label><label>${translate("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate("avoidTunnels")}</span></label></div></details>`);
     if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate("requestDiagnosticsArmed")}</span>` : ""}</div>`);
-    if (diagnosticsVisible && result?.request_diagnostic) { const diagnosticText = JSON.stringify(result.request_diagnostic, null, 2); this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate("requestDiagnosticsResult")}</summary><p class="subtle">${translate("requestDiagnosticsPrivacy")}</p><button type="button" data-action="copy-diagnostics">${translate("requestDiagnosticsCopy")}</button>${this._state.diagnosticCopyStatus ? `<p class="subtle" role="status">${escapeHtml(this._state.diagnosticCopyStatus)}</p>` : ""}<textarea data-diagnostic-copy readonly rows="10" aria-label="${translate("requestDiagnosticsResult")}">${escapeHtml(diagnosticText)}</textarea></details>`); }
+    if (diagnosticsVisible && requestDiagnostic) { const diagnosticText = JSON.stringify(requestDiagnostic, null, 2); this.shadowRoot.querySelector(".result")?.insertAdjacentHTML("afterbegin", `<details class="request-diagnostic" open><summary>${translate("requestDiagnosticsResult")}</summary><p class="subtle">${translate("requestDiagnosticsPrivacy")}</p><button type="button" data-action="copy-diagnostics">${translate("requestDiagnosticsCopy")}</button>${this._state.diagnosticCopyStatus ? `<p class="subtle" role="status">${escapeHtml(this._state.diagnosticCopyStatus)}</p>` : ""}<textarea data-diagnostic-copy readonly rows="10" aria-label="${translate("requestDiagnosticsResult")}">${escapeHtml(diagnosticText)}</textarea></details>`); }
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => { const key = input.dataset.routeOption; if (key === "avoid") input.checked = this._state.routeOptions.avoid.includes(input.value); else input.value = key === "depart_at" || key === "arrive_at" ? isoDateTimeToLocalInput(this._state.routeOptions[key]) : this._state.routeOptions[key] ?? ""; });
     const fuelHost = result ? this.shadowRoot.querySelector(".result") : this.shadowRoot.querySelector(".map-section");
     fuelHost?.insertAdjacentHTML(result ? "beforeend" : "beforebegin", `${result ? renderRestrictions(result, translate) : ""}${renderFuelPlan(result, profile, this._state.fuelValues, translate, language)}`);
