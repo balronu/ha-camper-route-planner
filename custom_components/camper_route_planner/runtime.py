@@ -270,6 +270,7 @@ class RuntimeData:
                 "retryable": exc.retryable,
                 "restriction_codes": restriction_codes,
                 "restriction_count": details.get("restriction_count", len(restriction_hits) if isinstance(restriction_hits, list) else 0),
+                "response_shape": details.get("response_shape"),
                 "transport": safe_transport,
             },
         }
@@ -336,6 +337,7 @@ class RuntimeData:
                     "restriction_count": details.get("restriction_count"),
                     "waypoint_index": details.get("waypoint_index"),
                     "coordinates": details.get("coordinates"),
+                    "response_shape": details.get("response_shape"),
                 }
             raise
         api_version = str(result.metadata.get("api_version") or ("v3" if self.config_values.get(CONF_PROVIDER) == PROVIDER_NAKORDONI_MOTORHOME_V3 else "v2"))

@@ -151,6 +151,73 @@ def _number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) else None
 
 
+def _safe_field_type(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    return "other"
+
+
+def _response_shape_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
+    """Describe parser-relevant fields without retaining response values."""
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else None
+    route = data.get("route") if isinstance(data, dict) and isinstance(data.get("route"), dict) else None
+    vehicle = data.get("vehicle") if isinstance(data, dict) and isinstance(data.get("vehicle"), dict) else None
+    expected = {
+        "api_version": payload.get("api_version", data.get("api_version") if isinstance(data, dict) else None),
+        "data": payload.get("data"),
+        "data.route": data.get("route") if isinstance(data, dict) else None,
+        "data.vehicle": data.get("vehicle") if isinstance(data, dict) else None,
+        "data.route.geometry": route.get("geometry") if isinstance(route, dict) else None,
+        "data.route.distance_m": route.get("distance_m") if isinstance(route, dict) else None,
+        "data.route.duration_s": route.get("duration_s") if isinstance(route, dict) else None,
+        "data.route.legal": route.get("legal") if isinstance(route, dict) else None,
+        "data.route.restriction_hits": route.get("restriction_hits") if isinstance(route, dict) else None,
+    }
+    for field in ("type", "height_m", "width_m", "length_m", "weight_t", "axles"):
+        expected[f"data.vehicle.{field}"] = vehicle.get(field) if isinstance(vehicle, dict) else None
+    invalid_fields: list[str] = []
+    if expected["api_version"] != V3_API_VERSION:
+        invalid_fields.append("api_version")
+    if not isinstance(data, dict):
+        invalid_fields.append("data")
+    if not isinstance(route, dict):
+        invalid_fields.append("data.route")
+    if not isinstance(vehicle, dict):
+        invalid_fields.append("data.vehicle")
+    elif vehicle.get("type") != "motorhome":
+        invalid_fields.append("data.vehicle.type")
+    for field in ("height_m", "width_m", "length_m", "weight_t", "axles"):
+        if _number(vehicle.get(field) if isinstance(vehicle, dict) else None) is None:
+            invalid_fields.append(f"data.vehicle.{field}")
+    if isinstance(route, dict):
+        if not isinstance(route.get("geometry"), (str, dict, list)):
+            invalid_fields.append("data.route.geometry")
+        if _number(route.get("distance_m")) is None or _number(route.get("distance_m")) <= 0:
+            invalid_fields.append("data.route.distance_m")
+        if _number(route.get("duration_s")) is None or _number(route.get("duration_s")) <= 0:
+            invalid_fields.append("data.route.duration_s")
+        if not isinstance(route.get("legal"), bool):
+            invalid_fields.append("data.route.legal")
+        if not isinstance(route.get("restriction_hits"), list):
+            invalid_fields.append("data.route.restriction_hits")
+    return {
+        "field_types": {field: _safe_field_type(value) for field, value in expected.items()},
+        "missing_fields": [field for field, value in expected.items() if value is None],
+        "invalid_fields": list(dict.fromkeys(invalid_fields)),
+        "parser_exception": None,
+    }
+
+
 _COORDINATE_LIKE = re.compile(r"(?:-?\d{1,3}[.,]\d{3,}|https?://|@)")
 
 
@@ -342,7 +409,27 @@ class NakordoniRouteAdapterV3:
             raise ProviderError("Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es später erneut.", code="network_error", retryable=True) from exc
         except ValueError as exc:
             raise ProviderError("Der Routingdienst hat keine gültige Antwort geliefert. Bitte versuche es später erneut.", code="invalid_response") from exc
-        return self.normalize_response(payload, request=request, synthetic=False)
+        try:
+            return self.normalize_response(payload, request=request, synthetic=False)
+        except ProviderError as exc:
+            if exc.code != "invalid_response":
+                raise
+            details = dict(exc.details) if isinstance(exc.details, dict) else {}
+            transport = payload.get("transport") if isinstance(payload.get("transport"), dict) else {}
+            if transport:
+                details["transport"] = {
+                    key: transport[key]
+                    for key in ("status", "content_type", "response_type", "response_length", "elapsed_s", "attempts", "route_source")
+                    if key in transport
+                }
+            headers = payload.get("headers") if isinstance(payload.get("headers"), dict) else {}
+            request_id = safe_request_id(payload.get("request_id") or headers.get("X-Request-Id") or headers.get("x-request-id"))
+            if request_id:
+                details["request_id"] = request_id
+            if payload.get("request_id_mismatch") is True:
+                details["request_id_mismatch"] = True
+            status = payload.get("status")
+            raise ProviderError(str(exc), code=exc.code, status=status if isinstance(status, int) and not isinstance(status, bool) else None, details=details) from exc
 
     def normalize_response(self, payload: dict[str, Any], *, request: RouteRequest, synthetic: bool = True) -> RouteResult:
         if payload.get("ok") is not True:
@@ -410,4 +497,10 @@ class NakordoniRouteAdapterV3:
         except ProviderError:
             raise
         except (KeyError, TypeError, ValueError, IndexError, ValidationError) as exc:
-            raise ProviderError("Invalid or incomplete NaKordoni v3 response", code="invalid_response") from exc
+            diagnostic = _response_shape_diagnostic(payload)
+            diagnostic["parser_exception"] = type(exc).__name__
+            raise ProviderError(
+                "Invalid or incomplete NaKordoni v3 response",
+                code="invalid_response",
+                details={"response_shape": diagnostic},
+            ) from exc

@@ -18,6 +18,12 @@ Die Ursache bleibt **unbestätigt**. Insbesondere ist nicht nachgewiesen, ob
 NaKordoni eine fehlerhafte Antwort, eine gültige Fehlerantwort, eine gültige
 Route oder eine unvollständige/abgebrochene Transportantwort geliefert hat.
 
+Die bestehende One-shot-Diagnose war für diesen Fehler nicht ausreichend: Der
+Parserfehler wurde nach dem Transport ausgelöst, aber der Payload-Kontext wurde
+beim Erzeugen des generischen `ProviderError` verworfen. Deshalb konnten
+Status, Content-Type, Antworttyp, Antwortlänge, Dauer und Request-ID den
+administrativen Fehlerbericht nicht erreichen.
+
 ## Codevergleich
 
 Der gemeinsame v3-Parser ist zwischen `v0.1.6-beta.8` und `v0.1.6-beta.10`
@@ -30,6 +36,19 @@ aus Beta.8.
 Die offizielle NaKordoni-v3-Dokumentation beschreibt diese Routendaten als
 Teil des Vertrags. Eine Lockerung der Sicherheitsprüfung wäre deshalb ohne
 eine echte Antwortaufzeichnung nicht vertretbar.
+
+## Diagnose-Patch
+
+Der lokale Patch ergänzt ausschließlich eine wertfreie Response-Shape-Diagnose
+für `invalid_response`. Sie enthält Feldnamen, erkannte JSON-Typen, fehlende
+oder offensichtlich ungültige Pflichtfelder und den Exception-Typ. Sichere
+Transportmetadaten und die validierte Request-ID werden aus dem bereits
+empfangenen Payload weitergereicht. Keine vollständige Providerantwort,
+Authorization-Header, API-Key oder Koordinaten werden in die native HA-
+Dauerdiagnose geschrieben; der bestehende admin-only Request-Snapshot bleibt
+unverändert.
+
+Die eigentliche Routingvalidierung und der Benutzerfehler bleiben unverändert.
 
 ## Regressionen
 
@@ -45,6 +64,10 @@ Zusätzlich werden leere sowie vollständig fehlende optionale POI-Listen
 akzeptiert, ohne eine gültige Route zu verwerfen. Die Tests verwenden nur
 kontrollierte Fixtures und keine echten Provideraufrufe.
 
+Zusätzlich prüft ein Regressionstest, dass ein Parserfehler die sicheren
+Transportdaten und die fehlende Pflichtfeldangabe in der One-shot-Diagnose
+erhält, ohne Antwortwerte oder Geheimnisse zu speichern.
+
 ## Offene Diagnosegrenze
 
 Für eine belastbare Beta.11-Entscheidung muss bei einem ausdrücklich
@@ -55,5 +78,9 @@ HTTP-Status, Content-Type, Antworttyp/-länge, Dauer, Retry-Anzahl,
 `X-Route-Source`, Request-ID, Fehlercode und Restriktionsstatus. Die komplette
 Providerantwort und Zugangsdaten dürfen nicht gespeichert werden.
 
-Bis dieser Nachweis vorliegt, wird kein spekulativer Parser-Fix, kein PR,
-kein Beta.11-Tag und kein Release erstellt.
+Der Patch ist zunächst nur lokal vorbereitet und getestet. Eine Diagnose-Beta
+ist erst nach separater Freigabe erforderlich; bis dahin wird kein PR, kein
+Beta.11-Tag und kein Release erstellt. Nach Installation einer freigegebenen
+Diagnoseversion genügt genau eine bewusst ausgelöste Routenberechnung mit
+bewaffneter One-shot-Diagnose, um Providerantwort und Parserbefund zu
+unterscheiden.
