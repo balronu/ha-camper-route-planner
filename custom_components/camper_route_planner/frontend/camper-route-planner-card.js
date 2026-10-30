@@ -31409,6 +31409,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._preserveInputDraftKeys = /* @__PURE__ */ new Set();
       this._searchRequestIds = /* @__PURE__ */ new Map();
       this._fitMapOnNextRender = false;
+      this._pendingViewState = null;
       this._entryDiscoveryConnection = null;
       this._entryDiscoveryPromise = null;
     }
@@ -31799,6 +31800,45 @@ svg.leaflet-image-layer.leaflet-interactive path {
       });
       return { activeKey, selectionStart: active?.selectionStart, selectionEnd: active?.selectionEnd };
     }
+    captureViewState() {
+      const active = this.shadowRoot?.activeElement;
+      const activeAction = active?.dataset?.action ? { action: active.dataset.action, index: active.dataset.index ?? null } : null;
+      const scrollTargets = [];
+      const seen = /* @__PURE__ */ new Set();
+      const capture = (element) => {
+        if (!element || seen.has(element)) return;
+        seen.add(element);
+        scrollTargets.push({ element, left: element.scrollLeft, top: element.scrollTop });
+      };
+      let ancestor = this.parentElement;
+      while (ancestor) {
+        if (ancestor.scrollHeight > ancestor.clientHeight || ancestor.scrollWidth > ancestor.clientWidth) capture(ancestor);
+        ancestor = ancestor.parentElement;
+      }
+      capture(document.scrollingElement);
+      return { activeAction, scrollTargets };
+    }
+    restoreViewState(state) {
+      if (!state) return;
+      const restore = () => {
+        state.scrollTargets?.forEach(({ element, left, top }) => {
+          if (!element?.isConnected) return;
+          element.scrollLeft = left;
+          element.scrollTop = top;
+        });
+        const activeAction = state.activeAction;
+        if (!activeAction) return;
+        const selector = activeAction.index == null ? `button[data-action="${activeAction.action}"]` : `button[data-action="${activeAction.action}"][data-index="${activeAction.index}"]`;
+        this.shadowRoot?.querySelector(selector)?.focus({ preventScroll: true });
+      };
+      restore();
+      const frame = globalThis.requestAnimationFrame;
+      if (typeof frame === "function") {
+        frame(() => frame(restore));
+      }
+      globalThis.setTimeout?.(restore, 0);
+      globalThis.setTimeout?.(restore, 50);
+    }
     restoreInputState(state) {
       this.shadowRoot?.querySelectorAll("input[data-search-input]").forEach((input2) => {
         const value = this._inputDrafts.get(`${input2.dataset.searchInput}:${input2.dataset.index}`);
@@ -32076,6 +32116,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const currentShell = this.shadowRoot?.querySelector("details.route-planner-shell");
       if (currentShell) this._cardExpanded = Boolean(currentShell.open);
       const inputState = this.captureInputState();
+      const viewState = this._pendingViewState || this.captureViewState();
+      this._pendingViewState = null;
       const oldMap = this.shadowRoot?.querySelector(".crp-map");
       const preserveMap = Boolean(oldMap?.classList.contains("leaflet-container") && this._state.mapConfig?.provider === "carto" && this._state.mapConfig?.status === "configured");
       if (preserveMap) oldMap.remove();
@@ -32166,10 +32208,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this.bindEvents();
       this._fitMapOnNextRender = false;
       this.restoreInputState(inputState);
+      this.restoreViewState(viewState);
       this._preserveInputDraftKeys.clear();
       if (this._cardExpanded) requestAnimationFrame(() => invalidateMapSize(this.shadowRoot?.querySelector(".crp-map")));
     }
     bindEvents() {
+      this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => {
+        const capture = () => {
+          const state = this.captureViewState();
+          if (!state.activeAction) state.activeAction = { action: button.dataset.action, index: button.dataset.index ?? null };
+          this._pendingViewState = state;
+          globalThis.setTimeout?.(() => {
+            if (this._pendingViewState === state) this._pendingViewState = null;
+          }, 0);
+        };
+        button.addEventListener("pointerdown", capture);
+        button.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") capture();
+        });
+      });
       this.shadowRoot.querySelectorAll("[data-route-option]").forEach((input) => input.addEventListener("change", () => {
         const key = input.dataset.routeOption;
         if (key === "avoid") this._state.routeOptions.avoid = [...this.shadowRoot.querySelectorAll('input[data-route-option="avoid"]:checked')].map((item) => item.value);

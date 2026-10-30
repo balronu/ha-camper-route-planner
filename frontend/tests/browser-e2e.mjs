@@ -417,6 +417,15 @@ await touchSelection.close();
 
 const buttonFlow = await preparePage({ width: 390, height: 844 }, "light", null, true);
 await buttonFlow.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.origin.latitude === 47.3769);
+const buttonFlowViewState = await buttonFlow.evaluate(() => {
+  document.body.style.minHeight = "2600px";
+  window.scrollTo(0, 520);
+  const card = document.querySelector("camper-route-planner-card");
+  const add = card?.shadowRoot?.querySelector('button[data-action="add"]');
+  add?.focus();
+  return { scrollY: window.scrollY, active: add === card?.shadowRoot?.activeElement };
+});
+assert.equal(buttonFlowViewState.active, true, "waypoint add button can receive keyboard focus before a DOM rebuild");
 const buttonFlowMap = await buttonFlow.evaluate(() => {
   const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map");
   window.__buttonFlowMapHost = host;
@@ -431,6 +440,8 @@ assert.equal(await buttonFlow.locator('input[data-point="destination"][data-fiel
 assert.equal(await buttonFlow.locator('input[data-point="destination"][data-field="longitude"]').inputValue(), "11.575", "real destination search button returns valid longitude");
 await buttonFlow.locator('.waypoints button[data-action="add"]').click();
 await buttonFlow.locator('.waypoints input[data-search-input="waypoint"][data-index="0"]').waitFor();
+assert.equal(await buttonFlow.evaluate(() => window.scrollY), buttonFlowViewState.scrollY, "adding a waypoint preserves the dashboard scroll position");
+assert.equal(await buttonFlow.evaluate(() => document.querySelector("camper-route-planner-card")?.shadowRoot?.activeElement?.dataset?.action), "add", "adding a waypoint restores focus to the action button");
 await buttonFlow.locator('.waypoints input[data-search-input="waypoint"][data-index="0"]').fill("Waypoint one");
 await buttonFlow.locator('.waypoints button[data-action="search"][data-index="0"]').click();
 await buttonFlow.locator('.waypoints [data-search-results][data-index="0"].search-results').waitFor();
@@ -450,8 +461,11 @@ await buttonFlow.waitForFunction(() => {
 });
 await buttonFlow.locator('.waypoints button[data-action="down"][data-index="0"]').click();
 assert.deepEqual(await buttonFlow.evaluate(() => document.querySelector("camper-route-planner-card")._state.waypoints.map((point) => point.address)), ["Fixture address", "Second fixture address"], "waypoint down button reorders points");
+const beforeWaypointRemovalScroll = await buttonFlow.evaluate(() => window.scrollY);
 await buttonFlow.locator('.waypoints button[data-action="remove"][data-index="1"]').click();
 assert.equal(await buttonFlow.locator('.waypoints input[data-search-input="waypoint"]').count(), 1, "waypoint remove button removes only the selected waypoint");
+await buttonFlow.waitForTimeout(80);
+assert.equal(await buttonFlow.evaluate(() => window.scrollY), beforeWaypointRemovalScroll, "removing a waypoint preserves the current dashboard scroll position");
 const buttonFlowMapAfter = await buttonFlow.evaluate(() => {
   const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map");
   return { sameHost: host === window.__buttonFlowMapHost, leafletId: host?._leaflet_id, tileCount: host?.querySelectorAll(".leaflet-tile").length || 0 };
