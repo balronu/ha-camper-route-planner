@@ -15,7 +15,7 @@ Routenplanung, Fahrzeugdaten und Reiseunterlagen an einem Ort.
 > Die Integration ist ein Planungswerkzeug und ersetzt kein spezialisiertes
 > Wohnmobil-Navigationsgerät.
 >
-> **v0.1.6-beta.14** ist als freiwillige POI-/UX-Vorabversion verfügbar.
+> **v0.1.6-beta.15** ist als freiwillige POI-/UX-Vorabversion verfügbar.
 > Sie trennt POI-Anforderung und Anzeige, schützt historische Routen ohne
 > belastbare POI-Metadaten und verteilt lange POI-Listen über die gesamte
 > Strecke. v0.1.5 bleibt die aktuelle Stable-Version.
@@ -99,7 +99,7 @@ Planner als **Custom Repository**:
 2. `balronu/ha-camper-route-planner` als Repository vom Typ **Integration**
    hinzufügen.
 3. Für produktive Nutzung die reguläre Stable-Version `v0.1.5` installieren.
-   `v0.1.6-beta.14` ist nur über die Vorabversionen bzw. das Release-ZIP für
+   `v0.1.6-beta.15` ist nur über die Vorabversionen bzw. das Release-ZIP für
    Tests vorgesehen. Home Assistant bei Aufforderung neu starten.
 4. Unter **Einstellungen → Geräte & Dienste** die Integration einrichten und
    anschließend die Lovelace-Karte in dein Dashboard aufnehmen.
@@ -134,6 +134,7 @@ nachgeführt; eine Katalogaufnahme wird nicht vorausgesetzt.
 - [v0.1.6-beta.12 Release Notes](docs/releases/v0.1.6-beta.12.md)
 - [v0.1.6-beta.13 Release Notes](docs/releases/v0.1.6-beta.13.md)
 - [v0.1.6-beta.14 Release Notes](docs/releases/v0.1.6-beta.14.md)
+- [v0.1.6-beta.15 Release Notes](docs/releases/v0.1.6-beta.15.md)
 - [NaKordoni-POI-Konzept](docs/NAKORDONI-POI-CONCEPT.md)
 
 ## Lizenz

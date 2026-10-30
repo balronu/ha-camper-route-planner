@@ -182,6 +182,15 @@ test("German and English labels are available", () => {
   assert.match(providerNoteText("Emission class not given: Euro 6 assumed (incl. VAT)", "en"), /not given/);
 });
 
+test("POI interval labels never expose internal keys", () => {
+  for (const key of ["poiInterval.all", "poiInterval.250", "poiInterval.500", "poiInterval.750", "poiInterval.range", "poiInterval.custom", "poiParkingInterval.all", "poiParkingInterval.100", "poiParkingInterval.custom"]) {
+    assert.notEqual(t("de", key), key);
+    assert.notEqual(t("en", key), key);
+  }
+  assert.equal(t("de", "poiParkingInterval.100"), "Alle 100 km");
+  assert.equal(t("en", "poiInterval.custom"), "Custom spacing");
+});
+
 test("toll display separates known provider hints from original text", () => {
   const known = classifyProviderText("This amount includes VAT", "de");
   assert.equal(known.known.length, 1);

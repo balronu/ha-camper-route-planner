@@ -41,3 +41,26 @@ test("range mode does not claim reachability without plausible fuel data", () =>
   const selection = selectPoiItems(pois, { display: { fuel: true }, interval: "range", routeDistanceM: 1_500_000, fuelPlan: {} });
   assert.deepEqual(selection.items, []);
 });
+
+test("custom fuel and parking spacing use separate local windows and cap candidates", () => {
+  const result = selectPoiItems({
+    requested: ["parking", "fuel"],
+    parking: Array.from({ length: 5 }, (_, index) => ({ id: `p${index}`, km_from_start: 390 + index * 5 })),
+    fuel: Array.from({ length: 5 }, (_, index) => ({ id: `f${index}`, km_from_start: 395 + index * 5 })),
+  }, {
+    display: { parking: true, fuel: true },
+    intervals: { parking: "custom", fuel: "custom" },
+    customIntervals: { parking: "400", fuel: "400" },
+    routeDistanceM: 900_000,
+  });
+  assert.equal(result.items.filter((item) => item.category === "parking").length, 3);
+  assert.equal(result.items.filter((item) => item.category === "fuel").length, 3);
+  assert.deepEqual(result.gaps, [{ category: "parking", km: 800 }, { category: "fuel", km: 800 }]);
+});
+
+test("invalid custom spacing falls back to all locally available items", () => {
+  const result = selectPoiItems({ requested: ["fuel"], fuel: [{ id: "f1", km_from_start: 10 }] }, {
+    display: { fuel: true }, intervals: { fuel: "custom" }, customIntervals: { fuel: "" }, routeDistanceM: 100_000,
+  });
+  assert.deepEqual(result.items.map((item) => item.id), ["f1"]);
+});
