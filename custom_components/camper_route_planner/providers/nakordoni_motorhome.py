@@ -276,6 +276,8 @@ class NakordoniMotorhomeProvider:
             raise ProviderError("Nakordoni Motorhome live routing is not configured", code="live_routing_disabled", status=403)
         try:
             payload = await self.transport(parameters)
+        except ProviderError:
+            raise
         except TimeoutError as exc:
             raise ProviderError(
                 f"Nakordoni request timed out after {self.timeout_s:.0f}s "
@@ -361,10 +363,12 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
         "integration_product_not_allowed": "Der Nakordoni-Tarif erlaubt dieses Routingprodukt nicht.",
         "invalid_api_key": "Der Nakordoni-API-Schlüssel ist ungültig.",
         "invalid_grant": "Die Nakordoni-Autorisierung ist abgelaufen oder wurde widerrufen.",
+        "invalid_api_key": "Der Routingdienst hat die Zugangsdaten abgelehnt.",
+        "provider_down": "Der Routingdienst ist vorübergehend nicht verfügbar. Bitte versuche es später erneut.",
     }
     if status == 429:
         code = code if code != "provider_error" else "quota_exceeded"
-    if status in {500, 502, 503, 504}:
+    if status in {408, 500, 502, 503, 504}:
         retryable = True
     else:
         retryable = False
@@ -373,4 +377,24 @@ def provider_error_from_payload(payload: dict[str, Any]) -> ProviderError:
     retry_after = error.get("retry_after") or headers.get("Retry-After") or headers.get("retry-after")
     suffix = f" Retry nach {retry_after} s." if retry_after else ""
     suffix += f" Reset: {reset_at}." if reset_at else ""
-    return ProviderError(messages.get(code, str(error.get("message", "Nakordoni request failed"))) + suffix, code=code, status=status, retryable=retryable)
+    if status == 400:
+        message = "Der Routingdienst hat die Anfrage abgelehnt."
+    elif status == 401:
+        message = "Der Routingdienst hat die Zugangsdaten abgelehnt."
+    elif status == 403:
+        message = "Der Routingdienst hat diese Anfrage nicht erlaubt."
+    elif status == 404:
+        message = "Der Routingdienst-Endpunkt wurde nicht gefunden."
+    elif status == 408:
+        message = "Der Routingdienst hat die Anfrage nicht rechtzeitig beantwortet."
+    elif status in {500, 502, 503, 504}:
+        message = "Der Routingdienst ist vorübergehend nicht verfügbar. Bitte versuche es später erneut."
+    else:
+        message = messages.get(code, "Der Routingdienst hat die Anfrage abgelehnt.")
+    transport = payload.get("transport") if isinstance(payload.get("transport"), dict) else {}
+    safe_transport = {
+        key: transport.get(key)
+        for key in ("status", "content_type", "response_type", "response_length", "elapsed_s", "attempts")
+        if key in transport
+    }
+    return ProviderError(message + suffix, code=code, status=status, retryable=retryable, details={"provider_error_code": code, "retry_after": retry_after, "reset_at": reset_at, "transport": safe_transport})

@@ -90,6 +90,19 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertNotIn("48.1", str(diagnostic))
         self.assertNotIn("K" * 24, str(diagnostic))
 
+    def test_armed_provider_error_diagnostic_contains_safe_transport_fields(self):
+        response = {"ok": False, "status": 502, "error": {"code": "provider_down", "message": "must not be shown"}, "transport": {"status": 502, "content_type": "application/json", "response_type": "json", "response_length": 91, "elapsed_s": 0.2, "attempts": 1}}
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError):
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "via": [{"latitude": 40.0, "longitude": -3.0}], "diagnostic_token": token}))
+        diagnostic = runtime.diagnostics()
+        self.assertEqual(diagnostic["last_request_error"]["error_code"], "provider_down")
+        self.assertEqual(diagnostic["last_request_error"]["transport"]["status"], 502)
+        self.assertEqual(diagnostic["last_request_error"]["waypoint_count"], 1)
+        self.assertNotIn("40.0", str(diagnostic))
+        self.assertNotIn("must not be shown", str(diagnostic))
+
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
         token = runtime.arm_request_diagnostics()
@@ -97,6 +110,11 @@ class Beta3DiagnosticTests(unittest.TestCase):
         snapshot = result["request_diagnostic"]
         self.assertEqual(snapshot["request"]["api_version"], "v3")
         self.assertEqual(snapshot["request"]["parameters"]["via"], "40.0,-3.0")
+        self.assertEqual(snapshot["response"]["api_version"], "v3")
+        self.assertEqual(snapshot["response"]["waypoint_count"], 1)
+        self.assertEqual(snapshot["response"]["http_status"], 200)
+        self.assertIn("response_type", snapshot["response"])
+        self.assertIsNone(snapshot["response"]["error_code"])
         self.assertEqual(snapshot["response"]["distance_m"], 100000)
         self.assertEqual(snapshot["response"]["duration_s"], 3600)
         self.assertNotIn("Authorization", str(snapshot))

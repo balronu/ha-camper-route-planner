@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isValidWaypoint, isoDateTimeToLocalInput, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerApiVersion, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "../src/card-utils.js";
 import { languageOf, t } from "../src/localization.js";
 import { providerNoteText } from "../src/provider-notes.js";
 import { classifyProviderText, formatTollAmount, tollCalculationText, tollCountryName } from "../src/toll-display.js";
@@ -246,4 +246,10 @@ test("navigation requires a valid destination and detects mobile platforms", () 
   assert.equal(navigationPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"), "ios");
   assert.equal(navigationPlatform("Mozilla/5.0 (Linux; Android 15; Pixel)"), "android");
   assert.equal(navigationPlatform("Mozilla/5.0 (X11; Linux x86_64)"), "desktop");
+});
+
+test("provider errors are localized without exposing provider response text", () => {
+  assert.match(providerErrorMessage({ code: "route_restrictions_unresolved", message: "raw location detail" }, "de"), /vollständig zulässige Route/);
+  assert.match(providerErrorMessage({ code: "quota_exceeded" }, "en"), /request limit/);
+  assert.match(providerErrorMessage({ status: 503, message: "raw upstream body" }, "de"), /vorübergehend nicht verfügbar/);
 });

@@ -4,6 +4,7 @@ import unittest
 from custom_components.camper_route_planner.providers.http_transport import ClientTimeout
 
 from custom_components.camper_route_planner.providers.http_transport import NakordoniHttpTransport, NakordoniUsageTransport
+from custom_components.camper_route_planner.models import ProviderError
 from custom_components.camper_route_planner.providers.usage import normalize_usage
 from custom_components.camper_route_planner.providers.nakordoni_motorhome import NakordoniMotorhomeProvider
 
@@ -34,6 +35,32 @@ class FakeSession:
     def get(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         return FakeResponse()
+
+
+class BodyResponse:
+    def __init__(self, body, *, status=200, content_type="application/json"):
+        self.body = body
+        self.status = status
+        self.headers = {"Content-Type": content_type}
+
+    async def read(self):
+        return self.body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+
+class BodySession:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def get(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return self.response
 
 
 class Phase4BHttpTransportTests(unittest.TestCase):
@@ -76,6 +103,35 @@ class Phase4BHttpTransportTests(unittest.TestCase):
     def test_missing_key_is_rejected_before_transport(self):
         with self.assertRaises(ValueError):
             asyncio.run(NakordoniHttpTransport(FakeSession(), "")({}))
+
+    def test_empty_html_and_invalid_json_are_classified_without_body_retention(self):
+        cases = ((b"", "empty_response", "empty"), (b"<html>gateway</html>", "html_response", "html"), (b"{not-json", "invalid_json", "invalid_json"))
+        for body, code, response_type in cases:
+            with self.subTest(code=code):
+                transport = NakordoniHttpTransport(BodySession(BodyResponse(body)), "SECRET-KEY", min_interval_s=0)
+                with self.assertRaises(ProviderError) as ctx:
+                    asyncio.run(transport({}))
+                self.assertEqual(ctx.exception.code, code)
+                self.assertEqual(ctx.exception.details["transport"]["response_type"], response_type)
+                self.assertNotIn("gateway", str(ctx.exception.details))
+
+    def test_http_status_is_preserved_even_when_body_is_not_json(self):
+        for status, code, retryable in ((400, "invalid_request", False), (401, "unauthorized", False), (403, "forbidden", False), (404, "not_found", False), (408, "provider_timeout", True), (429, "quota_exceeded", False), (500, "provider_unavailable", True), (502, "provider_unavailable", True), (503, "provider_unavailable", True), (504, "provider_unavailable", True)):
+            with self.subTest(status=status):
+                transport = NakordoniHttpTransport(BodySession(BodyResponse(b"not-json", status=status, content_type="text/plain")), "SECRET-KEY", min_interval_s=0)
+                with self.assertRaises(ProviderError) as ctx:
+                    asyncio.run(transport({}))
+                self.assertEqual(ctx.exception.status, status)
+                self.assertEqual(ctx.exception.code, code)
+                self.assertEqual(ctx.exception.retryable, retryable)
+                self.assertEqual(ctx.exception.details["transport"]["content_type"], "text/plain")
+
+    def test_structured_error_keeps_only_safe_transport_metadata(self):
+        body = b'{"ok": false, "error": {"code": "quota_exceeded", "message": "private detail"}}'
+        payload = asyncio.run(NakordoniHttpTransport(BodySession(BodyResponse(body, status=429)), "SECRET-KEY", min_interval_s=0)({}))
+        self.assertEqual(payload["status"], 429)
+        self.assertEqual(payload["transport"]["response_length"], len(body))
+        self.assertEqual(payload["transport"]["response_type"], "json")
 
     def test_usage_transport_is_single_bounded_get_without_redirects(self):
         class UsageResponse(FakeResponse):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import re
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
@@ -25,6 +26,7 @@ from .nakordoni_motorhome import (
     NakordoniMotorhomeProvider,
     _fallback_border_data,
     build_motorhome_parameters as build_v2_motorhome_parameters,
+    provider_error_from_payload,
 )
 
 PROVIDER_NAME = "nakordoni_motorhome"
@@ -146,6 +148,28 @@ def _number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) else None
 
 
+_COORDINATE_LIKE = re.compile(r"(?:-?\d{1,3}[.,]\d{3,}|https?://|@)")
+
+
+def _safe_restriction_hits(raw: Any) -> list[dict[str, Any]]:
+    """Keep bounded, non-location restriction facts for admin diagnostics."""
+    if not isinstance(raw, list):
+        return []
+    allowed = ("code", "kind", "type", "name", "segment_index", "waypoint_index", "via_index", "applies")
+    result: list[dict[str, Any]] = []
+    for item in raw[:20]:
+        if not isinstance(item, dict):
+            continue
+        safe = {key: item[key] for key in allowed if key in item and isinstance(item[key], (str, int, float, bool))}
+        for source in ("message", "description"):
+            value = item.get(source)
+            if isinstance(value, str) and value.strip() and not _COORDINATE_LIKE.search(value) and len(value) <= 160:
+                safe[source] = value.strip()
+        if safe:
+            result.append(safe)
+    return result
+
+
 def _warnings(data: dict[str, Any], route: dict[str, Any]) -> tuple[RouteWarning, ...]:
     items: list[Any] = []
     items.extend(route.get("warnings", []) if isinstance(route.get("warnings", []), list) else [])
@@ -232,7 +256,11 @@ def _require_motorhome_confirmation(version: Any, data: dict[str, Any], route: d
     if not isinstance(legal, bool) or not isinstance(hits, list):
         raise ProviderError("NaKordoni response lacks complete restriction confirmation", code="safety_unconfirmed")
     if legal is False or hits:
-        raise ProviderError("NaKordoni route contains unresolved vehicle restrictions", code="route_restrictions_unresolved")
+        raise ProviderError(
+            "Für diese Strecke konnte keine vollständig zulässige Route für dein Fahrzeug bestätigt werden. Prüfe deine Zwischenziele und Fahrzeugangaben.",
+            code="route_restrictions_unresolved",
+            details={"legal": legal, "restriction_count": len(hits), "restriction_hits": _safe_restriction_hits(hits)},
+        )
     return vehicle
 
 
@@ -301,15 +329,21 @@ class NakordoniRouteAdapterV3:
             raise ProviderError("Nakordoni API key is missing", code="missing_api_key", status=401)
         if self.transport is None:
             raise ProviderError("NaKordoni v3 transport is not configured", code="live_routing_disabled", status=403)
-        payload = await self.transport(parameters)
+        try:
+            payload = await self.transport(parameters)
+        except ProviderError:
+            raise
+        except TimeoutError as exc:
+            raise ProviderError("Der Routingdienst hat nicht rechtzeitig geantwortet. Bitte versuche es später erneut.", code="timeout", retryable=True) from exc
+        except OSError as exc:
+            raise ProviderError("Die Netzwerkverbindung zum Routingdienst ist fehlgeschlagen. Bitte versuche es später erneut.", code="network_error", retryable=True) from exc
+        except ValueError as exc:
+            raise ProviderError("Der Routingdienst hat keine gültige Antwort geliefert. Bitte versuche es später erneut.", code="invalid_response") from exc
         return self.normalize_response(payload, request=request, synthetic=False)
 
     def normalize_response(self, payload: dict[str, Any], *, request: RouteRequest, synthetic: bool = True) -> RouteResult:
         if payload.get("ok") is not True:
-            error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
-            code = str(error.get("code", "provider_error"))
-            status = payload.get("status") if isinstance(payload.get("status"), int) else None
-            raise ProviderError(str(error.get("message", "NaKordoni v3 request failed")), code=code, status=status, retryable=status in {500, 502, 503, 504})
+            raise provider_error_from_payload(payload)
         try:
             data = payload["data"]
             route = data["route"]

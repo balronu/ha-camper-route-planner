@@ -1,5 +1,5 @@
 import { languageOf, t } from "./localization.js";
-import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
+import { addWaypoint, buildNavigationLink, calculateFuelPlan, formatDistance, formatDuration, hasTrackGeometry, isoDateTimeToLocalInput, isValidWaypoint, localDateTimeToIso, moveWaypoint, navigationPlatform, normalizeConfig, normalizeDecimalInput, normalizeProviderId, normalizeRouteOptions, normalizeServiceResponse, pickFuelValues, providerErrorMessage, removeWaypoint, resolveProviderStatus, routeRecordFromResult, selectConfigEntry, validOrEmptyWaypoint } from "./card-utils.js";
 import { armRequestDiagnostics, callWebsocket, calculateRoute, deliverGpxExport, disarmRequestDiagnostics, estimateTollsV2, exportGpx, geocode, reverseGeocode, trackerPosition } from "./services.js";
 import { destroyMap, invalidateMapSize, renderMap, updateMapPoints } from "./map-view.js";
 import { LEAFLET_CSS } from "./leaflet-css.js";
@@ -334,7 +334,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
       this._state.diagnosticCopyStatus = "";
       this._state.resultStale = false;
       this._state.routes = this._state.routes.filter((route) => route.route_id !== this._state.result.route_id);
-    } catch (error) { this._state.requestDiagnosticsArmed = false; this._state.diagnosticToken = ""; this._state.error = error.message || t(language, "calculationFailed"); this._state.resultStale = Boolean(this._state.result); }
+    } catch (error) { this._state.requestDiagnosticsArmed = false; this._state.diagnosticToken = ""; this._state.error = providerErrorMessage(error, language); this._state.resultStale = Boolean(this._state.result); }
     this._state.busy = false; this.render();
   }
 
