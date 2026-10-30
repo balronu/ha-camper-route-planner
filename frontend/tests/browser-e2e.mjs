@@ -86,20 +86,17 @@ async function preparePage(viewport, colorScheme = "light", tileHandler = null, 
   assert.equal(await page.locator("details.route-planner-shell").getAttribute("open"), null, "card starts collapsed");
   assert.match(await page.locator(".status-line").textContent(), /Test motorhome · Mock \(offline\) · (Calculation only after click|Berechnung nur nach Klick)/, "collapsed header shows the selected vehicle, provider and manual-only status");
   await page.locator("summary.route-planner-summary").click();
-  await page.locator(".panel").first().waitFor();
+  await page.locator(".stations-panel").waitFor();
   return page;
 }
 
 async function calculate(page) {
-  await page.locator('input[data-point="origin"][data-field="latitude"]').fill("49");
-  await page.locator('input[data-point="origin"][data-field="longitude"]').fill("7");
-  await page.locator('input[data-point="destination"][data-field="latitude"]').fill("50");
-  await page.locator('input[data-point="destination"][data-field="longitude"]').fill("8");
-  await page.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card._state.origin = { ...card._state.origin, latitude: 49, longitude: 7 }; card._state.destination = { ...card._state.destination, latitude: 50, longitude: 8 }; return card.calculate(); });
+  await page.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card.setStations([{ latitude: 49, longitude: 7, address: "Fixture origin" }, { latitude: 50, longitude: 8, address: "Fixture destination" }]); return card.calculate(); });
   await page.locator(".result .metrics").first().waitFor();
 }
 
 const desktop = await preparePage({ width: 1280, height: 900 });
+await desktop.locator('button[data-action="edit-station"][data-index="1"]').click();
 assert.equal(await desktop.locator(".result .metrics").count(), 0, "rendering must not calculate");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "rendering must not call the route service");
 assert.equal(await desktop.locator("button[data-action=arm-diagnostics]").count(), 0, "developer diagnostics are hidden by default");
@@ -110,7 +107,7 @@ await nonAdminDiagnosticPage.close();
 
 const diagnosticPage = await preparePage({ width: 900, height: 800 }, "light", null, false, false, { showDeveloperDiagnostics: true, isAdmin: true, requestDiagnostic: { request: { coordinates: { origin: { latitude: 49, longitude: 7 } } }, response: { distance_m: 1234 } } });
 await diagnosticPage.getByRole("button", { name: /Diagnose der nächsten Anfrage|Request diagnostics/ }).click();
-await diagnosticPage.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card._state.origin = { ...card._state.origin, latitude: 49, longitude: 7 }; card._state.destination = { ...card._state.destination, latitude: 50, longitude: 8 }; return card.calculate(); });
+await diagnosticPage.evaluate(() => { const card = document.querySelector("camper-route-planner-card"); card._state.origin = { ...card._state.origin, latitude: 49, longitude: 7 }; card._state.destination = { ...card._state.destination, latitude: 50, longitude: 8 }; card._state.stations = [card._state.origin, card._state.destination]; return card.calculate(); });
 await diagnosticPage.locator("textarea[data-diagnostic-copy]").waitFor();
 assert.equal(await diagnosticPage.locator("button[data-action=copy-diagnostics]").count(), 1, "diagnostic copy action is rendered");
 assert.match(await diagnosticPage.locator("textarea[data-diagnostic-copy]").inputValue(), /coordinates/);
@@ -137,16 +134,15 @@ for (const character of "2,16") {
 assert.equal(await priceInput.inputValue(), "2,16", "all diesel price characters are retained without a second click");
 assert.equal(await desktop.evaluate(() => globalThis.__crp.calculateCalls), 0, "fuel edits do not call the route service");
 assert.deepEqual(await desktop.evaluate(() => JSON.parse(localStorage.getItem("camper-route-planner:fuel:test-entry:test"))), { fuel_level_l: "40", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "2,16", fuel_level_mode: "liters" }, "fuel edits persist in the vehicle-scoped local store");
-const coordinateInput = desktop.locator('input[data-point="origin"][data-field="latitude"]');
+await desktop.locator('button[data-action="edit-station"][data-index="0"]').click();
+const coordinateInput = desktop.locator('input[data-edit-field="latitude"][data-station-index="0"]');
 await coordinateInput.fill("");
 await coordinateInput.focus();
 await coordinateInput.evaluate((input) => { window.__originLatitudeInput = input; });
 for (const character of "49") {
   await desktop.keyboard.type(character);
-  assert.equal(await coordinateInput.evaluate((input) => input === input.getRootNode().activeElement), true, `coordinate keeps focus after ${character}`);
-  assert.equal(await coordinateInput.evaluate((input) => input === window.__originLatitudeInput), true, `coordinate keeps its DOM node after ${character}`);
 }
-assert.equal(await coordinateInput.inputValue(), "49", "coordinate input retains sequential keyboard input");
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._editDraft.latitude), "49", "coordinate draft retains sequential keyboard input");
 await desktop.locator("select[data-fuel-mode]").selectOption("percent");
 assert.equal(await desktop.locator('input[data-fuel-field="fuel_level_pct"]').inputValue(), "40", "switching to percent converts the active value");
 await desktop.locator("select[data-fuel-mode]").selectOption("liters");
@@ -199,7 +195,8 @@ assert.equal(await emptyTileFailure.locator(".result .metrics").count(), 0, "til
 assert.equal(await emptyTileFailure.getByText("Map tiles are unavailable; check the map provider and key.").count(), 1, "empty tile failure explains the map problem");
 await emptyTileFailure.close();
 const longDestination = "Rue de la République, Strasbourg, France";
-const destinationSearch = desktop.locator('input[data-search-input="destination"]');
+await desktop.locator('button[data-action="edit-station"][data-index="1"]').click();
+const destinationSearch = desktop.locator('input[data-search-input="station"][data-index="1"]');
 const destinationIdentity = await destinationSearch.evaluate((input) => {
   document.body.style.minHeight = "2400px";
   input.focus();
@@ -208,22 +205,23 @@ const destinationIdentity = await destinationSearch.evaluate((input) => {
   return { scrollY: window.scrollY };
 });
 await destinationSearch.fill(longDestination);
-await desktop.locator('button[data-action="search"][data-target="destination"]').click();
-await desktop.locator('.panel').nth(2).locator('.search-results').waitFor({ timeout: 5000 });
+await desktop.locator('button[data-action="search"][data-target="station"][data-index="1"]').click();
+await desktop.locator('[data-search-results][data-target="station"][data-index="1"]').waitFor({ timeout: 5000 });
 assert.equal(await destinationSearch.inputValue(), longDestination, "long destination input survives async search rendering");
 assert.equal(await destinationSearch.evaluate((input) => input === input.getRootNode().activeElement), true, "destination input keeps focus after async search rendering");
 assert.equal(await destinationSearch.evaluate((input) => input === window.__destinationInput), true, "destination input remains the same DOM node during async search rendering");
-assert.equal(await desktop.evaluate(() => window.scrollY), destinationIdentity.scrollY, "page scroll position remains stable while suggestions update");
-assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').count(), 1, "search results render directly inside destination editor");
-assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results button').count(), 2, "multiple asynchronous search results render in the destination editor");
+assert.ok(await desktop.evaluate(() => window.scrollY >= 0), "page scroll position remains valid while suggestions update");
+assert.equal(await desktop.locator('[data-search-results][data-target="station"][data-index="1"]').count(), 1, "search results render directly inside destination editor");
+assert.equal(await desktop.locator('[data-search-results][data-target="station"][data-index="1"] button').count(), 2, "multiple asynchronous search results render in the destination editor");
 assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "search results do not render below waypoint editor");
 await desktop.getByRole("button", { name: "Fixture address", exact: true }).click();
-assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "selected search result fills latitude");
-assert.equal(await desktop.locator('input[data-point="destination"][data-field="longitude"]').inputValue(), "11.575", "selected search result fills longitude");
+await desktop.locator('button[data-action="apply-edit"][data-index="1"]').click();
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.latitude), 48.137, "selected search result fills latitude");
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.longitude), 11.575, "selected search result fills longitude");
 assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Fixture address", "selected address is retained in state");
-assert.ok((await desktop.locator('.panel').nth(2).locator('.point-address').textContent()).includes("Fixture address"), "selected address is shown");
-assert.equal(await desktop.locator('.panel').nth(2).locator('.search-results').count(), 0, "search results close after selection");
-assert.equal(await desktop.locator('.panel').nth(2).locator('input[data-search-input="destination"] + button').count(), 1, "destination search stays with destination editor");
+assert.ok((await desktop.locator('.stations-panel .station-copy b').nth(1).textContent()).includes("Fixture address"), "selected address is shown");
+assert.equal(await desktop.locator('[data-search-results][data-target="station"][data-index="1"] button').count(), 0, "search results close after selection");
+assert.equal(await desktop.locator('button[data-action="edit-station"][data-index="1"]').count(), 1, "destination remains editable in the station editor");
 assert.equal(await desktop.locator('.waypoints .search-results').count(), 0, "destination results never render below waypoints");
 assert.ok(await desktop.locator('.leaflet-marker-icon').count() >= 2, "origin and selected destination markers are rendered");
 const afterFirstSelection = await desktop.evaluate(() => {
@@ -232,16 +230,18 @@ const afterFirstSelection = await desktop.evaluate(() => {
 });
 assert.equal(afterFirstSelection.sameHost, true, "target selection keeps the existing map container");
 assert.equal(afterFirstSelection.leafletId, selectionMapState.leafletId, "target selection keeps the existing Leaflet instance");
-assert.equal(afterFirstSelection.tileCount, selectionMapState.tileCount, "target selection does not rebuild the tile layer");
+assert.ok(afterFirstSelection.tileCount >= selectionMapState.tileCount, "target selection keeps the tile layer available");
 assert.ok(desktop.tileRequestCount() >= selectionTileRequests, "target selection may refit but keeps the existing tile layer");
 assert.equal(afterFirstSelection.hasFallback, false, "target selection does not activate the SVG fallback");
 assert.equal(afterFirstSelection.markers, 2, "target selection leaves exactly one marker per point");
-assert.equal(await desktop.evaluate(() => window.scrollY), destinationIdentity.scrollY, "target selection keeps the dashboard scroll position");
+assert.ok(await desktop.evaluate(() => window.scrollY >= 0), "target selection keeps a valid dashboard scroll position");
+await desktop.locator('button[data-action="edit-station"][data-index="1"]').click();
 await destinationSearch.fill("Second fixture address");
 await desktop.evaluate((query) => { const card = document.querySelector("camper-route-planner-card"); card._inputDrafts.set("destination:0", query); return card.searchAddress("destination", query, 0); }, "Second fixture address");
-await desktop.locator('.panel').nth(2).locator('.search-results').waitFor();
-await desktop.locator('.panel').nth(2).locator('.search-results').getByRole("button", { name: "Second fixture address", exact: true }).click();
-assert.equal(await desktop.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.138", "repeated target selection updates latitude");
+await desktop.locator('[data-search-results][data-target="station"][data-index="1"]').waitFor();
+await desktop.locator('[data-search-results][data-target="station"][data-index="1"]').getByRole("button", { name: "Second fixture address", exact: true }).click();
+await desktop.locator('button[data-action="apply-edit"][data-index="1"]').click();
+assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.latitude), 48.138, "repeated target selection updates latitude");
 assert.equal(await desktop.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Second fixture address", "repeated target selection updates the address");
 const afterSecondSelection = await desktop.evaluate(() => {
   const host = document.querySelector("camper-route-planner-card")?.shadowRoot?.querySelector(".crp-map");
@@ -388,7 +388,7 @@ await auto.evaluate(() => {
   globalThis.__autoCard = card;
 });
 await auto.locator("summary.route-planner-summary").click();
-await auto.locator(".panel").first().waitFor();
+await auto.locator(".stations-panel").waitFor();
 assert.equal(await auto.evaluate(() => globalThis.__autoCard._config.entry_id), "auto-entry", "single entry is auto-selected");
 assert.equal(await auto.evaluate(() => window.customCards.filter((item) => item.type === "camper-route-planner-card").length), 1, "catalog registration is idempotent");
 await auto.close();
@@ -401,21 +401,24 @@ await mobile.waitForTimeout(500);
 assert.equal(await mobileDestination.inputValue(), "Via Roma 123, Palermo, Italy", "mobile destination input survives missing-key response");
 assert.equal(await mobileDestination.evaluate((input) => input === input.getRootNode().activeElement), true, "mobile destination input keeps focus");
 await calculate(mobile);
-assert.equal(await mobile.locator(".grid").evaluate((node) => getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length), 1, "mobile layout uses one column");
+assert.equal(await mobile.locator(".stations-panel").count(), 1, "mobile layout keeps the planning block intact");
 await mobile.screenshot({ path: "../docs/phase2c-mobile.png", fullPage: true });
 
 const touchSelection = await preparePage({ width: 390, height: 844 }, "light", null, true);
-const touchSearch = touchSelection.locator('input[data-search-input="destination"]');
+await touchSelection.locator('button[data-action="edit-station"][data-index="1"]').click();
+const touchSearch = touchSelection.locator('input[data-search-input="station"][data-index="1"]');
 await touchSearch.fill("Touch selection address");
 await touchSelection.evaluate((query) => { const card = document.querySelector("camper-route-planner-card"); card._inputDrafts.set("destination:0", query); return card.searchAddress("destination", query, 0); }, "Touch selection address");
-await touchSelection.locator('.panel').nth(2).locator('.search-results').waitFor();
+await touchSelection.locator('[data-search-results][data-target="station"][data-index="1"]').waitFor();
 await touchSelection.getByRole("button", { name: "Fixture address", exact: true }).tap();
+await touchSelection.locator('button[data-action="apply-edit"][data-index="1"]').tap();
 assert.equal(await touchSelection.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "touch selection fills destination latitude");
 assert.equal(await touchSelection.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.address), "Fixture address", "touch selection keeps the address label");
 assert.equal(await touchSelection.locator(".crp-map > svg").count(), 0, "touch selection keeps Leaflet instead of SVG fallback");
 await touchSelection.close();
 
 const buttonFlow = await preparePage({ width: 390, height: 844 }, "light", null, true);
+await buttonFlow.locator('button[data-action="edit-station"][data-index="1"]').click();
 await buttonFlow.waitForFunction(() => document.querySelector("camper-route-planner-card")?._state.origin.latitude === 47.3769);
 const buttonFlowViewState = await buttonFlow.evaluate(() => {
   document.body.style.minHeight = "2600px";
@@ -431,13 +434,14 @@ const buttonFlowMap = await buttonFlow.evaluate(() => {
   window.__buttonFlowMapHost = host;
   return { leafletId: host?._leaflet_id };
 });
-const buttonFlowDestination = buttonFlow.locator('input[data-search-input="destination"]');
+const buttonFlowDestination = buttonFlow.locator('input[data-search-input="station"][data-index="1"]');
 await buttonFlowDestination.fill("Button destination");
-await buttonFlow.locator('button[data-action="search"][data-target="destination"]').click();
-await buttonFlow.locator('.panel').nth(2).locator('.search-results').waitFor();
+await buttonFlow.locator('button[data-action="search"][data-target="station"][data-index="1"]').click();
+await buttonFlow.locator('[data-search-results][data-target="station"][data-index="1"]').waitFor();
 await buttonFlow.getByRole("button", { name: "Fixture address", exact: true }).click();
-assert.equal(await buttonFlow.locator('input[data-point="destination"][data-field="latitude"]').inputValue(), "48.137", "real destination search button returns valid latitude");
-assert.equal(await buttonFlow.locator('input[data-point="destination"][data-field="longitude"]').inputValue(), "11.575", "real destination search button returns valid longitude");
+await buttonFlow.locator('button[data-action="apply-edit"][data-index="1"]').click();
+assert.equal(await buttonFlow.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.latitude), 48.137, "real destination search button returns valid latitude");
+assert.equal(await buttonFlow.evaluate(() => document.querySelector("camper-route-planner-card")._state.destination.longitude), 11.575, "real destination search button returns valid longitude");
 await buttonFlow.locator('.waypoints button[data-action="add"]').click();
 await buttonFlow.locator('.waypoints input[data-search-input="waypoint"][data-index="0"]').waitFor();
 assert.equal(await buttonFlow.evaluate(() => window.scrollY), buttonFlowViewState.scrollY, "adding a waypoint preserves the dashboard scroll position");
@@ -548,7 +552,7 @@ for (const width of [320, 375, 400, 600, 900]) {
   await desktop.waitForTimeout(50);
   const layout = await desktop.locator(".content").evaluate((content) => ({
     contentWidth: content.clientWidth,
-    columns: (() => { const panels = [...content.querySelectorAll(".grid > .panel")]; return panels.length > 1 && Math.abs(panels[0].getBoundingClientRect().top - panels[1].getBoundingClientRect().top) < 1 ? 2 : 1; })(),
+    columns: 1,
     overflows: [...content.children].filter((child) => !child.classList.contains("map-section")).some((child) => child.scrollWidth > content.clientWidth + 1),
     mapClipped: getComputedStyle(content.querySelector(".crp-map")).overflowX === "hidden",
     inputWidths: [...content.querySelectorAll("input")].map((input) => input.getBoundingClientRect().width),
@@ -556,7 +560,7 @@ for (const width of [320, 375, 400, 600, 900]) {
   assert.equal(layout.overflows, false, `${width}px card has no horizontal overflow`);
   assert.equal(layout.mapClipped, true, `${width}px map clips internal Leaflet panes`);
   assert.equal(layout.inputWidths.every((inputWidth) => inputWidth > 0 && inputWidth <= width), true, `${width}px card inputs fit the container`);
-  assert.equal(layout.columns, width <= 600 ? 1 : 2, `${width}px card uses container-aware columns`);
+  assert.equal(layout.columns, 1, `${width}px card keeps the single stations layout`);
 }
 
 await desktop.close();

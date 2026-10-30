@@ -69,6 +69,18 @@ TRANSLATIONS.de.borderConfirmed = "Konkreter Grenzübergang erkannt";
 TRANSLATIONS.de.borderDetected = "Grenzübertritt erkannt";
 TRANSLATIONS.en.borderConfirmed = "Specific border crossing identified";
 TRANSLATIONS.en.borderDetected = "Border crossing detected";
+TRANSLATIONS.de.requestDataHint = "Zusatzdaten werden nur bei der nächsten bewussten Berechnung angefordert.";
+TRANSLATIONS.de.requestParking = "Parkplätze entlang der Route anfordern";
+TRANSLATIONS.de.requestFuel = "Tankstellen entlang der Route anfordern";
+TRANSLATIONS.de.poiNotRequested = "Nicht angefordert:";
+TRANSLATIONS.de.poiEnableAndRecalculate = "Bitte oben aktivieren und die Route neu berechnen.";
+TRANSLATIONS.de.settingsChanged = "Einstellungen geändert – Neuberechnung erforderlich.";
+TRANSLATIONS.en.requestDataHint = "Additional data is requested only with the next deliberate calculation.";
+TRANSLATIONS.en.requestParking = "Request parking along the route";
+TRANSLATIONS.en.requestFuel = "Request fuel stations along the route";
+TRANSLATIONS.en.poiNotRequested = "Not requested:";
+TRANSLATIONS.en.poiEnableAndRecalculate = "Enable it above and recalculate the route.";
+TRANSLATIONS.en.settingsChanged = "Settings changed – recalculation required.";
 
 export function languageOf(hass) {
   const language = hass?.locale?.language || hass?.language || "en";

@@ -136,10 +136,20 @@ test("fuel inputs are local, vehicle-scoped, and do not trigger routing", () => 
 });
 
 test("fuel values remain editable when no route has been calculated", () => {
-  assert.match(source, /fuelHost = result \? .* : this\.shadowRoot\.querySelector\("\.map-section"\)/);
+  assert.match(source, /const fuelHost = planningBlock/);
   assert.match(source, /renderFuelPlan\(result, profile, this\._state\.fuelValues/);
   assert.match(source, /tankCapacity/);
   assert.match(source, /fuelLevelPercent/);
+});
+
+test("calculation inputs and local result controls are structurally separated", () => {
+  assert.match(source, /className = "planning-block"/);
+  assert.match(source, /className = "result-block"/);
+  assert.match(source, /data-route-option="poi_parking"/);
+  assert.match(source, /data-route-option="poi_fuel"/);
+  assert.match(source, /data-route-option="fuel_plan_enabled"/);
+  assert.match(source, /renderPoiDisplayControls\(result, translate, this\._state\)/);
+  assert.match(source, /poiEnableAndRecalculate/);
 });
 
 test("fuel section no longer renders the legacy safety reserve input", () => {
