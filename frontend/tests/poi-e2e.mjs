@@ -54,6 +54,7 @@ for (const viewport of [{ width: 1280, height: 900, label: "Windows/Chromium" },
   await page.locator('input[data-route-option="poi_fuel"]').check();
   await page.evaluate(() => globalThis.__poiCard.calculate());
   await page.locator(".route-pois").waitFor();
+  await page.locator(".map-section .crp-marker-poi").first().waitFor();
   assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel, fuelType: globalThis.__poiState.request.poi_fuel_type })), { calls: 1, parking: true, fuel: true, fuelType: "diesel" }, `POI options are sent with the deliberate route request on ${viewport.label}`);
   assert.equal(await page.locator(".route-poi").count(), 2, `POI list is rendered on ${viewport.label}`);
   assert.equal(await page.locator(".map-section .crp-marker-poi").count(), 2, `normal map renders both POI categories on ${viewport.label}`);
