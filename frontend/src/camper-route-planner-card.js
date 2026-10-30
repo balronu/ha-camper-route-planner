@@ -161,6 +161,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._preserveInputDraftKeys = new Set();
     this._searchRequestIds = new Map();
     this._fitMapOnNextRender = false;
+    this._dashboardFitPending = false;
     this._pendingViewState = null;
     this._viewScrollTracking = new Map();
     this._viewScrollListeners = new Map();
@@ -341,6 +342,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._state.stations = [];
     this._state.result = null;
     this._state.resultStale = false;
+    this._dashboardFitPending = false;
     this._state.originManual = false;
     this._state.error = "";
     this._state.trackerError = "";
@@ -821,14 +823,14 @@ export class CamperRoutePlannerCard extends HTMLElement {
 
   async loadRoute(routeId) {
     const generation = ++this._routeStateGeneration;
-    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); if (generation !== this._routeStateGeneration) return; const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]); this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); if (generation !== this._routeStateGeneration) return; const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]); this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point)); this._fitMapOnNextRender = !this._state.resultStale; this._dashboardFitPending = !this._state.resultStale;
       // A loaded route is authoritative for every coordinate. Prevent the
       // current DOM values from being captured as drafts by render() before
       // the newly loaded inputs are restored; this is especially important
       // for stale 0/0 values without inventing coordinates.
       for (const key of this._inputDrafts.keys()) if (key.startsWith("point:")) this._inputDrafts.delete(key);
       this.shadowRoot?.querySelectorAll("input[data-point]").forEach((input) => this._preserveInputDraftKeys.add(`point:${input.dataset.point}:${input.dataset.index}:${input.dataset.field}`));
-      this.render(); }
+      this.render(); if (!this._state.resultStale) this.scheduleDashboardRouteFit(); }
     catch (error) { this._state.error = error.message || t(languageOf(this._hass), "calculationFailed"); this.render(); }
   }
 
@@ -939,7 +941,23 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._cardExpanded = Boolean(details.open);
     details.querySelector("summary")?.setAttribute("aria-expanded", String(this._cardExpanded));
     if (!this._cardExpanded) return;
-    requestAnimationFrame(() => invalidateMapSize(this.shadowRoot?.querySelector(".crp-map")));
+    requestAnimationFrame(() => {
+      invalidateMapSize(this.shadowRoot?.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"));
+      if (this._dashboardFitPending) this.scheduleDashboardRouteFit();
+    });
+  }
+
+  scheduleDashboardRouteFit() {
+    const fit = () => {
+      if (!this._dashboardFitPending || !this.currentMapRoute()) return;
+      const map = this.shadowRoot?.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map");
+      const bounds = map?.getBoundingClientRect();
+      if (!map || !bounds?.width || !bounds?.height) return;
+      invalidateMapSize(map);
+      if (fitMapToRoute(map, this.mapPoints(), this.currentMapRoute(), true)) this._dashboardFitPending = false;
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(fit));
+    else fit();
   }
 
   wrapCardContent(profile, language) {
@@ -1128,8 +1146,11 @@ export class CamperRoutePlannerCard extends HTMLElement {
 
   renderStation(station, index, translate, total) {
     const role = index === 0 ? translate("start") : index === total - 1 ? translate("destination") : translate("waypoint");
-    const address = station.address || station.label || translate("addressUnavailable");
-    const coordinateText = isValidWaypoint(station) ? `${formatCoordinate(station.latitude)}, ${formatCoordinate(station.longitude)}` : translate("stationIncomplete");
+    const valid = isValidWaypoint(station);
+    const technicalLabel = (value) => /^device_tracker\.[a-z0-9_]+$/i.test(String(value || "").trim());
+    const rawAddress = [station.address, station.label].find((value) => value && !technicalLabel(value)) || "";
+    const address = rawAddress || (!valid && index === total - 1 ? translate("destinationNotSet") : !valid ? translate("stationIncomplete") : index === 0 && (technicalLabel(station.address) || technicalLabel(station.label)) ? translate("trackerLocation") : translate("addressUnavailable"));
+    const coordinateText = valid ? `${formatCoordinate(station.latitude)}, ${formatCoordinate(station.longitude)}` : translate("stationIncomplete");
     const editing = this._editStationId === station.id;
     return `<article class="station-row" data-station-id="${escapeHtml(station.id)}"><div class="station-position">${index + 1}</div><div class="station-copy"><b>${escapeHtml(address)}</b><small>${escapeHtml(coordinateText)}</small><span class="station-role">${escapeHtml(role)}</span></div><div class="station-actions"><button type="button" data-action="edit-station" data-index="${index}">${translate("edit")}</button><button type="button" data-action="up-station" data-index="${index}" aria-label="${translate("moveUp")}" ${index <= 0 ? "disabled" : ""}>↑</button><button type="button" data-action="down-station" data-index="${index}" aria-label="${translate("moveDown")}" ${index >= total - 1 ? "disabled" : ""}>↓</button>${index > 0 && index < total - 1 ? `<button type="button" data-action="remove-station" data-index="${index}">${translate("remove")}</button>` : ""}</div>${editing ? this.renderStationEditor(station, index, translate) : ""}</article>`;
   }

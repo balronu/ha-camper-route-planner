@@ -50,6 +50,24 @@ assert.deepEqual(await page.evaluate(() => globalThis.__crp.card._state.stations
 ], "loading a saved route restores stations in the same order as its route result");
 assert.equal(await page.locator(".crp-map svg").count(), 1, "a loaded current route is drawn on the dashboard map");
 
+await page.evaluate(() => {
+  const card = globalThis.__crp.card;
+  card.setStations([{ latitude: 49, longitude: 7, address: "Sulzbach/Saar" }, { latitude: "", longitude: "", address: "" }]);
+  card.render();
+});
+assert.equal(await page.locator(".station-row").nth(1).locator("b").textContent(), "Destination not set yet", "an empty destination has an explicit state instead of a coordinate fallback");
+assert.match(await page.locator(".station-row").nth(1).locator("small").textContent(), /Incomplete station/, "an empty destination remains visibly incomplete");
+await page.evaluate(() => globalThis.__crp.card.calculate());
+assert.equal(await page.evaluate(() => globalThis.__crp.calls), 0, "an incomplete destination cannot trigger a route request");
+await page.evaluate(() => {
+  const card = globalThis.__crp.card;
+  card.setStations([{ latitude: 49, longitude: 7, label: "device_tracker.wohnmobil_zoe" }, { latitude: 41, longitude: -8, address: "" }]);
+  card.render();
+});
+assert.equal(await page.locator(".station-row").first().locator("b").textContent(), "Current motorhome location", "a tracker entity is rendered as a user-facing location label");
+assert.equal(await page.locator(".station-copy").first().locator("b").textContent().then((text) => text.includes("device_tracker")), false, "technical tracker IDs never appear as station addresses");
+assert.equal(await page.locator(".station-row").nth(1).locator("b").textContent(), "Address unavailable – coordinates are used", "valid coordinates without an address use the coordinate fallback");
+
 const seed = [
   { latitude: 49.294307, longitude: 7.051867, address: "Sulzbach/Saar" },
   { latitude: 38.878187, longitude: -6.970111, address: "Badajoz" },
