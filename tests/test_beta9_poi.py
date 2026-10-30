@@ -47,6 +47,19 @@ class Beta9PoiTests(unittest.TestCase):
         self.assertEqual(result.geometry.points[-1].longitude, -8)
         self.assertEqual(result.metadata["pois"], {"requested": ["parking"], "parking": [], "fuel": []})
 
+    def test_long_valid_route_without_pois_does_not_divide_none(self):
+        body = response()
+        body["data"]["route"]["distance_m"] = 1_500_000
+        body["data"].pop("parkings")
+        body["data"].pop("fuel_stations")
+        result = NakordoniRouteAdapterV3().normalize_response(body, request=request())
+        self.assertEqual(result.distance_m, 1_500_000)
+        self.assertEqual(result.metadata["pois"], {"requested": [], "parking": [], "fuel": []})
+
+    def test_invalid_optional_route_distance_is_ignored_safely(self):
+        normalized = normalize_pois({}, requested=(), route_distance_m=None)
+        self.assertEqual(normalized, {"requested": [], "parking": [], "fuel": []})
+
     def test_normalizer_does_not_invent_prices_or_vehicle_suitability(self):
         normalized = normalize_pois({"fuel_stations": [{"name": "No price", "lat": 44, "lon": -1, "km_from_start": 1}]}, requested=("fuel",))
         self.assertNotIn("prices", normalized["fuel"][0])
