@@ -71,6 +71,8 @@ for (const viewport of [{ width: 1280, height: 900, label: "Windows/Chromium" },
   await page.locator('.map-section [class*="crp-marker-poi"]').first().waitFor();
   assert.deepEqual(await page.evaluate(() => ({ calls: globalThis.__poiState.calls, parking: globalThis.__poiState.request.poi_parking, fuel: globalThis.__poiState.request.poi_fuel, fuelType: globalThis.__poiState.request.poi_fuel_type })), { calls: 3, parking: true, fuel: true, fuelType: "diesel" }, `both POI categories are sent with the deliberate route request on ${viewport.label}`);
   assert.equal(await page.locator(".route-poi").count(), 2, `POI list is rendered on ${viewport.label}`);
+  await page.evaluate(() => { const host = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"); const symbol = Object.getOwnPropertySymbols(host || {}).find((item) => String(item).includes("leaflet-map")); host?.[symbol]?.setZoom(5, { animate: false }); });
+  await page.waitForTimeout(100);
   assert.equal(await page.locator('.map-section [class*="crp-marker-poi"]').count(), 1, `normal map clusters nearby POIs on ${viewport.label}`);
   await page.evaluate(() => { const host = document.querySelector("camper-route-planner-card").shadowRoot.querySelector(".map-section .map-host > .crp-map, .map-section > .crp-map"); const symbol = Object.getOwnPropertySymbols(host || {}).find((item) => String(item).includes("leaflet-map")); host?.[symbol]?.setZoom(18, { animate: false }); });
   await page.waitForTimeout(100);
