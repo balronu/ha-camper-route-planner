@@ -151,6 +151,44 @@ test("fuel planning exposes additional demand without changing the formulas", ()
   assert.equal(calculateFuelPlan(100000, { consumption_l_per_100km: 10, tank_capacity_l: 100 }).deficit, null);
 });
 
+test("Portugal provider fuel-plan values are checked against the 90 l / 15% reserve profile", () => {
+  const tank = 90;
+  const rate = 10.5 / 100;
+  const reserve = tank * 0.15;
+  const stops = [
+    { km: 199.5, litres: 21.1 },
+    { km: 927, litres: 69 },
+    { km: 1583, litres: 76.5 },
+    { km: 1971, litres: 32.1 },
+  ];
+  const destinationKm = 2617.9;
+  let fuel = tank;
+  let previousKm = 0;
+  const arrivals = [];
+  for (const stop of stops) {
+    fuel -= (stop.km - previousKm) * rate;
+    arrivals.push({ km: stop.km, fuelBeforeStop: fuel, reserveCompliant: fuel >= reserve });
+    fuel += stop.litres;
+    previousKm = stop.km;
+  }
+  fuel -= (destinationKm - previousKm) * rate;
+
+  assert.deepEqual(arrivals.map(({ km, reserveCompliant }) => ({ km, reserveCompliant })), [
+    { km: 199.5, reserveCompliant: true },
+    { km: 927, reserveCompliant: true },
+    { km: 1583, reserveCompliant: true },
+    { km: 1971, reserveCompliant: true },
+  ]);
+  assert.deepEqual(arrivals.map(({ fuelBeforeStop }) => Math.round(fuelBeforeStop * 1000) / 1000), [69.053, 13.765, 13.885, 49.645]);
+  assert.ok(arrivals.every(({ fuelBeforeStop }) => fuelBeforeStop >= reserve));
+  assert.ok(stops.some((stop, index) => {
+    const before = index === 0 ? tank : tank;
+    return before + stop.litres > tank;
+  }), "provider quantities exceed the configured tank if added without an explicit post-stop cap");
+  assert.ok(fuel >= reserve, `provider data leaves ${fuel.toFixed(3)} l at the destination, below the ${reserve.toFixed(3)} l reserve would be a contradiction`);
+  assert.equal(Math.round(fuel * 1000) / 1000, 13.82);
+});
+
 test("fuel planning keeps profile values when local editor fields are still empty", () => {
   const profile = { tank_capacity_l: 90, fuel_level_l: 90, consumption_l_per_100km: 10.5, diesel_price_per_l: 2.16 };
   const localEditor = { fuel_level_l: "", fuel_level_pct: "", diesel_price_per_l: "", fuel_level_mode: "liters" };

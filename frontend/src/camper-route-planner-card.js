@@ -276,6 +276,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   beginStationEdit(index) {
     const station = this.ensureStations()[index];
     if (!station) return;
+    this._pendingViewState = this.captureViewState();
     this._editStationId = station.id;
     this._editDraft = stationPoint(station);
     this._editError = "";
@@ -283,11 +284,12 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.render();
   }
 
-  cancelStationEdit() { this._editStationId = null; this._editDraft = null; this._editError = ""; this._state.searchResults = []; this.render(); }
+  cancelStationEdit() { this._pendingViewState = this.captureViewState(); this._editStationId = null; this._editDraft = null; this._editError = ""; this._state.searchResults = []; this.render(); }
 
   applyStationEdit() {
     const index = this.stationIndex(this._editStationId);
     if (index < 0 || !this._editDraft) return;
+    this._pendingViewState = this.captureViewState();
     if (!isValidWaypoint(this._editDraft)) { this._editError = t(languageOf(this._hass), "invalidCoordinates"); this.render(); return; }
     const stations = this.ensureStations().map((station, current) => current === index ? stationFromPoint(this._editDraft, station.id) : station);
     this._state.stations = stations;
@@ -300,6 +302,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
   addStation() {
     const stations = this.ensureStations();
     if (stations.length >= 7) return;
+    this._pendingViewState = this.captureViewState();
+    this._pendingViewState.activeAction = { action: "add-station", index: null };
     stations.splice(Math.max(1, stations.length - 1), 0, stationFromPoint({ latitude: "", longitude: "", address: "" }));
     this._state.stations = stations;
     this.syncLegacyPoints();
@@ -313,6 +317,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   removeStation(index) {
     const stations = this.ensureStations();
     if (index <= 0 || index >= stations.length - 1) return;
+    this._pendingViewState = this.captureViewState();
     stations.splice(index, 1); this._state.stations = stations; this.syncLegacyPoints();
     this._state.resultStale = Boolean(this._state.result); this._fitMapOnNextRender = true; this.render();
   }
@@ -320,6 +325,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   moveStation(index, direction) {
     const stations = this.ensureStations(); const target = index + direction;
     if (target < 0 || target >= stations.length) return;
+    this._pendingViewState = this.captureViewState();
     [stations[index], stations[target]] = [stations[target], stations[index]];
     this._state.stations = stations; this.syncLegacyPoints(); this._state.resultStale = Boolean(this._state.result); this._fitMapOnNextRender = true; this.render();
   }
@@ -807,7 +813,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
       ancestor = ancestor.parentElement;
     }
     capture(document.scrollingElement);
-    return { activeAction, scrollTargets };
+    if (document.body && document.body !== document.scrollingElement) capture(document.body);
+    return { activeAction, scrollTargets, windowScrollX: globalThis.scrollX || 0, windowScrollY: globalThis.scrollY || 0 };
   }
 
   trackViewScrollTargets() {
@@ -818,6 +825,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
       ancestor = ancestor.parentElement;
     }
     if (document.scrollingElement) targets.push(document.scrollingElement);
+    if (document.body && document.body !== document.scrollingElement) targets.push(document.body);
     targets.forEach((element) => {
       if (this._viewScrollListeners.has(element)) return;
       const record = { left: element.scrollLeft, top: element.scrollTop };
@@ -835,6 +843,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
   restoreViewState(state) {
     if (!state) return;
     const restore = () => {
+      if (typeof globalThis.scrollTo === "function" && (state.windowScrollX || state.windowScrollY)) globalThis.scrollTo(state.windowScrollX || 0, state.windowScrollY || 0);
       state.scrollTargets?.forEach(({ element, left, top }) => {
         if (!element?.isConnected) return;
         element.scrollLeft = left;
