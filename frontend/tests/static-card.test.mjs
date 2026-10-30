@@ -104,8 +104,15 @@ test("card renders route-provided border crossings and toll details without brow
   assert.match(source, /renderTollDetails/);
   assert.match(source, /borderNoWait/);
   assert.match(source, /borderCrossings/);
-  assert.match(source, /borderCrossings: result\?\.metadata/);
+  assert.match(source, /borderCrossings: activeMapRoute\?\.metadata/);
   assert.doesNotMatch(source, /fetch\(|XMLHttpRequest\(/);
+});
+
+test("stale route geometry is excluded from the active map and tracker updates cannot overwrite a loaded route", () => {
+  assert.match(source, /currentMapRoute\(\) \{ return this\._state\.result && !this\._state\.resultStale \? this\._state\.result : null; \}/);
+  assert.match(source, /!this\._state\.originManual && !this\._state\.result/);
+  assert.match(source, /if \(generation !== this\._routeStateGeneration\) return;/);
+  assert.match(source, /if \(entryChanged\) this\.resetRouteState\(\)/);
 });
 
 test("border crossings localize ISO directions and omit empty metadata", () => {

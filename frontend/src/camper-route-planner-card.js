@@ -172,6 +172,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._mapPopupOpen = false;
     this._mapPopupReturnFocus = null;
     this._bodyOverflowBeforeMapPopup = null;
+    this._routeStateGeneration = 0;
   }
 
   ensureStations() {
@@ -327,8 +328,27 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const next = normalizeConfig(config); const entryChanged = next.entry_id !== this._config.entry_id; const changed = entryChanged || next.title !== this._config.title || next.show_developer_diagnostics !== this._config.show_developer_diagnostics;
     const diagnosticsDisabled = this._config.show_developer_diagnostics && !next.show_developer_diagnostics;
     this._config = next;
+    if (entryChanged) this.resetRouteState();
     if (diagnosticsDisabled) this.disableDeveloperDiagnostics();
     if (changed && this._hass && entryChanged) this.loadData(); else this.render();
+  }
+
+  resetRouteState() {
+    this._routeStateGeneration += 1;
+    this._state.origin = { latitude: "", longitude: "", label: "" };
+    this._state.destination = { latitude: "", longitude: "", label: "" };
+    this._state.waypoints = [];
+    this._state.stations = [];
+    this._state.result = null;
+    this._state.resultStale = false;
+    this._state.originManual = false;
+    this._state.error = "";
+    this._state.trackerError = "";
+    this._inputDrafts.clear();
+    this._preserveInputDraftKeys.clear();
+    this._editStationId = null;
+    this._editDraft = null;
+    this._editError = "";
   }
 
   isDeveloperDiagnosticsVisible() { return this._config.show_developer_diagnostics === true && this._hass?.user?.is_admin === true; }
@@ -367,6 +387,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
 
   async loadData() {
     if (!this._hass) return;
+    const generation = this._routeStateGeneration;
     this._state.error = "";
     try {
       const selection = await this.discoverEntry();
@@ -377,6 +398,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
         callWebsocket(this._hass, { type: "camper_route_planner/list_routes", entry_id: entryId }),
         callWebsocket(this._hass, { type: "camper_route_planner/map_config", entry_id: entryId })
       ]);
+      if (generation !== this._routeStateGeneration) return;
       this._config = { ...this._config, entry_id: entryId };
       this._state.profiles = Array.isArray(profiles?.profiles) ? profiles.profiles : [];
       this._state.provider = String(profiles?.provider || this._state.provider || "");
@@ -384,7 +406,9 @@ export class CamperRoutePlannerCard extends HTMLElement {
       this._state.mapConfig = mapConfig || { provider: "none", status: "not_configured" };
       if (!this._state.profileId && this._state.profiles[0]) this._state.profileId = this._state.profiles[0].profile_id;
       this._state.fuelValues = readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId));
-      if (this._state.profileId && !this._state.originManual) this.useTrackerLocation(false);
+      // A saved/current result owns the station list. A reconnect must not
+      // replace its origin with a late tracker response.
+      if (this._state.profileId && !this._state.originManual && !this._state.result) this.useTrackerLocation(false, generation);
     } catch (error) { this._state.error = error.message || t(languageOf(this._hass), "providerUnavailable"); }
     this._state.loaded = true;
     this.render();
@@ -528,10 +552,11 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this._state.busy = false; this.render();
   }
 
-  async useTrackerLocation(showErrors = true) {
+  async useTrackerLocation(showErrors = true, generation = this._routeStateGeneration) {
     if (!this._config.entry_id || !this._state.profileId) return;
     try {
       const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
+      if (generation !== this._routeStateGeneration) return;
       if (response?.available && response.point && isValidWaypoint(response.point)) {
         this._state.origin = response.point;
         const stations = this.ensureStations();
@@ -795,7 +820,8 @@ export class CamperRoutePlannerCard extends HTMLElement {
   }
 
   async loadRoute(routeId) {
-    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]); this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
+    const generation = ++this._routeStateGeneration;
+    try { const response = await callWebsocket(this._hass, { type: "camper_route_planner/load_route", entry_id: this._config.entry_id, route_id: routeId }); if (generation !== this._routeStateGeneration) return; const route = response.route; this._state.origin = validOrEmptyWaypoint(route.origin); this._state.destination = validOrEmptyWaypoint(route.destination); this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : []; this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]); this._state.profileId = route.profile_id || this._state.profileId; this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) }; this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) }; this._state.result = normalizeServiceResponse(route); this._state.resultStale = !isValidWaypoint(route.origin) || !isValidWaypoint(route.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point));
       // A loaded route is authoritative for every coordinate. Prevent the
       // current DOM values from being captured as drafts by render() before
       // the newly loaded inputs are restored; this is especially important
@@ -886,8 +912,10 @@ export class CamperRoutePlannerCard extends HTMLElement {
     const map = this.shadowRoot?.querySelector(".crp-map");
     if (!map) return;
     const translate = (key) => t(languageOf(this._hass), key);
-    updateMapPoints(map, this.mapPoints(), { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") }, { route: this._state.result, fitBounds: false, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
+    updateMapPoints(map, this.mapPoints(), { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") }, { route: this.currentMapRoute(), fitBounds: false, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
   }
+
+  currentMapRoute() { return this._state.result && !this._state.resultStale ? this._state.result : null; }
 
   mapPoints() { return [{ ...this._state.origin, target: "origin" }, ...this._state.waypoints.map((point, index) => ({ ...point, target: "waypoint", index })), { ...this._state.destination, target: "destination" }].filter((point) => isValidWaypoint(point)); }
 
@@ -1051,17 +1079,18 @@ export class CamperRoutePlannerCard extends HTMLElement {
     }
     this.shadowRoot.querySelector(".privacy")?.insertAdjacentHTML("beforeend", ` <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">${translate("geocodingAttribution")}</a>`);
     const mapLabels = { noRoute: translate("noRoute"), mapLoading: translate("mapLoading"), mapUnavailable: translate("mapUnavailable"), geometryFallback: translate("geometryFallback"), start: translate("start"), destination: translate("destination"), waypoint: translate("waypoint"), previewLine: translate("previewLine"), borderCrossing: translate("borderName"), borderNoWait: translate("borderNoWait") };
-    const mapOptions = { points: this.mapPoints(), route: result, borderCrossings: result?.metadata?.border_crossings || [], restrictionItems: [...(result?.metadata?.restriction_hits || []), ...(result?.metadata?.low_emission_zones_on_route || [])], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
+    const activeMapRoute = this.currentMapRoute();
+    const mapOptions = { points: this.mapPoints(), route: activeMapRoute, borderCrossings: activeMapRoute?.metadata?.border_crossings || [], restrictionItems: [...(activeMapRoute?.metadata?.restriction_hits || []), ...(activeMapRoute?.metadata?.low_emission_zones_on_route || [])], fitBounds: this._fitMapOnNextRender, onPointChange: (target, index, latlng) => this.onMapPointChange(target, index, latlng), onMapClick: (latlng) => this.onMapPointChange("origin", 0, latlng) };
     const mapHost = this.shadowRoot.querySelector(".map-host");
     if (preserveMap) {
       mapHost.append(oldMap);
       updateMapPoints(oldMap, mapOptions.points, mapLabels, mapOptions);
     } else {
-      renderMap(mapHost, result, this._state.mapConfig, mapLabels, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); }, mapOptions);
+      renderMap(mapHost, activeMapRoute, this._state.mapConfig, mapLabels, () => { this._state.mapError = translate("mapTileError"); this._state.mapConfig = { ...(this._state.mapConfig || {}), status: "invalid" }; this.render(); }, mapOptions);
     }
     if (this._mapPopupOpen) {
       const popupHost = this.shadowRoot.querySelector(".map-popup-host");
-      renderMap(popupHost, result, this._state.mapConfig, mapLabels, () => {}, { ...mapOptions, fitBounds: true });
+      renderMap(popupHost, activeMapRoute, this._state.mapConfig, mapLabels, () => {}, { ...mapOptions, fitBounds: true });
     }
     const popupStyle = document.createElement("style");
     popupStyle.textContent = ".map-section>h3{display:inline-block;margin-right:10px}.map-section>button{vertical-align:middle}.map-popup{position:fixed;inset:0;z-index:1000;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;padding:clamp(12px,3vw,28px);background:var(--primary-background-color,#fff);color:var(--primary-text-color);overflow:hidden}.map-popup-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.map-popup-heading h2{margin:0}.map-popup-close{min-width:44px;min-height:44px;font-size:1.7rem;line-height:1}.map-popup-actions{display:flex;gap:8px}.map-popup-host{min-height:0;height:100%;overflow:hidden;border-radius:12px}.map-popup-host .crp-leaflet-map{height:100%;min-height:240px}.map-popup-host .crp-map>svg{height:100%}.map-popup button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.map-popup button:focus-visible,.map-section>button:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}@media(max-width:600px){.map-popup{padding:8px}.map-popup-host .crp-leaflet-map{min-height:0}.map-popup-actions button{flex:1}}";
@@ -1137,7 +1166,7 @@ export class CamperRoutePlannerCard extends HTMLElement {
     this.shadowRoot.querySelectorAll("button[data-action=open-map-popup]").forEach((button) => button.addEventListener("click", () => this.openMapPopup()));
     this.shadowRoot.querySelectorAll("button[data-action=close-map-popup]").forEach((button) => button.addEventListener("click", () => this.closeMapPopup()));
     this.shadowRoot.querySelectorAll("button[data-action=fit-map-popup]").forEach((button) => button.addEventListener("click", () => {
-      fitMapToRoute(this.shadowRoot?.querySelector(".map-popup > .crp-map"), this.mapPoints(), this._state.result, true);
+      fitMapToRoute(this.shadowRoot?.querySelector(".map-popup > .crp-map"), this.mapPoints(), this.currentMapRoute(), true);
     }));
     this.shadowRoot.querySelectorAll(".map-popup").forEach((popup) => popup.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.preventDefault(); this.closeMapPopup(); return; }
