@@ -120,6 +120,31 @@ class Beta3DiagnosticTests(unittest.TestCase):
         self.assertEqual(report["response"]["request_id"], "req-2026.10.30:abc")
         self.assertEqual(report["response"]["error_code"], "route_timeout")
 
+    def test_armed_parser_error_keeps_transport_and_safe_field_shape(self):
+        response = route_payload()
+        del response["data"]["route"]["duration_s"]
+        response["request_id"] = "req-parser-2026.10.30"
+        response["transport"].update({"content_type": "application/json", "response_type": "json", "response_length": 812})
+        runtime = self.runtime(response)
+        token = runtime.arm_request_diagnostics()
+        with self.assertRaises(ProviderError) as context:
+            asyncio.run(runtime.async_calculate_service({**self.request_data(), "diagnostic_token": token}))
+        self.assertEqual(context.exception.code, "invalid_response")
+        self.assertEqual(runtime.diagnostics()["last_request_error"]["http_status"], 200)
+        self.assertEqual(runtime.diagnostics()["last_request_error"]["request_id"], "req-parser-2026.10.30")
+        last_error = runtime.diagnostics()["last_request_error"]
+        shape = last_error["response_shape"]
+        self.assertIn("data.route.duration_s", shape["missing_fields"])
+        self.assertEqual(shape["field_types"]["data.route.duration_s"], "null")
+        report = runtime.get_request_diagnostic()
+        self.assertEqual(report["response"]["content_type"], "application/json")
+        self.assertEqual(report["response"]["response_length"], 812)
+        self.assertEqual(report["response"]["request_id"], "req-parser-2026.10.30")
+        self.assertEqual(report["response"]["response_shape"]["parser_exception"], "ValueError")
+        self.assertNotIn("100000", str(report))
+        self.assertNotIn("48.1", str(last_error))
+        self.assertNotIn("K" * 24, str(report))
+
     def test_armed_request_diagnostic_contains_actual_v3_parameters_once(self):
         runtime = self.runtime(route_payload())
         token = runtime.arm_request_diagnostics()
