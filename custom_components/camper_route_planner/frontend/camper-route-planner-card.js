@@ -1,4 +1,4 @@
-/* Camper Route Planner Card v0.1.6-beta.3; reproducible local bundle */
+/* Camper Route Planner Card v0.1.6-beta.4; reproducible local bundle */
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -13915,6 +13915,12 @@
       invalidDateTime: "Bitte eine g\xFCltige lokale Zeit ausw\xE4hlen; Sommer-/Winterzeit wird automatisch ber\xFCcksichtigt.",
       addWaypoint: "Zwischenziel hinzuf\xFCgen",
       remove: "Entfernen",
+      stations: "Stationen",
+      stationsHint: "Reihenfolge bestimmt Start, Zwischenziele und Ziel.",
+      stationIncomplete: "Unvollst\xE4ndige Station \u2013 bitte bearbeiten",
+      edit: "Bearbeiten",
+      apply: "\xDCbernehmen",
+      cancel: "Abbrechen",
       moveUp: "Nach oben",
       moveDown: "Nach unten",
       savedRoutes: "Gespeicherte Routen",
@@ -14077,6 +14083,12 @@
       invalidDateTime: "Choose a valid local time; daylight-saving changes are handled automatically.",
       addWaypoint: "Add waypoint",
       remove: "Remove",
+      stations: "Stations",
+      stationsHint: "The order determines start, waypoints and destination.",
+      stationIncomplete: "Incomplete station \u2013 edit it before calculating",
+      edit: "Edit",
+      apply: "Apply",
+      cancel: "Cancel",
       moveUp: "Move up",
       moveDown: "Move down",
       savedRoutes: "Saved routes",
@@ -31249,6 +31261,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (!Number.isFinite(number)) return String(value ?? "");
     return number.toFixed(6).replace(/\.?0+$/, "");
   };
+  var stationSequence = 0;
+  var stationId = () => globalThis.crypto?.randomUUID?.() || `station-${Date.now()}-${++stationSequence}`;
+  var stationPoint = (point = {}) => ({ ...point, address: point.address || point.label || "" });
+  var stationFromPoint = (point = {}, existingId = "") => ({ id: existingId || stationId(), ...stationPoint(point) });
   var FUEL_FIELDS = ["fuel_level_l", "fuel_level_pct", "reserve_l", "diesel_price_per_l", "fuel_level_mode"];
   var emptyFuelValues = () => ({ fuel_level_l: "", fuel_level_pct: "", reserve_l: "", diesel_price_per_l: "", fuel_level_mode: "liters" });
   var fuelStorageKey = (entryId, profileId) => `camper-route-planner:fuel:${String(entryId)}:${String(profileId)}`;
@@ -31401,7 +31417,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       super();
       this.attachShadow({ mode: "open" });
       this._config = normalizeConfig();
-      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
+      this._state = { profiles: [], routes: [], provider: "", mapConfig: null, profileId: "", fuelValues: emptyFuelValues(), origin: { latitude: "", longitude: "", label: "" }, destination: { latitude: "", longitude: "", label: "" }, waypoints: [], stations: [], routeName: "manual route", routeOptions: { traffic: "off", avoid: [], route_type: "fastest", alternatives: 0, depart_at: "", arrive_at: "" }, result: null, resultStale: false, requestDiagnosticsArmed: false, diagnosticToken: "", requestDiagnostic: null, diagnosticCopyStatus: "", error: "", mapError: "", searchError: "", searchResults: [], searchTarget: "origin", searchSlot: 0, originManual: false, busy: false, loaded: false, entryStatus: "missing", entries: [] };
       this._cardExpanded = false;
       this._connection = null;
       this._reverseTimers = /* @__PURE__ */ new Map();
@@ -31414,6 +31430,104 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._viewScrollListeners = /* @__PURE__ */ new Map();
       this._entryDiscoveryConnection = null;
       this._entryDiscoveryPromise = null;
+      this._editStationId = null;
+      this._editDraft = null;
+      this._editError = "";
+    }
+    ensureStations() {
+      const legacy = [this._state.origin, ...this._state.waypoints, this._state.destination].map(stationPoint);
+      if (!this._state.stations.length || this._state.stations.length !== legacy.length) {
+        const previous = this._state.stations || [];
+        this._state.stations = legacy.map((point, index) => stationFromPoint(point, previous[index]?.id));
+      } else {
+        this._state.stations = this._state.stations.map((station, index) => {
+          const point = legacy[index];
+          const changed = Number(station.latitude) !== Number(point.latitude) || Number(station.longitude) !== Number(point.longitude) || (station.address || station.label || "") !== (point.address || point.label || "");
+          return changed ? stationFromPoint(point, station.id) : station;
+        });
+      }
+      return this._state.stations;
+    }
+    syncLegacyPoints() {
+      const stations = this._state.stations || [];
+      this._state.origin = stationPoint(stations[0] || {});
+      this._state.destination = stationPoint(stations[stations.length - 1] || {});
+      this._state.waypoints = stations.slice(1, -1).map(stationPoint);
+    }
+    setStations(points) {
+      const previous = this._state.stations || [];
+      this._state.stations = points.map((point, index) => stationFromPoint(point, previous[index]?.id));
+      this.syncLegacyPoints();
+    }
+    stationIndex(id) {
+      return this.ensureStations().findIndex((station) => station.id === id);
+    }
+    beginStationEdit(index) {
+      const station = this.ensureStations()[index];
+      if (!station) return;
+      this._editStationId = station.id;
+      this._editDraft = stationPoint(station);
+      this._editError = "";
+      this._state.searchResults = [];
+      this.render();
+    }
+    cancelStationEdit() {
+      this._editStationId = null;
+      this._editDraft = null;
+      this._editError = "";
+      this._state.searchResults = [];
+      this.render();
+    }
+    applyStationEdit() {
+      const index = this.stationIndex(this._editStationId);
+      if (index < 0 || !this._editDraft) return;
+      if (!isValidWaypoint(this._editDraft)) {
+        this._editError = t(languageOf(this._hass), "invalidCoordinates");
+        this.render();
+        return;
+      }
+      const stations = this.ensureStations().map((station, current) => current === index ? stationFromPoint(this._editDraft, station.id) : station);
+      this._state.stations = stations;
+      this.syncLegacyPoints();
+      this._state.resultStale = Boolean(this._state.result);
+      this._editStationId = null;
+      this._editDraft = null;
+      this._editError = "";
+      this._state.searchResults = [];
+      this.render();
+    }
+    addStation() {
+      const stations = this.ensureStations();
+      if (stations.length >= 7) return;
+      stations.splice(Math.max(1, stations.length - 1), 0, stationFromPoint({ latitude: "", longitude: "", address: "" }));
+      this._state.stations = stations;
+      this.syncLegacyPoints();
+      this._editStationId = stations[stations.length - 2].id;
+      this._editDraft = stationPoint(stations[stations.length - 2]);
+      this._editError = "";
+      this._fitMapOnNextRender = true;
+      this.render();
+    }
+    removeStation(index) {
+      const stations = this.ensureStations();
+      if (index <= 0 || index >= stations.length - 1) return;
+      stations.splice(index, 1);
+      this._state.stations = stations;
+      this.syncLegacyPoints();
+      this._state.resultStale = Boolean(this._state.result);
+      this._fitMapOnNextRender = true;
+      this.render();
+    }
+    moveStation(index, direction) {
+      const stations = this.ensureStations();
+      const target = index + direction;
+      if (target < 0 || target >= stations.length) return;
+      [stations[index], stations[target]] = [stations[target], stations[index]];
+      this._state.stations = stations;
+      this.syncLegacyPoints();
+      this._state.resultStale = Boolean(this._state.result);
+      this._fitMapOnNextRender = true;
+      this.render();
     }
     connectedCallback() {
       this._resizeObserver?.disconnect();
@@ -31576,6 +31690,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
     async calculate(forceRefresh = false) {
       if (this._state.busy) return;
+      this.syncLegacyPoints();
       const language = languageOf(this._hass);
       if (!isValidWaypoint(this._state.origin) || !isValidWaypoint(this._state.destination) || this._state.waypoints.some((point) => !isValidWaypoint(point))) {
         this._state.error = t(language, "invalidCoordinates");
@@ -31685,6 +31800,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
         const response = await trackerPosition(this._hass, { entry_id: this._config.entry_id, profile_id: this._state.profileId });
         if (response?.available && response.point && isValidWaypoint(response.point)) {
           this._state.origin = response.point;
+          const stations = this.ensureStations();
+          if (stations[0]) stations[0] = stationFromPoint(response.point, stations[0].id);
+          this.syncLegacyPoints();
           this._inputDrafts.set("point:origin:0:latitude", formatCoordinate(response.point.latitude));
           this._inputDrafts.set("point:origin:0:longitude", formatCoordinate(response.point.longitude));
           this._preserveInputDraftKeys.add("point:origin:0:latitude");
@@ -31756,7 +31874,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
         longitude: Number(rawPoint.longitude ?? rawPoint.lon)
       };
       if (!point || !isValidWaypoint(point)) return;
-      if (target === "waypoint") {
+      if (target === "station") {
+        if (this._editDraft) this._editDraft = stationPoint(point);
+      } else if (target === "waypoint") {
         this._state.waypoints[slot] = { ...point };
       } else {
         this._state[target] = { ...point };
@@ -31769,7 +31889,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._inputDrafts.delete(`${target}:${slot}`);
       this._state.searchResults = [];
       this._state.searchTarget = target;
-      this.updateSelectedPointDom(target, slot, point);
+      if (target === "station") this.updateStationDraftDom(point);
+      else this.updateSelectedPointDom(target, slot, point);
       updateMapPoints(this.shadowRoot?.querySelector(".crp-map"), this.mapPoints(), { start: t(languageOf(this._hass), "start"), destination: t(languageOf(this._hass), "destination"), waypoint: t(languageOf(this._hass), "waypoint"), previewLine: t(languageOf(this._hass), "previewLine") }, { route: this._state.result, fitBounds: true, onPointChange: (changedTarget, changedIndex, latlng) => this.onMapPointChange(changedTarget, changedIndex, latlng) });
       this.updateSearchResults();
     }
@@ -31933,6 +32054,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state.origin = validOrEmptyWaypoint(route.origin);
         this._state.destination = validOrEmptyWaypoint(route.destination);
         this._state.waypoints = Array.isArray(route.waypoints) ? route.waypoints.map(validOrEmptyWaypoint) : [];
+        this.setStations([this._state.origin, ...this._state.waypoints, this._state.destination]);
         this._state.profileId = route.profile_id || this._state.profileId;
         this._state.fuelValues = { ...readFuelValues(this._config.entry_id, this._state.profiles.find((item) => item.profile_id === this._state.profileId)), ...pickFuelValues(route.fuel_values) };
         this._state.routeOptions = { ...this._state.routeOptions, ...normalizeRouteOptions(route.route_options || route.metadata?.request_options || {}) };
@@ -32125,6 +32247,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         this._state[target] = point;
         if (target === "origin") this._state.originManual = true;
       }
+      const stations = this.ensureStations();
+      const stationIndex = target === "origin" ? 0 : target === "destination" ? stations.length - 1 : index + 1;
+      if (stations[stationIndex]) stations[stationIndex] = stationFromPoint(point, stations[stationIndex].id);
+      this.syncLegacyPoints();
       this._state.resultStale = Boolean(this._state.result);
       this.render();
       this.scheduleReverseGeocode(target, index, point);
@@ -32165,6 +32291,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const fuelType = profile ? translate2(`fuelType.${profile.fuel_type}`) : "";
       const navigationTarget = result && !this._state.resultStale ? buildNavigationLink(result, this._state, navigationPlatform()) : null;
       this.shadowRoot.innerHTML = `<style>${LEAFLET_CSS}${STYLES}${RESPONSIVE_STYLES}</style><ha-card><div class="content"><header><div><h2>${escapeHtml(this._config.title)}</h2><p class="subtle">${translate2("manualOnly")}</p></div><span class="status-dot ${this._state.loaded ? "ready" : "loading"}"></span></header><section class="grid"><div class="panel"><h3>${translate2("vehicle")}</h3><select data-action="profile" aria-label="${translate2("vehicle")}"><option value="">${translate2("noProfiles")}</option>${this._state.profiles.map((item) => `<option value="${escapeHtml(item.profile_id)}" ${item.profile_id === this._state.profileId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>${profile ? `<dl class="facts"><div><dt>H \xD7 W \xD7 L</dt><dd>${profile.height_m} \xD7 ${profile.width_m} \xD7 ${profile.length_m} m</dd></div><div><dt>kg</dt><dd>${profile.gross_weight_kg}</dd></div><div><dt>${translate2("profileDetails")}</dt><dd>${escapeHtml(vehicleKind)} \xB7 ${escapeHtml(fuelType)}${profile.emission_class ? ` \xB7 ${escapeHtml(profile.emission_class.toUpperCase())}` : ""}</dd></div></dl><button type="button" data-action="tracker">${translate2("useVehicleLocation")}</button>` : ""}</div><div class="panel"><h3>${translate2("start")}</h3>${pointEditor(this._state.origin, "origin")}${this._state.trackerError ? `<p class="subtle">${translate2("trackerUnavailable")}</p>` : ""}</div><div class="panel"><h3>${translate2("destination")}</h3>${pointEditor(this._state.destination, "destination")}</div><div class="panel waypoints"><h3>${translate2("waypoint")}</h3>${this._state.waypoints.map((point, index) => pointEditor(point, "waypoint", index)).join("")}<button type="button" data-action="add">\uFF0B ${translate2("addWaypoint")}</button></div></section><p class="subtle" data-search-error hidden></p><p class="privacy">${translate2("geocodingPrivacy")}</p><section class="map-section"><h3>${translate2("map")}</h3><div class="map-host"></div></section><div class="actions"><button type="button" class="primary" data-action="calculate" ${this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("calculating") : translate2("calculate")}</button>${result ? `<button type="button" data-action="calculate-force" ${this._state.busy ? "disabled" : ""}>${translate2("recalculate")}</button>` : ""}<input data-field="routeName" value="${escapeHtml(this._state.routeName)}" aria-label="${translate2("save")}"><button type="button" data-action="save" ${!result || this._state.busy ? "disabled" : ""}>${this._state.busy ? translate2("saving") : translate2("save")}</button></div>${this._state.error ? `<p class="error" role="alert">${escapeHtml(this._state.error)}</p>` : ""}${this._state.mapError ? `<p class="error" role="alert">${escapeHtml(this._state.mapError)}</p>` : ""}<section class="result"><h3>${result ? `${translate2("provider")}: ${escapeHtml(this.providerLabel(result.provider, language, result.metadata?.api_version))}` : translate2("noRoute")}</h3>${result ? `<div class="metrics"><div><b>${formatDistance(result.distance_m, language)}</b><span>${translate2("distance")}</span></div><div><b>${formatDuration(result.duration_s, language)}</b><span>${translate2("duration")}</span></div></div>${result.metadata?.cache_hit ? `<p class="notice">${translate2("cachedRouteNotice")}</p>` : ""}<div class="export-actions"><button type="button" data-action="export" data-mode="route">${translate2("exportRoute")}</button><button type="button" data-action="export" data-mode="track" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportTrack")}</button><button type="button" data-action="export" data-mode="combined" ${hasTrackGeometry(result) ? "" : "disabled"}>${translate2("exportCombined")}</button><button type="button" data-action="pdf">${translate2("pdfExport")}</button></div><div class="navigation-actions"><button type="button" data-action="navigation" ${navigationTarget ? "" : "disabled"}>\u{1F9ED} ${translate2("openNavigation")}</button>${navigationTarget?.omittedWaypoints ? `<p class="subtle">${translate2("navigationWaypointsUnsupported")}</p>` : ""}<p class="notice">${translate2("navigationSafety")}</p></div>${result.synthetic ? `<p class="notice">${translate2("mockDataNotice")}</p>` : ""}` : ""}</section><section class="saved"><h3>${translate2("savedRoutes")}</h3>${this._state.routes.length ? this._state.routes.map((route) => `<div class="saved-row"><span>${escapeHtml(route.name || route.route_id)} \xB7 ${formatDistance(route.distance_m, language)}</span><button type="button" data-action="load" data-route-id="${escapeHtml(route.route_id)}">${translate2("load")}</button><button type="button" data-action="export" data-mode="route" data-route-id="${escapeHtml(route.route_id)}">${translate2("exportRoute")}</button><button type="button" data-action="delete" data-route-id="${escapeHtml(route.route_id)}">${translate2("delete")}</button></div>`).join("") : `<p class="subtle">${translate2("noRoute")}</p>`}</section></div></ha-card>`;
+      const legacyGrid = this.shadowRoot.querySelector(".grid");
+      const stations = this.ensureStations();
+      legacyGrid?.replaceWith(this.htmlNodes(`<section class="stations-panel"><div class="stations-heading"><h3>${translate2("stations")}</h3><span class="subtle">${translate2("stationsHint")}</span></div><div class="stations-list">${stations.map((station, index) => this.renderStation(station, index, translate2, stations.length)).join("")}</div><button type="button" data-action="add-station" ${stations.length >= 7 ? "disabled" : ""}>\uFF0B ${translate2("addWaypoint")}</button></section>`)[0]);
       const optionAnchor = this.shadowRoot.querySelector(".map-section");
       optionAnchor?.insertAdjacentHTML("beforebegin", `<details class="route-options" open><summary><h3>${translate2("routeOptions")}</h3></summary><div class="option-grid"><label>${translate2("trafficModeLabel")}<select data-route-option="traffic"><option value="off">${translate2("trafficMode.off")}</option><option value="live">${translate2("trafficMode.live")}</option><option value="forecast">${translate2("trafficMode.forecast")}</option></select></label><label>${translate2("routeType")}<select data-route-option="route_type"><option value="fastest">${translate2("fastest")}</option><option value="eco">${translate2("eco")}</option></select></label><label>${translate2("alternatives")}<select data-route-option="alternatives"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label><label>${translate2("departAt")}<input type="datetime-local" data-route-option="depart_at"></label><label>${translate2("arriveAt")}<input type="datetime-local" data-route-option="arrive_at"></label></div><p class="subtle">${translate2("plannedRequest")}</p><div class="avoid-options"><label><input type="checkbox" data-route-option="avoid" value="tolls"> <span>${translate2("avoidTolls")}</span></label><label><input type="checkbox" data-route-option="avoid" value="motorways"> <span>${translate2("avoidMotorways")}</span></label><label><input type="checkbox" data-route-option="avoid" value="ferries"> <span>${translate2("avoidFerries")}</span></label><label><input type="checkbox" data-route-option="avoid" value="tunnels"> <span>${translate2("avoidTunnels")}</span></label></div></details>`);
       if (diagnosticsVisible) optionAnchor?.insertAdjacentHTML("beforebegin", `<div class="diagnostic-actions"><button type="button" data-action="arm-diagnostics" ${this._state.busy ? "disabled" : ""}>${translate2("requestDiagnostics")}</button>${this._state.requestDiagnosticsArmed ? `<span class="subtle">${translate2("requestDiagnosticsArmed")}</span>` : ""}</div>`);
@@ -32241,6 +32370,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
       this._preserveInputDraftKeys.clear();
       if (this._cardExpanded) requestAnimationFrame(() => invalidateMapSize(this.shadowRoot?.querySelector(".crp-map")));
     }
+    updateStationDraftDom(point) {
+      const editor = this.shadowRoot?.querySelector(".station-editor");
+      if (!editor) return;
+      editor.querySelector('[data-edit-field="latitude"]')?.setAttribute("value", formatCoordinate(point.latitude));
+      editor.querySelector('[data-edit-field="longitude"]')?.setAttribute("value", formatCoordinate(point.longitude));
+    }
+    renderStationEditor(station, index, translate2) {
+      const draft = this._editDraft || station;
+      const activeResults = this._state.searchTarget === "station" && this._state.searchSlot === index ? this._state.searchResults : [];
+      const results = activeResults.map((item, resultIndex) => `<button type="button" data-action="select-search" data-target="station" data-index="${resultIndex}" data-slot="${index}">${escapeHtml(item.label || "")}</button>`).join("");
+      return `<div class="station-editor" data-station-editor="${escapeHtml(station.id)}"><div class="search-row"><input data-search-input="station" data-index="${index}" value="${escapeHtml(this._inputDrafts.get(`station:${index}`) || "")}" placeholder="${translate2("searchPlaceholder")}" aria-label="${translate2("search")}"><button type="button" data-action="search" data-target="station" data-index="${index}">${translate2("search")}</button></div><div data-search-results data-target="station" data-index="${index}" class="search-results">${results}</div><div class="point-row"><label>${translate2("latitude")}<input data-edit-field="latitude" data-station-index="${index}" type="number" step="any" value="${escapeHtml(formatCoordinate(draft.latitude))}"></label><label>${translate2("longitude")}<input data-edit-field="longitude" data-station-index="${index}" type="number" step="any" value="${escapeHtml(formatCoordinate(draft.longitude))}"></label></div>${this._editError ? `<p class="error" role="alert">${escapeHtml(this._editError)}</p>` : ""}<div class="station-editor-actions"><button type="button" data-action="apply-edit" data-index="${index}">${translate2("apply")}</button><button type="button" data-action="cancel-edit">${translate2("cancel")}</button></div></div>`;
+    }
+    renderStation(station, index, translate2, total) {
+      const role = index === 0 ? translate2("start") : index === total - 1 ? translate2("destination") : translate2("waypoint");
+      const address = station.address || station.label || translate2("addressUnavailable");
+      const coordinateText = isValidWaypoint(station) ? `${formatCoordinate(station.latitude)}, ${formatCoordinate(station.longitude)}` : translate2("stationIncomplete");
+      const editing = this._editStationId === station.id;
+      return `<article class="station-row" data-station-id="${escapeHtml(station.id)}"><div class="station-position">${index + 1}</div><div class="station-copy"><b>${escapeHtml(address)}</b><small>${escapeHtml(coordinateText)}</small><span class="station-role">${escapeHtml(role)}</span></div><div class="station-actions"><button type="button" data-action="edit-station" data-index="${index}">${translate2("edit")}</button><button type="button" data-action="up-station" data-index="${index}" aria-label="${translate2("moveUp")}" ${index <= 0 ? "disabled" : ""}>\u2191</button><button type="button" data-action="down-station" data-index="${index}" aria-label="${translate2("moveDown")}" ${index >= total - 1 ? "disabled" : ""}>\u2193</button>${index > 0 && index < total - 1 ? `<button type="button" data-action="remove-station" data-index="${index}">${translate2("remove")}</button>` : ""}</div>${editing ? this.renderStationEditor(station, index, translate2) : ""}</article>`;
+    }
     bindEvents() {
       this.shadowRoot.querySelectorAll("button[data-action]").forEach((button) => {
         const capture = () => {
@@ -32262,6 +32410,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
         else this._state.routeOptions[key] = key === "alternatives" ? Number(input.value) : input.value;
         this._state.resultStale = Boolean(this._state.result);
         this.render();
+      }));
+      this.shadowRoot.querySelectorAll("button[data-action=edit-station]").forEach((button) => button.addEventListener("click", () => this.beginStationEdit(Number(button.dataset.index))));
+      this.shadowRoot.querySelectorAll("button[data-action=apply-edit]").forEach((button) => button.addEventListener("click", () => this.applyStationEdit()));
+      this.shadowRoot.querySelectorAll("button[data-action=cancel-edit]").forEach((button) => button.addEventListener("click", () => this.cancelStationEdit()));
+      this.shadowRoot.querySelectorAll("button[data-action=add-station]").forEach((button) => button.addEventListener("click", () => this.addStation()));
+      this.shadowRoot.querySelectorAll("button[data-action=remove-station]").forEach((button) => button.addEventListener("click", () => this.removeStation(Number(button.dataset.index))));
+      this.shadowRoot.querySelectorAll("button[data-action=up-station]").forEach((button) => button.addEventListener("click", () => this.moveStation(Number(button.dataset.index), -1)));
+      this.shadowRoot.querySelectorAll("button[data-action=down-station]").forEach((button) => button.addEventListener("click", () => this.moveStation(Number(button.dataset.index), 1)));
+      this.shadowRoot.querySelectorAll("input[data-edit-field]").forEach((input) => input.addEventListener("input", () => {
+        if (!this._editDraft) return;
+        this._editDraft[input.dataset.editField] = input.value;
+        this._editDraft.address = "";
       }));
       this.shadowRoot.querySelectorAll("input[data-point]").forEach((input) => input.addEventListener("input", (event) => this.updatePoint(event.target.dataset.point, Number(event.target.dataset.index), event.target.dataset.field, event.target.value)));
       this.shadowRoot.querySelector("select[data-action=profile]")?.addEventListener("change", (event) => {
@@ -32329,7 +32489,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     }
   };
   var STYLES = `:host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}ha-card{overflow:hidden}.route-planner-shell{margin:0}.route-planner-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:12px 16px;cursor:pointer;list-style:none;touch-action:manipulation}.route-planner-summary::-webkit-details-marker{display:none}.route-planner-summary:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px}.summary-copy{display:grid;gap:3px;min-width:0}.summary-copy h2{margin:0;font-size:1.25rem}.status-line{overflow-wrap:anywhere}.summary-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}.chevron{font-size:1.35rem;line-height:1;transition:transform .15s ease}.route-planner-shell[open] .chevron{transform:rotate(90deg)}.content{padding:16px;border-top:1px solid var(--divider-color,#ddd)}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}h2,h3{margin:0 0 8px}h2{font-size:1.25rem}h3{font-size:1rem}.subtle,small,.privacy{color:var(--secondary-text-color);font-size:.82rem}.status-dot{width:10px;height:10px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ready{background:var(--success-color,#43a047)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.panel{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}select,input{box-sizing:border-box;max-width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:8px;background:var(--card-background-color,#fff);color:inherit}select{width:100%}.point-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px}.point-row label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.point-row button{min-height:34px}.search-row{display:flex;gap:6px}.search-row input{flex:1;min-width:0}.search-results{display:grid;gap:4px;margin:8px 0}.search-results button{text-align:left}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:.8rem}.facts div{background:var(--secondary-background-color,#f5f5f5);padding:8px;border-radius:8px}.facts dt{color:var(--secondary-text-color)}.facts dd{margin:3px 0 0}.actions,.export-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions input{flex:1;min-width:120px}.actions button,.export-actions button,button{cursor:pointer;border:1px solid var(--divider-color,#bbb);background:var(--secondary-background-color,#f5f5f5);color:inherit;border-radius:8px;padding:8px 12px;min-height:42px}.actions .primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);border:0;font-weight:600}.route-options{margin:12px 0;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.route-options summary{cursor:pointer;min-height:28px}.option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.option-grid label{display:grid;gap:4px;min-width:0}.avoid-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px}.avoid-options label{display:flex;align-items:center;gap:8px;min-height:42px;line-height:1.25;overflow-wrap:anywhere}.avoid-options input{flex:0 0 auto;min-width:22px;min-height:22px}.fuel-profile-facts,.fuel-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px;margin:10px 0}.fuel-profile-facts span{display:grid;gap:2px;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5)}.fuel-input{display:grid;gap:4px;min-width:0;line-height:1.25}.fuel-input input{width:100%}.error{padding:10px;border-radius:8px;color:var(--error-color,#d32f2f);background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metrics div{padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.metrics b,.metrics span{display:block}.metrics span{font-size:.8rem;color:var(--secondary-text-color)}.crp-map{margin-top:12px;overflow:hidden;border-radius:12px;background:var(--secondary-background-color,#f5f5f5);touch-action:none;min-height:220px}.crp-map>svg{display:block;width:100%;min-height:220px;transition:transform .12s ease}.crp-map small{display:block;padding:6px 10px}.crp-leaflet-map{height:340px}.leaflet-container{font:inherit;background:var(--secondary-background-color,#f5f5f5)}.crp-marker{background:transparent;border:0}.crp-marker span{display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50% 50% 50% 0;box-shadow:0 2px 5px #0008;color:#fff;font-size:.8rem;font-weight:700;transform:rotate(-45deg)}.crp-marker span::first-letter{transform:rotate(45deg)}.crp-marker-start span{background:#43a047}.crp-marker-destination span{background:#e53935}.crp-marker-waypoint span{background:#fb8c00}.export-panel{margin-top:12px;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.notice,.warnings{padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);font-size:.86rem}.warnings ul{margin:6px 0 0;padding-left:20px}.navigation-actions{display:grid;gap:8px;margin-top:12px}.navigation-actions button{min-height:44px;font-weight:600}.navigation-actions p{margin:0}.saved{margin-top:16px}.saved-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd);font-size:.88rem}.saved-row span{flex:1;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.content{padding:12px}.grid{grid-template-columns:1fr}.facts,.metrics{grid-template-columns:1fr 1fr}.point-row{grid-template-columns:1fr 1fr}.export-actions button{flex:1;min-width:0}.actions>*{flex:1 1 auto;min-width:0}.saved-row{flex-wrap:wrap}.saved-row span{flex-basis:100%}}`;
-  var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
+  var RESPONSIVE_STYLES = `:host{max-width:100%;box-sizing:border-box}ha-card{max-width:100%;box-sizing:border-box}.content{min-width:0;max-width:100%;box-sizing:border-box}.crp-map{contain:paint}.grid,.facts,.metrics,.panel,.saved-row,.actions,.route-details{min-width:0}.stations-panel{grid-column:1/-1;border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px}.stations-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.stations-list{display:grid}.station-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 0;border-top:1px solid var(--divider-color,#ddd)}.station-row:first-child{border-top:0}.station-position{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--secondary-background-color,#f5f5f5);font-weight:700}.station-copy{display:grid;gap:3px;min-width:0}.station-copy b{font-weight:700;overflow-wrap:anywhere}.station-copy small{font-weight:400}.station-role{color:var(--secondary-text-color);font-size:.78rem}.station-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.station-actions button{min-height:36px;padding:6px 9px}.station-editor{grid-column:2/-1;padding:10px;border-radius:9px;background:var(--secondary-background-color,#f5f5f5)}.station-editor-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.station-editor-actions button{min-width:100px}.route-details{margin-top:12px;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:9px}.border-crossing{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--divider-color,#ddd)}.border-crossing:first-of-type{border-top:0}.border-crossing small{display:block}.toll-details{overflow-wrap:anywhere}.toll-total{font-size:1.35rem;font-weight:700;margin-bottom:10px}.toll-countries{display:grid;gap:0}.toll-country{display:grid;gap:4px;padding:9px 0;border-top:1px solid var(--divider-color,#ddd)}.toll-country:first-child{border-top:0}.toll-country-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.toll-country-heading strong{white-space:nowrap}.toll-country-meta{color:var(--secondary-text-color);font-size:.85rem}.toll-known-notes,.toll-objects,.provider-details{margin-top:10px;padding-top:8px;border-top:1px solid var(--divider-color,#ddd)}.toll-known-notes ul,.toll-objects ul,.provider-details ul{margin:6px 0;padding-left:20px}.provider-details summary{cursor:pointer;overflow-wrap:anywhere}.provider-details li{overflow-wrap:anywhere;white-space:pre-wrap}.crp-marker-border span{background:#6a1b9a}.point-row{grid-template-columns:repeat(2,minmax(0,1fr))}.search-row{min-width:0}.search-row button{flex:0 0 auto}.saved-row button{min-width:0;white-space:normal}:host(:not(.crp-narrow)) .grid{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .content{padding:12px}:host(.crp-narrow) .grid{grid-template-columns:1fr}:host(.crp-narrow) .facts,:host(.crp-narrow) .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}:host(.crp-narrow) .export-actions button{flex:1;min-width:0}:host(.crp-narrow) .saved-row{flex-wrap:wrap}:host(.crp-narrow) .saved-row span{flex-basis:100%}:host(.crp-narrow) .station-row{grid-template-columns:auto minmax(0,1fr)}:host(.crp-narrow) .station-actions{grid-column:2;justify-content:flex-start}:host(.crp-narrow) .station-editor{grid-column:1/-1}:host(.crp-tiny) .point-row{grid-template-columns:1fr}:host(.crp-tiny) .facts,:host(.crp-tiny) .metrics{grid-template-columns:1fr}:host(.crp-tiny) .actions{align-items:stretch}:host(.crp-tiny) .actions>*{min-width:0;flex:1 1 100%}`;
   if (!customElements.get("camper-route-planner-card-editor")) customElements.define("camper-route-planner-card-editor", CamperRoutePlannerCardEditor);
   if (!customElements.get("camper-route-planner-card")) customElements.define("camper-route-planner-card", CamperRoutePlannerCard);
   if (globalThis.window && Array.isArray(window.customCards) && !window.customCards.some((card) => card.type === "camper-route-planner-card")) window.customCards.push({ type: "camper-route-planner-card", name: "Camper Route Planner", description: "Manuelle Routenplanung mit Fahrzeugprofilen und automatischer Instanzwahl.", preview: true, documentationURL: "https://github.com/balronu/ha-camper-route-planner" });
