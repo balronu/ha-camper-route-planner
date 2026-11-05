@@ -17,6 +17,12 @@ const CRP_LEAFLET_POI_DATA = Symbol("camper-route-planner-leaflet-poi-data");
 const CRP_LEAFLET_POI_ZOOM_HANDLER = Symbol("camper-route-planner-leaflet-poi-zoom-handler");
 const CRP_LEAFLET_FUEL_PLAN_MARKERS = Symbol("camper-route-planner-leaflet-fuel-plan-markers");
 
+
+// Leaflet treats tooltip strings as HTML. Always supply a text node instead.
+function safeTooltip(value) {
+  return document.createTextNode(String(value ?? ""));
+}
+
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
   for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -124,7 +130,7 @@ function updateLeafletMarkers(container, points) {
   const markers = points.map((point, index) => {
     const target = point.target || (index === 0 ? "origin" : index === points.length - 1 ? "destination" : "waypoint");
     const marker = L.marker([Number(point.latitude), Number(point.longitude)], { draggable: Boolean(options.onPointChange), icon: markerIcon(target) });
-    marker.addTo(map).bindTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`));
+    marker.addTo(map).bindTooltip(safeTooltip(point.address || point.label || (target === "origin" ? labels.start : target === "destination" ? labels.destination : `${labels.waypoint} ${index}`)));
     marker.on("dragend", (event) => options.onPointChange?.(target, point.index ?? 0, event.target.getLatLng()));
     return marker;
   });
@@ -141,7 +147,7 @@ function updateLeafletBorderMarkers(container, crossings = []) {
     const marker = L.marker([Number(item.lat), Number(item.lon)], { icon: borderMarkerIcon() });
     const direction = [item.from_country, item.to_country].filter(Boolean).join(" → ");
     const wait = item.wait_min == null ? labels.borderNoWait || "No current wait-time data" : `${Math.round(Number(item.wait_min))} min`;
-    marker.addTo(map).bindTooltip(`${item.name || labels.borderCrossing || "Border crossing"}${direction ? ` · ${direction}` : ""} · ${wait}`);
+    marker.addTo(map).bindTooltip(safeTooltip(`${item.name || labels.borderCrossing || "Border crossing"}${direction ? ` · ${direction}` : ""} · ${wait}`));
     return marker;
   });
   container[CRP_LEAFLET_BORDER_MARKERS] = markers;
@@ -154,7 +160,7 @@ function updateLeafletRestrictionMarkers(container, items = []) {
   for (const marker of container[CRP_LEAFLET_RESTRICTION_MARKERS] || []) marker.remove();
   const markers = items.filter((item) => Number.isFinite(Number(item?.lat ?? item?.latitude)) && Number.isFinite(Number(item?.lon ?? item?.longitude))).map((item) => {
     const marker = L.circleMarker([Number(item.lat ?? item.latitude), Number(item.lon ?? item.longitude)], { radius: 7, color: "#d32f2f", fillColor: "#ef5350", fillOpacity: 0.85 });
-    marker.addTo(map).bindTooltip(String(item.message || item.type || item.code || "Restriction"));
+    marker.addTo(map).bindTooltip(safeTooltip(String(item.message || item.type || item.code || "Restriction")));
     return marker;
   });
   container[CRP_LEAFLET_RESTRICTION_MARKERS] = markers;
@@ -195,13 +201,13 @@ function updateLeafletPoiMarkers(container, pois = {}) {
     if (cluster.items.length > 1) {
       const center = [cluster.latitude, cluster.longitude];
       const marker = L.marker(center, { icon: poiClusterIcon(cluster.items.length), keyboard: true });
-      marker.addTo(map).bindTooltip(`${cluster.items.length} POIs`).on("click", () => map.setView(center, Math.min(map.getZoom() + 2, map.getMaxZoom() || 19), { animate: true }));
+      marker.addTo(map).bindTooltip(safeTooltip(`${cluster.items.length} POIs`)).on("click", () => map.setView(center, Math.min(map.getZoom() + 2, map.getMaxZoom() || 19), { animate: true }));
       return marker;
     }
     const item = cluster.items[0];
     const marker = L.marker([Number(item.latitude), Number(item.longitude)], { icon: poiMarkerIcon(item.category) });
     const distance = item.km_from_start == null ? "" : ` · ${Number(item.km_from_start).toFixed(1)} km`;
-    marker.addTo(map).bindTooltip(`${item.name || (item.category === "fuel" ? "Fuel station" : "Parking")}${distance}`);
+    marker.addTo(map).bindTooltip(safeTooltip(`${item.name || (item.category === "fuel" ? "Fuel station" : "Parking")}${distance}`));
     return marker;
   });
   container[CRP_LEAFLET_POI_MARKERS] = markers;
@@ -234,7 +240,7 @@ function updateLeafletFuelPlanMarkers(container, plan = null) {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
     const marker = L.marker([latitude, longitude], { icon: fuelPlanMarkerIcon() });
     const cost = stop.est_cost_eur ?? stop.est_cost;
-    marker.addTo(map).bindTooltip(`Fuel plan · ${Number(stop.km_from_start).toFixed(1)} km · ${Number(stop.litres).toFixed(1)} l${cost == null ? "" : ` · ${Number(cost).toFixed(2)} EUR (estimate)`}`);
+    marker.addTo(map).bindTooltip(safeTooltip(`Fuel plan · ${Number(stop.km_from_start).toFixed(1)} km · ${Number(stop.litres).toFixed(1)} l${cost == null ? "" : ` · ${Number(cost).toFixed(2)} EUR (estimate)`}`));
     return [marker];
   });
   container[CRP_LEAFLET_FUEL_PLAN_MARKERS] = markers;
@@ -257,7 +263,7 @@ function updateLeafletRoute(container, route, points = []) {
     dashArray: preview ? "7 9" : undefined,
     className: preview ? "crp-preview-line" : "crp-route-line",
   }).addTo(map);
-  if (preview) line.bindTooltip(container[CRP_LEAFLET_LABELS]?.previewLine || "Straight-line preview");
+  if (preview) line.bindTooltip(safeTooltip(container[CRP_LEAFLET_LABELS]?.previewLine || "Straight-line preview"));
   container[CRP_LEAFLET_ROUTE] = line;
   return true;
 }

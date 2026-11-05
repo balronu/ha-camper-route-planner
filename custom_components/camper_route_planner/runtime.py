@@ -123,7 +123,7 @@ class RuntimeData:
             "route_calls": dict(self._diagnostic_counts),
             "last_operation": None,
             "status": "available" if calls else "no_route_calculation",
-            "last_request_error": dict(self._last_request_error) if self._last_request_error else None,
+            "last_request_error": None,  # Never expose route/waypoint details in downloadable HA diagnostics.
         }
 
     def arm_request_diagnostics(self) -> str:
