@@ -201,7 +201,7 @@ function updateLeafletPoiMarkers(container, pois = {}) {
     if (cluster.items.length > 1) {
       const center = [cluster.latitude, cluster.longitude];
       const marker = L.marker(center, { icon: poiClusterIcon(cluster.items.length), keyboard: true });
-      marker.addTo(map).bindTooltip(safeTooltip(`${cluster.items.length} POIs`).on("click", () => map.setView(center, Math.min(map.getZoom() + 2, map.getMaxZoom() || 19), { animate: true })));
+      marker.addTo(map).bindTooltip(safeTooltip(`${cluster.items.length} POIs`)).on("click", () => map.setView(center, Math.min(map.getZoom() + 2, map.getMaxZoom() || 19), { animate: true }));
       return marker;
     }
     const item = cluster.items[0];
