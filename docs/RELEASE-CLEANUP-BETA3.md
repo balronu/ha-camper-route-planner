@@ -1,31 +1,30 @@
-# Release-/Tag-Bereinigung für v0.1.1-beta.4
+# Release-/Tag-Bereinigung nach v0.1.1-beta.4
 
-Prüfstand: GitHub Releases und Tags am 26.10.2026 vor Beta.4. Es wurde noch nichts gelöscht.
+Prüfstand: GitHub Releases und Tags am 26.10.2026 nach erfolgreicher Beta.4-Veröffentlichung und grüner Tag-CI. Die ausdrücklich freigegebenen historischen Beta-Releases und Tags wurden entfernt.
 
-| Version | Veröffentlichungsdatum | Status | Empfehlung nach Beta.3 | Grund |
-|---|---:|---|---|---|
-| `v0.1.0` | 2026-10-22 | Stable | **Behalten** | Stable-Rückfallbasis und aktuellste Stable |
-| `v0.1.1-beta.4` | nach Veröffentlichung | Pre-release | **Behalten** | aktuelle Test-Beta |
-| `v0.1.1-beta.3` | 2026-10-26 | Pre-release | **Behalten** | geprüfte Rückfallbasis bis zur Beta.4-Abnahme |
-| `v0.1.1-beta.2` | 2026-10-26 | Pre-release | Entfernen nach Beta.4-Prüfung | durch Beta.3 ersetzt; keine aktive Referenz gefunden |
-| `v0.1.1-beta.1` | 2026-10-26 | Pre-release | Entfernen vorschlagen | durch Beta.2/Beta.3 ersetzt; keine bekannte Referenz |
-| `v0.1.0-beta.21` | 2026-10-22 | Pre-release | Entfernen vorschlagen | alte Stable-Vorbereitungs-Beta |
-| `v0.1.0-beta.20` | 2026-10-22 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.19` | 2026-10-22 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.18` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.17` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.16` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.15` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.14` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.13` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.12` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.11` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.10` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.9` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.8` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.7` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.6` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.5` | 2026-10-21 | Pre-release | Entfernen vorschlagen | alte Test-Beta |
-| `v0.1.0-beta.4` | kein GitHub-Release gefunden | Tag ohne Release | Entfernen vorschlagen | alter Tag ohne veröffentlichtes Release |
+## Verbleibende GitHub-Releases und Tags
 
-Für Beta.4 sind die oben genannten historischen Releases und Tags ausdrücklich freigegeben. Vor dem Löschen wurden Release, Tag, Branches/PRs, CI-Verweise, Dokumentationsverweise, Assets und Rollback-Bedeutung geprüft; keine Branches, Commits oder Source-Historie werden gelöscht. Nach der Bereinigung sind Release-Liste, Tags und die HACS-Datenquelle erneut zu prüfen.
+| Version | Status | Ergebnis |
+|---|---|---|
+| `v0.1.0` | Stable / Latest | **Behalten** |
+| `v0.1.1-beta.3` | Pre-release | **Behalten** – geprüfte Rückfallbasis |
+| `v0.1.1-beta.4` | Pre-release | **Behalten** – aktuelle Test-Beta |
+
+## Gelöschte Releases und Tags
+
+| Version | Release | Git-Tag |
+|---|---:|---:|
+| `v0.1.1-beta.1` | gelöscht | gelöscht |
+| `v0.1.1-beta.2` | gelöscht | gelöscht |
+| `v0.1.0-beta.4` | kein Release vorhanden | gelöscht |
+| `v0.1.0-beta.5` bis `v0.1.0-beta.21` | gelöscht | gelöscht |
+
+Es wurden keine Branches, Commits oder Source-Historie gelöscht. Aktive historische Branches bleiben unabhängig von den gelöschten Tags erhalten. Es gab keine offenen PRs, die auf die gelöschten Releases angewiesen waren.
+
+## HACS-Prüfung
+
+Die öffentliche GitHub-Release-/Tag-Quelle enthält nach der Bereinigung nur die drei oben genannten Versionen. Die produktive HACS-Installation wurde nicht verändert oder automatisch aktualisiert; die nächste HACS-Metadatenaktualisierung sollte diese bereinigte Auswahl übernehmen.
+
+## Rollback-Grenze
+
+`v0.1.0` bleibt Stable. `v0.1.1-beta.3` bleibt die unmittelbar geprüfte Rückfallbasis für Beta.4. Weitere historische Beta-Tags werden nicht ohne neue ausdrückliche Freigabe gelöscht.
